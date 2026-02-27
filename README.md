@@ -6,6 +6,7 @@ This is a simple web interface to manage a Caddy server instance with NTLM authe
 
 *   Go (1.20 or later)
 *   `xcaddy` (for building the custom Caddy binary)
+*   Docker (optional, for containerized deployment)
 
 ## Building Caddy with NTLM Support
 
@@ -27,7 +28,7 @@ To use the NTLM transport in your `Caddyfile`, you need a custom Caddy build tha
 
     This will produce a `caddy` binary in your current directory.
 
-## Running the Manager
+## Running the Manager Locally
 
 1.  **Build the Manager:**
 
@@ -37,7 +38,7 @@ To use the NTLM transport in your `Caddyfile`, you need a custom Caddy build tha
 
 2.  **Run:**
 
-    Ensure the `caddy` binary you built in the previous step is in the same directory as the `server` binary (or adjust the path in the code).
+    Ensure the `caddy` binary you built in the previous step is in the same directory as the `server` binary or in your system PATH.
 
     ```bash
     ./server
@@ -46,6 +47,22 @@ To use the NTLM transport in your `Caddyfile`, you need a custom Caddy build tha
 3.  **Access:**
 
     Open your browser and navigate to `http://localhost:8090`.
+
+## Docker Deployment
+
+A `Dockerfile` is provided to build a container image with the custom Caddy binary and the manager application.
+
+1.  **Build the Image:**
+
+    ```bash
+    docker build -t caddy-manager .
+    ```
+
+2.  **Run the Container:**
+
+    ```bash
+    docker run -p 8090:8090 -p 8080:8080 caddy-manager
+    ```
 
 ## Configuration
 
