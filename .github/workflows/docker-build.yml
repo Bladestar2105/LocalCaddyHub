@@ -29,5 +29,5 @@ jobs:
 
     - name: Verify image
       run: |
-        docker run --rm caddy-manager:latest ./caddy version
-        docker run --rm caddy-manager:latest ./server -h || true # Just check it runs
+        docker run --rm caddy-manager:latest caddy version
+        docker run --rm caddy-manager:latest /app/server -h || true # Just check it runs
