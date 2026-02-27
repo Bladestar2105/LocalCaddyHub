@@ -1,5 +1,13 @@
+{
+    layer4 {
+        :8443 {
+            proxy localhost:9443
+        }
+    }
+}
+
 :8080 {
-    reverse_proxy localhost:9090 {
+    reverse_proxy localhost:9000 {
         transport http_ntlm
     }
 }
