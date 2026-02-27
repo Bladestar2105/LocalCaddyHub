@@ -1,0 +1,5 @@
+:8080 {
+    reverse_proxy localhost:9090 {
+        transport http_ntlm
+    }
+}

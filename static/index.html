@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caddy Manager</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .tabs { display: flex; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border: 1px solid transparent; border-bottom: none; }
+        .tab.active { background-color: #f0f0f0; border-color: #ccc; border-radius: 5px 5px 0 0; }
+        .content { display: none; }
+        .content.active { display: block; }
+        textarea { width: 100%; height: 300px; font-family: monospace; }
+        .status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #eee; white-space: pre-wrap; }
+        button { margin-right: 10px; padding: 8px 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<h1>Caddy Manager</h1>
+
+<div class="tabs">
+    <div class="tab active" onclick="showTab('config')">Configuration</div>
+    <div class="tab" onclick="showTab('control')">Control</div>
+    <div class="tab" onclick="showTab('stats')">Stats</div>
+</div>
+
+<div id="config" class="content active">
+    <h2>Caddyfile</h2>
+    <textarea id="caddyfile"></textarea>
+    <br><br>
+    <button onclick="saveConfig()">Save</button>
+    <button onclick="validateConfig()">Validate</button>
+    <div id="configStatus" class="status"></div>
+</div>
+
+<div id="control" class="content">
+    <h2>Process Control</h2>
+    <button onclick="startCaddy()">Start</button>
+    <button onclick="stopCaddy()">Stop</button>
+    <button onclick="reloadCaddy()">Reload</button>
+    <div id="controlStatus" class="status"></div>
+</div>
+
+<div id="stats" class="content">
+    <h2>Backend Stats</h2>
+    <button onclick="fetchStats()">Refresh</button>
+    <pre id="statsOutput" class="status"></pre>
+</div>
+
+<script>
+    function showTab(tabName) {
+        // Remove active class from all tabs
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(t => t.classList.remove('active'));
+
+        // Remove active class from all content
+        const contents = document.querySelectorAll('.content');
+        contents.forEach(c => c.classList.remove('active'));
+
+        // Add active class to clicked tab
+        const activeTab = document.querySelector(`.tab[onclick="showTab('${tabName}')"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+
+        // Add active class to corresponding content
+        const activeContent = document.getElementById(tabName);
+        if (activeContent) {
+            activeContent.classList.add('active');
+        }
+    }
+
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/config');
+            if (!res.ok) throw new Error('Failed to load config');
+            const data = await res.json();
+            document.getElementById('caddyfile').value = data.content;
+        } catch (e) {
+            console.error("Failed to load config", e);
+            document.getElementById('configStatus').innerText = "Error loading config: " + e.message;
+        }
+    }
+
+    async function saveConfig() {
+        const content = document.getElementById('caddyfile').value;
+        try {
+            const res = await fetch('/api/config', {
+                method: 'POST',
+                body: JSON.stringify({ content }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (res.ok) {
+                document.getElementById('configStatus').innerText = "Saved successfully.";
+            } else {
+                document.getElementById('configStatus').innerText = "Failed to save.";
+            }
+        } catch (e) {
+            document.getElementById('configStatus').innerText = "Error: " + e.message;
+        }
+    }
+
+    async function validateConfig() {
+        try {
+            const res = await fetch('/api/validate', { method: 'POST' });
+            const data = await res.json();
+            let msg = data.output || "";
+            if (data.error) msg += "\nError: " + data.error;
+            document.getElementById('configStatus').innerText = msg;
+        } catch (e) {
+            document.getElementById('configStatus').innerText = "Error: " + e.message;
+        }
+    }
+
+    async function startCaddy() {
+        try {
+            const res = await fetch('/api/start', { method: 'POST' });
+            const data = await res.json();
+             let msg = data.output || "";
+            if (data.error) msg += "\nError: " + data.error;
+            document.getElementById('controlStatus').innerText = msg;
+        } catch (e) {
+            document.getElementById('controlStatus').innerText = "Error: " + e.message;
+        }
+    }
+
+    async function stopCaddy() {
+        try {
+            const res = await fetch('/api/stop', { method: 'POST' });
+            const data = await res.json();
+             let msg = data.output || "";
+            if (data.error) msg += "\nError: " + data.error;
+            document.getElementById('controlStatus').innerText = msg;
+        } catch (e) {
+            document.getElementById('controlStatus').innerText = "Error: " + e.message;
+        }
+    }
+
+    async function reloadCaddy() {
+        try {
+            const res = await fetch('/api/reload', { method: 'POST' });
+            const data = await res.json();
+             let msg = data.output || "";
+            if (data.error) msg += "\nError: " + data.error;
+            document.getElementById('controlStatus').innerText = msg;
+        } catch (e) {
+            document.getElementById('controlStatus').innerText = "Error: " + e.message;
+        }
+    }
+
+    async function fetchStats() {
+        try {
+            const res = await fetch('/api/stats');
+            const text = await res.text();
+            document.getElementById('statsOutput').innerText = text;
+        } catch (e) {
+             document.getElementById('statsOutput').innerText = "Error: " + e.message;
+        }
+    }
+
+    // Load config on startup
+    loadConfig();
+    fetchStats();
+</script>
+
+</body>
+</html>
