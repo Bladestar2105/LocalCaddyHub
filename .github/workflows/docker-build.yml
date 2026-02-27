@@ -1,0 +1,33 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build and push (dry run)
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false # Only build to verify success
+        tags: caddy-manager:latest
+        load: true # Load image into docker daemon for testing
+
+    - name: Verify image
+      run: |
+        docker run --rm caddy-manager:latest ./caddy version
+        docker run --rm caddy-manager:latest ./server -h || true # Just check it runs

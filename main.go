@@ -67,7 +67,8 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./caddy", "validate", "--config", "Caddyfile")
+	// Use "caddy" to rely on $PATH (e.g. /usr/bin/caddy in Docker)
+	cmd := exec.Command("caddy", "validate", "--config", "Caddyfile")
 	output, err := cmd.CombinedOutput()
 	result := CommandResult{Output: string(output)}
 	if err != nil {
@@ -84,7 +85,7 @@ func handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./caddy", "start", "--config", "Caddyfile")
+	cmd := exec.Command("caddy", "start", "--config", "Caddyfile")
 	output, err := cmd.CombinedOutput()
 	result := CommandResult{Output: string(output)}
 	if err != nil {
@@ -101,7 +102,7 @@ func handleStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./caddy", "stop")
+	cmd := exec.Command("caddy", "stop")
 	output, err := cmd.CombinedOutput()
 	result := CommandResult{Output: string(output)}
 	if err != nil {
@@ -118,7 +119,7 @@ func handleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./caddy", "reload", "--config", "Caddyfile")
+	cmd := exec.Command("caddy", "reload", "--config", "Caddyfile")
 	output, err := cmd.CombinedOutput()
 	result := CommandResult{Output: string(output)}
 	if err != nil {
