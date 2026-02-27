@@ -1,0 +1,15 @@
+{
+  "proxies": [
+    {
+      "listen": ":8080",
+      "upstream": "localhost:9000",
+      "ntlm": true
+    }
+  ],
+  "layer4": [
+    {
+      "listen": ":8443",
+      "upstream": "localhost:9443"
+    }
+  ]
+}

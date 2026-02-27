@@ -14,6 +14,13 @@
         textarea { width: 100%; height: 300px; font-family: monospace; }
         .status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #eee; white-space: pre-wrap; }
         button { margin-right: 10px; padding: 8px 16px; cursor: pointer; }
+        .config-section { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+        .config-section h3 { margin-top: 0; }
+        .config-item { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; }
+        .config-item input { padding: 5px; }
+        .config-item label { display: flex; align-items: center; gap: 5px; }
+        .remove-btn { background-color: #ffcccc; border: 1px solid #ff9999; color: #cc0000; }
+        .add-btn { background-color: #ccffcc; border: 1px solid #99ff99; color: #006600; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -22,16 +29,35 @@
 
 <div class="tabs">
     <div class="tab active" onclick="showTab('config')">Configuration</div>
+    <div class="tab" onclick="showTab('raw-config')">Raw Caddyfile</div>
     <div class="tab" onclick="showTab('control')">Control</div>
     <div class="tab" onclick="showTab('stats')">Stats</div>
 </div>
 
 <div id="config" class="content active">
+    <div class="config-section">
+        <h3>Reverse Proxy</h3>
+        <div id="proxyList"></div>
+        <button class="add-btn" onclick="addProxy()">+ Add Proxy</button>
+    </div>
+
+    <div class="config-section">
+        <h3>Layer 4 Proxy</h3>
+        <div id="layer4List"></div>
+        <button class="add-btn" onclick="addLayer4()">+ Add Layer 4</button>
+    </div>
+
+    <br>
+    <button onclick="saveStructuredConfig()">Save Configuration</button>
+    <button onclick="validateConfig()">Validate</button>
+    <div id="structuredConfigStatus" class="status"></div>
+</div>
+
+<div id="raw-config" class="content">
     <h2>Caddyfile</h2>
     <textarea id="caddyfile"></textarea>
     <br><br>
-    <button onclick="saveConfig()">Save</button>
-    <button onclick="validateConfig()">Validate</button>
+    <button onclick="saveConfig()">Save Raw Config</button>
     <div id="configStatus" class="status"></div>
 </div>
 
@@ -160,8 +186,95 @@
         }
     }
 
+    // --- Structured Config Logic ---
+
+    function addProxy(listen = "", upstream = "", ntlm = false) {
+        const div = document.createElement('div');
+        div.className = 'config-item';
+        div.innerHTML = `
+            <input type="text" placeholder="Listen Address (e.g., :80)" class="proxy-listen" value="${listen}">
+            <input type="text" placeholder="Upstream Address (e.g., localhost:8080)" class="proxy-upstream" value="${upstream}">
+            <label><input type="checkbox" class="proxy-ntlm" ${ntlm ? 'checked' : ''}> NTLM</label>
+            <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        document.getElementById('proxyList').appendChild(div);
+    }
+
+    function addLayer4(listen = "", upstream = "") {
+        const div = document.createElement('div');
+        div.className = 'config-item';
+        div.innerHTML = `
+            <input type="text" placeholder="Listen Address (e.g., :443)" class="l4-listen" value="${listen}">
+            <input type="text" placeholder="Upstream Address (e.g., localhost:8443)" class="l4-upstream" value="${upstream}">
+            <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        document.getElementById('layer4List').appendChild(div);
+    }
+
+    async function loadStructuredConfig() {
+        try {
+            const res = await fetch('/api/config/structured');
+            if (!res.ok) throw new Error('Failed to load structured config');
+            const data = await res.json();
+
+            // Clear existing lists
+            document.getElementById('proxyList').innerHTML = '';
+            document.getElementById('layer4List').innerHTML = '';
+
+            if (data.proxies) {
+                data.proxies.forEach(p => addProxy(p.listen, p.upstream, p.ntlm));
+            }
+            if (data.layer4) {
+                data.layer4.forEach(l => addLayer4(l.listen, l.upstream));
+            }
+
+        } catch (e) {
+            console.error("Failed to load structured config", e);
+             document.getElementById('structuredConfigStatus').innerText = "Error loading config: " + e.message;
+        }
+    }
+
+    async function saveStructuredConfig() {
+        const proxies = [];
+        document.querySelectorAll('#proxyList .config-item').forEach(item => {
+            proxies.push({
+                listen: item.querySelector('.proxy-listen').value,
+                upstream: item.querySelector('.proxy-upstream').value,
+                ntlm: item.querySelector('.proxy-ntlm').checked
+            });
+        });
+
+        const layer4 = [];
+        document.querySelectorAll('#layer4List .config-item').forEach(item => {
+            layer4.push({
+                listen: item.querySelector('.l4-listen').value,
+                upstream: item.querySelector('.l4-upstream').value
+            });
+        });
+
+        const config = { proxies, layer4 };
+
+        try {
+            const res = await fetch('/api/config/structured', {
+                method: 'POST',
+                body: JSON.stringify(config),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (res.ok) {
+                document.getElementById('structuredConfigStatus').innerText = "Saved successfully.";
+                // Reload raw config to show changes
+                loadConfig();
+            } else {
+                document.getElementById('structuredConfigStatus').innerText = "Failed to save.";
+            }
+        } catch (e) {
+            document.getElementById('structuredConfigStatus').innerText = "Error: " + e.message;
+        }
+    }
+
     // Load config on startup
     loadConfig();
+    loadStructuredConfig();
     fetchStats();
 </script>
 

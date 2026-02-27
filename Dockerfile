@@ -4,6 +4,7 @@ FROM caddy:builder AS caddy-builder
 # xcaddy is pre-installed in caddy:builder
 RUN xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
+    --with github.com/mholt/caddy-l4 \
     --output /caddy
 
 # Stage 2: Build Go Manager Application

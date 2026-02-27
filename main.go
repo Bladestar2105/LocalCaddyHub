@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type Config struct {
@@ -18,11 +19,60 @@ type CommandResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
+type ProxyConfig struct {
+	Listen   string `json:"listen"`
+	Upstream string `json:"upstream"`
+	NTLM     bool   `json:"ntlm"`
+}
+
+type Layer4Config struct {
+	Listen   string `json:"listen"`
+	Upstream string `json:"upstream"`
+}
+
+type AppConfig struct {
+	Proxies []ProxyConfig  `json:"proxies"`
+	Layer4  []Layer4Config `json:"layer4"`
+}
+
+func generateCaddyfile(config AppConfig) string {
+	var sb strings.Builder
+
+	// Global options or snippets could go here
+
+	// Layer 4 configuration
+	if len(config.Layer4) > 0 {
+		sb.WriteString("{\n")
+		sb.WriteString("    layer4 {\n")
+		for _, l4 := range config.Layer4 {
+			sb.WriteString("        " + l4.Listen + " {\n")
+			sb.WriteString("            proxy " + l4.Upstream + "\n")
+			sb.WriteString("        }\n")
+		}
+		sb.WriteString("    }\n")
+		sb.WriteString("}\n\n")
+	}
+
+	// Reverse Proxy configuration
+	for _, proxy := range config.Proxies {
+		sb.WriteString(proxy.Listen + " {\n")
+		sb.WriteString("    reverse_proxy " + proxy.Upstream + " {\n")
+		if proxy.NTLM {
+			sb.WriteString("        transport http_ntlm\n")
+		}
+		sb.WriteString("    }\n")
+		sb.WriteString("}\n\n")
+	}
+
+	return sb.String()
+}
+
 func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
 	http.HandleFunc("/api/config", handleConfig)
+	http.HandleFunc("/api/config/structured", handleStructuredConfig)
 	http.HandleFunc("/api/validate", handleValidate)
 	http.HandleFunc("/api/start", handleStart)
 	http.HandleFunc("/api/stop", handleStop)
@@ -55,6 +105,56 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to write Caddyfile", http.StatusInternalServerError)
 			return
 		}
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleStructuredConfig(w http.ResponseWriter, r *http.Request) {
+	configFile := "config.json"
+	if r.Method == http.MethodGet {
+		content, err := os.ReadFile(configFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Return empty default config
+				json.NewEncoder(w).Encode(AppConfig{
+					Proxies: []ProxyConfig{},
+					Layer4:  []Layer4Config{},
+				})
+				return
+			}
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(content)
+
+	} else if r.Method == http.MethodPost {
+		var config AppConfig
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Save structured config
+		data, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			http.Error(w, "Failed to marshal config", http.StatusInternalServerError)
+			return
+		}
+		if err := os.WriteFile(configFile, data, 0644); err != nil {
+			http.Error(w, "Failed to write config file", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate and save Caddyfile
+		caddyfileContent := generateCaddyfile(config)
+		if err := os.WriteFile("Caddyfile", []byte(caddyfileContent), 0644); err != nil {
+			http.Error(w, "Failed to write Caddyfile", http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
