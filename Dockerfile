@@ -7,21 +7,10 @@ RUN xcaddy build \
     --with github.com/mholt/caddy-l4 \
     --output /caddy
 
-# Stage 2: Build Go Manager Application
-# Use golang image for building the manager
-FROM golang:1.20-bookworm AS manager-builder
+# Stage 2: Node Application setup
+FROM node:22-bookworm-slim
 
 WORKDIR /app
-
-# Copy Go source
-COPY main.go .
-
-# Build the Go application statically
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /server main.go
-RUN chmod +x /server
-
-# Stage 3: Final Image
-FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,18 +20,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Caddy binary from builder
 COPY --from=caddy-builder /caddy /usr/bin/caddy
 
-# Copy Manager binary from builder
-COPY --from=manager-builder /server /app/server
-
-# Copy static assets and default configuration
-COPY static /app/static
-COPY Caddyfile /app/Caddyfile
-
 # Ensure execution permissions (just in case)
-RUN chmod +x /usr/bin/caddy /app/server
+RUN chmod +x /usr/bin/caddy
+
+# Copy package.json and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev || npm install --omit=dev
+
+# Copy source code, static assets and default configuration
+COPY src ./src
+COPY static ./static
+COPY Caddyfile ./Caddyfile
 
 # Expose necessary ports
 EXPOSE 8090 80 443
 
-# Start the manager
-CMD ["/app/server"]
+# Start the Node.js application
+CMD ["npm", "start"]
