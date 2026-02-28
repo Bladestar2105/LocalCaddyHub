@@ -344,14 +344,14 @@ const app = {
                     <div class="modal-header"><h5 class="modal-title">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="domainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="d_en"> <label for="d_en">Enabled</label></div>
-                        <div class="mb-2"><label>Domain</label><input type="text" name="fromDomain" class="form-control" required placeholder="example.com"></div>
-                        <div class="mb-2"><label>Port (Empty for default)</label><input type="text" name="fromPort" class="form-control"></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="d_fd">Domain</label><input type="text" id="d_fd" name="fromDomain" class="form-control" required placeholder="example.com"></div>
+                        <div class="mb-2"><label for="d_fp">Port (Empty for default)</label><input type="text" id="d_fp" name="fromPort" class="form-control"></div>
+                        <div class="mb-2"><label for="d_desc">Description</label><input type="text" id="d_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="accessLog" id="d_al"> <label for="d_al">Enable Access Log</label></div>
                         <div class="mb-2"><input type="checkbox" name="disableTls" id="d_dtls"> <label for="d_dtls">Disable TLS (HTTP only)</label></div>
-                        <div class="mb-2"><label>Custom Certificate</label><select name="customCert" class="form-select cert-select"></select></div>
-                        <div class="mb-2"><label>Access Lists</label><select name="accesslist" class="form-select al-select" multiple></select></div>
-                        <div class="mb-2"><label>Basic Auth</label><select name="basicauth" class="form-select ba-select" multiple></select></div>
+                        <div class="mb-2"><label for="d_cc">Custom Certificate</label><select id="d_cc" name="customCert" class="form-select cert-select"></select></div>
+                        <div class="mb-2"><label for="d_ac">Access Lists</label><select id="d_ac" name="accesslist" class="form-select al-select" multiple></select></div>
+                        <div class="mb-2"><label for="d_ba">Basic Auth</label><select id="d_ba" name="basicauth" class="form-select ba-select" multiple></select></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('domainModal', 'domains')">Save</button></div>
                   </div></div>
@@ -363,11 +363,11 @@ const app = {
                     <div class="modal-header"><h5 class="modal-title">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="subdomainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="sd_en"> <label for="sd_en">Enabled</label></div>
-                        <div class="mb-2"><label>Subdomain (e.g. 'api' for api.example.com)</label><input type="text" name="fromDomain" class="form-control" required></div>
-                        <div class="mb-2"><label>Parent Domain</label><select name="reverse" class="form-select domain-select" required></select></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
-                        <div class="mb-2"><label>Access Lists</label><select name="accesslist" class="form-select al-select" multiple></select></div>
-                        <div class="mb-2"><label>Basic Auth</label><select name="basicauth" class="form-select ba-select" multiple></select></div>
+                        <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
+                        <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
+                        <div class="mb-2"><label for="sd_desc">Description</label><input type="text" id="sd_desc" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="sd_ac">Access Lists</label><select id="sd_ac" name="accesslist" class="form-select al-select" multiple></select></div>
+                        <div class="mb-2"><label for="sd_ba">Basic Auth</label><select id="sd_ba" name="basicauth" class="form-select ba-select" multiple></select></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('subdomainModal', 'subdomains')">Save</button></div>
                   </div></div>
@@ -381,21 +381,21 @@ const app = {
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-2"><input type="checkbox" name="enabled" id="h_en"> <label for="h_en">Enabled</label></div>
-                                <div class="mb-2"><label>Domain</label><select name="reverse" class="form-select domain-select" required></select></div>
-                                <div class="mb-2"><label>Subdomain Filter</label><select name="subdomain" class="form-select subdomain-select"></select></div>
-                                <div class="mb-2"><label>Handle Type</label><select name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
-                                <div class="mb-2"><label>Path Matcher (e.g. /api/*)</label><input type="text" name="handlePath" class="form-control"></div>
-                                <div class="mb-2"><label>Directive</label><select name="handleDirective" class="form-select"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
-                                <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                                <div class="mb-2"><label for="h_rev">Domain</label><select id="h_rev" name="reverse" class="form-select domain-select" required></select></div>
+                                <div class="mb-2"><label for="h_sub">Subdomain Filter</label><select id="h_sub" name="subdomain" class="form-select subdomain-select"></select></div>
+                                <div class="mb-2"><label for="h_ht">Handle Type</label><select id="h_ht" name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
+                                <div class="mb-2"><label for="h_hp">Path Matcher (e.g. /api/*)</label><input type="text" id="h_hp" name="handlePath" class="form-control"></div>
+                                <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
+                                <div class="mb-2"><label for="h_desc">Description</label><input type="text" id="h_desc" name="description" class="form-control"></div>
                             </div>
                             <div class="col-md-6">
-                                <div class="mb-2"><label>Upstream Domains/IPs (comma separated)</label><input type="text" name="toDomain" class="form-control array-input"></div>
-                                <div class="mb-2"><label>Upstream Port</label><input type="text" name="toPort" class="form-control"></div>
+                                <div class="mb-2"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
+                                <div class="mb-2"><label for="h_tp">Upstream Port</label><input type="text" id="h_tp" name="toPort" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="httpTls" id="h_tls"> <label for="h_tls">Upstream TLS (HTTPS)</label></div>
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
-                                <div class="mb-2"><label>LB Policy</label><select name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option></select></div>
-                                <div class="mb-2"><label>Access Lists</label><select name="accesslist" class="form-select al-select" multiple></select></div>
-                                <div class="mb-2"><label>Headers</label><select name="header" class="form-select header-select" multiple></select></div>
+                                <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option></select></div>
+                                <div class="mb-2"><label for="h_al">Access Lists</label><select id="h_al" name="accesslist" class="form-select al-select" multiple></select></div>
+                                <div class="mb-2"><label for="h_head">Headers</label><select id="h_head" name="header" class="form-select header-select" multiple></select></div>
                             </div>
                         </div>
                     </form></div>
@@ -408,10 +408,10 @@ const app = {
                   <div class="modal-dialog"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Access List</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="accessListModalForm">
-                        <div class="mb-2"><label>Name</label><input type="text" name="accesslistName" class="form-control" required></div>
-                        <div class="mb-2"><label>Client IPs (comma separated CIDR)</label><input type="text" name="clientIps" class="form-control array-input" required></div>
+                        <div class="mb-2"><label for="al_name">Name</label><input type="text" id="al_name" name="accesslistName" class="form-control" required></div>
+                        <div class="mb-2"><label for="al_ips">Client IPs (comma separated CIDR)</label><input type="text" id="al_ips" name="clientIps" class="form-control array-input" required></div>
                         <div class="mb-2"><input type="checkbox" name="invert" id="al_inv"> <label for="al_inv">Invert (Block these IPs)</label></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="al_desc">Description</label><input type="text" id="al_desc" name="description" class="form-control"></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('accessListModal', 'accessLists')">Save</button></div>
                   </div></div>
@@ -422,9 +422,9 @@ const app = {
                   <div class="modal-dialog"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Basic Auth</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="basicAuthModalForm">
-                        <div class="mb-2"><label>Username</label><input type="text" name="basicauthuser" class="form-control" required></div>
-                        <div class="mb-2"><label>Password (BCrypt Hash in Caddyfile)</label><input type="password" name="basicauthpass" class="form-control" required></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="ba_user">Username</label><input type="text" id="ba_user" name="basicauthuser" class="form-control" required></div>
+                        <div class="mb-2"><label for="ba_pass">Password (BCrypt Hash in Caddyfile)</label><input type="password" id="ba_pass" name="basicauthpass" class="form-control" required></div>
+                        <div class="mb-2"><label for="ba_desc">Description</label><input type="text" id="ba_desc" name="description" class="form-control"></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('basicAuthModal', 'basicAuths')">Save</button></div>
                   </div></div>
@@ -435,10 +435,10 @@ const app = {
                   <div class="modal-dialog"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="headerModalForm">
-                        <div class="mb-2"><label>Direction</label><select name="headerUpDown" class="form-select"><option value="header_up">Request (Up)</option><option value="header_down">Response (Down)</option></select></div>
-                        <div class="mb-2"><label>Header Name</label><input type="text" name="headerType" class="form-control" required placeholder="X-Forwarded-For"></div>
-                        <div class="mb-2"><label>Value (Leave empty to delete)</label><input type="text" name="headerValue" class="form-control"></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="hd_dir">Direction</label><select id="hd_dir" name="headerUpDown" class="form-select"><option value="header_up">Request (Up)</option><option value="header_down">Response (Down)</option></select></div>
+                        <div class="mb-2"><label for="hd_name">Header Name</label><input type="text" id="hd_name" name="headerType" class="form-control" required placeholder="X-Forwarded-For"></div>
+                        <div class="mb-2"><label for="hd_val">Value (Leave empty to delete)</label><input type="text" id="hd_val" name="headerValue" class="form-control"></div>
+                        <div class="mb-2"><label for="hd_desc">Description</label><input type="text" id="hd_desc" name="description" class="form-control"></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('headerModal', 'headers')">Save</button></div>
                   </div></div>
@@ -450,15 +450,15 @@ const app = {
                     <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="layer4ModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
-                        <div class="mb-2"><label>Sequence (Priority)</label><input type="text" name="sequence" class="form-control"></div>
-                        <div class="mb-2"><label>Matchers (e.g. tlssni, http, any)</label><input type="text" name="matchers" class="form-control" value="any"></div>
-                        <div class="mb-2"><label>Listen Domains/IPs (comma separated)</label><input type="text" name="fromDomain" class="form-control array-input"></div>
-                        <div class="mb-2"><label>Listen Port</label><input type="text" name="fromPort" class="form-control" required placeholder="443"></div>
-                        <div class="mb-2"><label>Upstream IPs/Domains (comma separated)</label><input type="text" name="toDomain" class="form-control array-input" required></div>
-                        <div class="mb-2"><label>Upstream Port</label><input type="text" name="toPort" class="form-control" required></div>
+                        <div class="mb-2"><label for="l4_seq">Sequence (Priority)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
+                        <div class="mb-2"><label for="l4_match">Matchers (e.g. tlssni, http, any)</label><input type="text" id="l4_match" name="matchers" class="form-control" value="any"></div>
+                        <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
+                        <div class="mb-2"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
+                        <div class="mb-2"><label for="l4_td">Upstream IPs/Domains (comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
+                        <div class="mb-2"><label for="l4_tp">Upstream Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
-                        <div class="mb-2"><label>Proxy Protocol</label><select name="proxyProtocol" class="form-select"><option value="">Off</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
-                        <div class="mb-2"><label>Description</label><input type="text" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="l4_pp">Proxy Protocol</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Off</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
+                        <div class="mb-2"><label for="l4_desc">Description</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('layer4Modal', 'layer4')">Save</button></div>
                   </div></div>
