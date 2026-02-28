@@ -52,16 +52,69 @@ To use the NTLM transport in your `Caddyfile`, you need a custom Caddy build tha
 
 A `Dockerfile` is provided to build a container image with the custom Caddy binary and the manager application.
 
+### Using Pre-built Image from GitHub Actions
+
+1.  **Download the Artifact:**
+    Go to the "Actions" tab in your GitHub repository, click on the latest successful build, and download the Docker image artifact (usually a `.tar` file).
+
+2.  **Load the Image:**
+
+    ```bash
+    docker load -i <path_to_downloaded_tar_file>
+    ```
+
+3.  **Prepare Environment (Required):**
+    Before running the container, create the necessary files and directories on your host to persist your configuration and certificates. If you don't create the files beforehand, Docker might create directories instead of files.
+
+    ```bash
+    touch config.json Caddyfile
+    mkdir certs
+    ```
+
+4.  **Run the Container:**
+    Run the container, mapping the necessary ports and volumes.
+
+    ```bash
+    docker run -d \
+      --name caddy-manager \
+      -p 8090:8090 \
+      -p 80:80 \
+      -p 443:443 \
+      -v $(pwd)/config.json:/app/config.json \
+      -v $(pwd)/Caddyfile:/app/Caddyfile \
+      -v $(pwd)/certs:/app/certs \
+      caddy-manager:latest
+    ```
+
+### Building the Image Locally
+
 1.  **Build the Image:**
 
     ```bash
     docker build -t caddy-manager .
     ```
 
-2.  **Run the Container:**
+2.  **Prepare Environment (Required):**
+    Before running the container, create the necessary files and directories on your host to persist your configuration and certificates. If you don't create the files beforehand, Docker might create directories instead of files.
 
     ```bash
-    docker run -p 8090:8090 -p 8080:8080 caddy-manager
+    touch config.json Caddyfile
+    mkdir certs
+    ```
+
+3.  **Run the Container:**
+    Run the container, mapping the necessary ports and volumes.
+
+    ```bash
+    docker run -d \
+      --name caddy-manager \
+      -p 8090:8090 \
+      -p 80:80 \
+      -p 443:443 \
+      -v $(pwd)/config.json:/app/config.json \
+      -v $(pwd)/Caddyfile:/app/Caddyfile \
+      -v $(pwd)/certs:/app/certs \
+      caddy-manager:latest
     ```
 
 ## Configuration
