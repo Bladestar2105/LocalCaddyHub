@@ -141,6 +141,10 @@ type AppConfig struct {
 func generateCaddyfile(config AppConfig) string {
 	var sb strings.Builder
 
+	// Preallocate to minimize allocations
+	estimatedSize := 512 + len(config.Domains)*256 + len(config.Subdomains)*128 + len(config.Handlers)*256 + len(config.Layer4)*256
+	sb.Grow(estimatedSize)
+
 	// Global options
 	sb.WriteString("{\n")
 	if config.General.HttpPort != "" {
