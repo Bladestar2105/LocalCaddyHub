@@ -533,7 +533,7 @@ func handleCerts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to read certs directory", http.StatusInternalServerError)
 			return
 		}
-		var certNames []string
+		certNames := []string{}
 		for _, f := range files {
 			if !f.IsDir() {
 				certNames = append(certNames, f.Name())

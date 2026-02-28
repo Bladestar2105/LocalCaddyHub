@@ -253,7 +253,7 @@ const app = {
             app.config.headers.forEach(h => headerSelects.append(new Option(h.headerType + " (" + h.headerUpDown + ")", h.id)));
 
             const certSelects = $('.cert-select').empty().append(new Option("Auto HTTPS / Internal", ""));
-            app.certs.filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
+            (app.certs || []).filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
 
             // Handlers and Subdomains need Domain selects
             const domainSelects = $('.domain-select').empty().append(new Option("Select Domain", ""));
