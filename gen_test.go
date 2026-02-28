@@ -59,3 +59,30 @@ func TestGenerateCaddyfileLayer4(t *testing.T) {
 		t.Errorf("Expected to find proxy target")
 	}
 }
+
+func BenchmarkGenerateCaddyfile(b *testing.B) {
+	config := AppConfig{
+		General: GeneralConfig{
+			Enabled: true,
+		},
+		Domains: []Domain{
+			{ID: "d1", Enabled: true, FromDomain: "example.com", FromPort: "443", DisableTls: true},
+			{ID: "d2", Enabled: true, FromDomain: "test.com", FromPort: "80"},
+		},
+		Subdomains: []Subdomain{
+			{ID: "s1", Enabled: true, Reverse: "d1", FromDomain: "api"},
+		},
+		Handlers: []Handler{
+			{ID: "h1", Enabled: true, Reverse: "d1", HandlePath: "/", HandleDirective: "reverse_proxy", ToDomain: []string{"localhost"}, ToPort: "9090", NTLM: true},
+			{ID: "h2", Enabled: true, Reverse: "d2", HandlePath: "/api", HandleDirective: "reverse_proxy", ToDomain: []string{"127.0.0.1"}, ToPort: "8080"},
+		},
+		Layer4: []Layer4Route{
+			{ID: "l1", Enabled: true, FromPort: "443", ToDomain: []string{"10.0.0.2"}, ToPort: "443"},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		generateCaddyfile(config)
+	}
+}
