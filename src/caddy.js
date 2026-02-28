@@ -1,4 +1,6 @@
-function generateCaddyfile(config) {
+const path = require('path');
+
+function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
 
   // Global options
@@ -124,8 +126,9 @@ function generateCaddyfile(config) {
       if (domain.disableTls) {
         // Handled by http:// prefix
       } else if (domain.customCert) {
-        const certPath = `./certs/${domain.customCert}`;
-        const keyPath = `./certs/${domain.customCert.replace(/\.pem$/, '')}.key`;
+        // Ensure path formatting uses forward slashes, even on Windows, to make Caddyfile happy
+        const certPath = path.join(certsDir, domain.customCert).replace(/\\/g, '/');
+        const keyPath = path.join(certsDir, domain.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
         sb += `\ttls ${certPath} ${keyPath}\n`;
       } else {
         sb += '\ttls internal\n'; // Auto HTTPS disabled by default in our app without ACME
