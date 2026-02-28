@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log"
@@ -10,7 +12,22 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
+
+var (
+	sessions   = make(map[string]time.Time)
+	sessionsMu sync.Mutex
+)
+
+func generateSessionToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 type Config struct {
 	Content string `json:"content"`
@@ -491,6 +508,44 @@ func generateCaddyfile(config AppConfig) string {
 	return sb.String()
 }
 
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow login routes
+		if r.URL.Path == "/login" || r.URL.Path == "/login.html" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check for valid session cookie
+		cookie, err := r.Cookie("session")
+		var exists bool
+		if err == nil {
+			sessionsMu.Lock()
+			expiry, found := sessions[cookie.Value]
+			exists = found
+
+			// Clean up expired session if exists
+			if exists && time.Now().After(expiry) {
+				delete(sessions, cookie.Value)
+				exists = false
+			}
+			sessionsMu.Unlock()
+		}
+
+		if err != nil || !exists {
+			// Redirect API requests with 401, otherwise redirect to login page
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			} else {
+				http.Redirect(w, r, "/login.html", http.StatusSeeOther)
+			}
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func csrfMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Protect state-changing API methods
@@ -523,10 +578,77 @@ func main() {
 	mux.HandleFunc("/api/stats", handleStats)
 	mux.HandleFunc("/api/certs", handleCerts)
 
-	handler := csrfMiddleware(mux)
+	mux.HandleFunc("/login", handleLogin)
+	mux.HandleFunc("/logout", handleLogout)
+
+	handler := authMiddleware(csrfMiddleware(mux))
 
 	log.Println("Server started on :8090")
 	log.Fatal(http.ListenAndServe(":8090", handler))
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	expectedUser := os.Getenv("ADMIN_USER")
+	if expectedUser == "" {
+		expectedUser = "admin"
+	}
+
+	expectedPass := os.Getenv("ADMIN_PASS")
+	if expectedPass == "" {
+		expectedPass = "admin"
+	}
+
+	if username == expectedUser && password == expectedPass {
+		token, err := generateSessionToken()
+		if err != nil {
+			http.Error(w, "Failed to generate session", http.StatusInternalServerError)
+			return
+		}
+
+		// Store session with 24h expiration
+		sessionsMu.Lock()
+		sessions[token] = time.Now().Add(24 * time.Hour)
+		sessionsMu.Unlock()
+
+		// Set cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   86400, // 24 hours
+		})
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session")
+	if err == nil {
+		sessionsMu.Lock()
+		delete(sessions, cookie.Value)
+		sessionsMu.Unlock()
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	http.Redirect(w, r, "/login.html", http.StatusSeeOther)
 }
 
 func handleCerts(w http.ResponseWriter, r *http.Request) {
