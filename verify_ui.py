@@ -24,11 +24,24 @@ def run():
         # Take initial screenshot
         page.screenshot(path="verification/initial_load.png")
 
+        # --- Login ---
+        print("Logging in...")
+        try:
+            page.fill("input[name='username']", "admin")
+            page.fill("input[name='password']", "admin")
+            page.click("button:has-text('Login')")
+            page.wait_for_selector("text=Reverse Proxy")
+            print("Logged in.")
+        except Exception as e:
+            print(f"Failed to log in: {e}")
+            page.screenshot(path="verification/error_login.png")
+            return
+
         # --- Add Domain ---
         print("Adding Domain...")
         try:
             page.click("text=Reverse Proxy")
-            page.click("a[href='#rp-domains']")
+            page.wait_for_timeout(500) # Give the tab time to switch
             page.click("button:has-text('+ Add Domain')")
             page.wait_for_selector("#domainModal", state="visible")
             page.fill("#d_fd", "example.com")
