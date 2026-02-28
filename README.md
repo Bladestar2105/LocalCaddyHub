@@ -67,7 +67,7 @@ A `Dockerfile` is provided to build a container image with the custom Caddy bina
     ```yaml
     services:
       caddy-manager:
-        image: caddy-manager:latest
+        image: ghcr.io/bladestar2105/iptv-manager:latest
         container_name: caddy-manager
         restart: unless-stopped
         ports:
