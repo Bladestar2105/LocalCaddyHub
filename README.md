@@ -1,4 +1,4 @@
-# Caddy Manager with NTLM Support
+# LocalCaddyHub with NTLM Support
 
 This is a simple web interface to manage a Caddy server instance with NTLM authentication support.
 
@@ -66,9 +66,9 @@ A `Dockerfile` is provided to build a container image with the custom Caddy bina
 
     ```yaml
     services:
-      caddy-manager:
+      localcaddyhub:
         image: ghcr.io/bladestar2105/localcaddyhub:latest
-        container_name: caddy-manager
+        container_name: localcaddyhub
         restart: unless-stopped
         ports:
           - "8090:8090"
@@ -108,14 +108,14 @@ A `Dockerfile` is provided to build a container image with the custom Caddy bina
 
     ```bash
     docker run -d \
-      --name caddy-manager \
+      --name localcaddyhub \
       -p 8090:8090 \
       -p 80:80 \
       -p 443:443 \
       -v $(pwd)/config.json:/app/config.json \
       -v $(pwd)/Caddyfile:/app/Caddyfile \
       -v $(pwd)/certs:/app/certs \
-      caddy-manager:latest
+      localcaddyhub:latest
     ```
 
 ### Building the Image Locally
@@ -123,7 +123,7 @@ A `Dockerfile` is provided to build a container image with the custom Caddy bina
 1.  **Build the Image:**
 
     ```bash
-    docker build -t caddy-manager .
+    docker build -t localcaddyhub .
     ```
 
 2.  **Prepare Environment (Required):**
@@ -139,14 +139,14 @@ A `Dockerfile` is provided to build a container image with the custom Caddy bina
 
     ```bash
     docker run -d \
-      --name caddy-manager \
+      --name localcaddyhub \
       -p 8090:8090 \
       -p 80:80 \
       -p 443:443 \
       -v $(pwd)/config.json:/app/config.json \
       -v $(pwd)/Caddyfile:/app/Caddyfile \
       -v $(pwd)/certs:/app/certs \
-      caddy-manager:latest
+      localcaddyhub:latest
     ```
 
 ## Configuration
