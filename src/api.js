@@ -225,7 +225,11 @@ router.post('/reload', (req, res) => execCaddy(['reload', '--config', appPaths.c
 
 // Stats
 router.get('/stats', (req, res) => {
-  fetch('http://localhost:2019/metrics')
+  fetch('http://localhost:2019/metrics', {
+    headers: {
+      'Origin': 'http://localhost:2019'
+    }
+  })
     .then(r => r.text())
     .then(text => {
       res.set('Content-Type', 'text/plain');
