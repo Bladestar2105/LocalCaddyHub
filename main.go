@@ -487,21 +487,37 @@ func generateCaddyfile(config AppConfig) string {
 	return sb.String()
 }
 
-func main() {
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
+func csrfMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Protect state-changing API methods
+		if (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.Header.Get("X-Requested-With") != "XMLHttpRequest" {
+				http.Error(w, "CSRF check failed: missing X-Requested-With header", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-	http.HandleFunc("/api/config", handleConfig)
-	http.HandleFunc("/api/config/structured", handleStructuredConfig)
-	http.HandleFunc("/api/validate", handleValidate)
-	http.HandleFunc("/api/start", handleStart)
-	http.HandleFunc("/api/stop", handleStop)
-	http.HandleFunc("/api/reload", handleReload)
-	http.HandleFunc("/api/stats", handleStats)
-	http.HandleFunc("/api/certs", handleCerts)
+func main() {
+	mux := http.NewServeMux()
+	fs := http.FileServer(http.Dir("./static"))
+	mux.Handle("/", fs)
+
+	mux.HandleFunc("/api/config", handleConfig)
+	mux.HandleFunc("/api/config/structured", handleStructuredConfig)
+	mux.HandleFunc("/api/validate", handleValidate)
+	mux.HandleFunc("/api/start", handleStart)
+	mux.HandleFunc("/api/stop", handleStop)
+	mux.HandleFunc("/api/reload", handleReload)
+	mux.HandleFunc("/api/stats", handleStats)
+	mux.HandleFunc("/api/certs", handleCerts)
+
+	handler := csrfMiddleware(mux)
 
 	log.Println("Server started on :8090")
-	log.Fatal(http.ListenAndServe(":8090", nil))
+	log.Fatal(http.ListenAndServe(":8090", handler))
 }
 
 func handleCerts(w http.ResponseWriter, r *http.Request) {
