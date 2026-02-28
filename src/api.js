@@ -5,20 +5,18 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const db = require('./db');
 const { generateCaddyfile } = require('./caddy');
+const appPaths = require('./paths');
 
 const router = express.Router();
 
-const certDir = path.join(__dirname, '..', 'certs');
-if (!fs.existsSync(certDir)) {
-  fs.mkdirSync(certDir, { recursive: true });
-}
+const certDir = appPaths.certsDir;
 
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // /api/config
 router.get('/config', (req, res) => {
   try {
-    const caddyfilePath = path.join(__dirname, '..', 'Caddyfile');
+    const caddyfilePath = appPaths.caddyfile;
     let content = '';
     if (fs.existsSync(caddyfilePath)) {
       content = fs.readFileSync(caddyfilePath, 'utf-8');
@@ -33,7 +31,7 @@ router.post('/config', express.json(), (req, res) => {
   try {
     const { content } = req.body;
     if (typeof content !== 'string') return res.status(400).send('Invalid request body');
-    const caddyfilePath = path.join(__dirname, '..', 'Caddyfile');
+    const caddyfilePath = appPaths.caddyfile;
     fs.writeFileSync(caddyfilePath, content, 'utf-8');
     res.sendStatus(200);
   } catch (err) {
@@ -200,8 +198,8 @@ router.post('/config/structured', express.json(), (req, res) => {
 
     saveTransaction();
 
-    const caddyfileContent = generateCaddyfile(config);
-    fs.writeFileSync(path.join(__dirname, '..', 'Caddyfile'), caddyfileContent, 'utf-8');
+    const caddyfileContent = generateCaddyfile(config, certDir);
+    fs.writeFileSync(appPaths.caddyfile, caddyfileContent, 'utf-8');
 
     res.sendStatus(200);
   } catch (err) {
@@ -220,10 +218,10 @@ function execCaddy(cmdArgs, res) {
   });
 }
 
-router.post('/validate', (req, res) => execCaddy(['validate', '--config', 'Caddyfile'], res));
-router.post('/start', (req, res) => execCaddy(['start', '--config', 'Caddyfile'], res));
+router.post('/validate', (req, res) => execCaddy(['validate', '--config', appPaths.caddyfile], res));
+router.post('/start', (req, res) => execCaddy(['start', '--config', appPaths.caddyfile], res));
 router.post('/stop', (req, res) => execCaddy(['stop'], res));
-router.post('/reload', (req, res) => execCaddy(['reload', '--config', 'Caddyfile'], res));
+router.post('/reload', (req, res) => execCaddy(['reload', '--config', appPaths.caddyfile], res));
 
 // Stats
 router.get('/stats', (req, res) => {
