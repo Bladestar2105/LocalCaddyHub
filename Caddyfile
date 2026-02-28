@@ -1,13 +1,20 @@
 {
-    layer4 {
-        :8443 {
-            proxy localhost:9443
-        }
-    }
+	http_port 80
+	https_port 443
+	log {
+		level INFO
+	}
 }
 
-:8080 {
-    reverse_proxy localhost:9000 {
-        transport http_ntlm
-    }
+https://example.com:443, https://api.example.com:443 {
+	tls internal
+	log
+	@al_1 {
+		remote_ip 1.2.3.4
+	}
+	abort @al_1
+	handle /test {
+		reverse_proxy 127.0.0.1:8080 {
+		}
+	}
 }

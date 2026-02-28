@@ -1,15 +1,84 @@
 {
-  "proxies": [
+  "general": {
+    "enabled": true,
+    "enable_layer4": true,
+    "http_port": "80",
+    "https_port": "443",
+    "log_level": "INFO"
+  },
+  "domains": [
     {
-      "listen": ":8080",
-      "upstream": "localhost:9000",
-      "ntlm": true
+      "id": "1",
+      "enabled": true,
+      "fromDomain": "example.com",
+      "fromPort": "443",
+      "accesslist": [
+        "1"
+      ],
+      "basicauth": [],
+      "description": "Main",
+      "accessLog": true,
+      "disableTls": false,
+      "customCert": ""
     }
   ],
-  "layer4": [
+  "subdomains": [
     {
-      "listen": ":8443",
-      "upstream": "localhost:9443"
+      "id": "1",
+      "enabled": true,
+      "reverse": "1",
+      "fromDomain": "api",
+      "accesslist": [],
+      "basicauth": [],
+      "description": "API"
     }
-  ]
+  ],
+  "handlers": [
+    {
+      "id": "2",
+      "enabled": true,
+      "reverse": "1",
+      "subdomain": "1",
+      "handleType": "handle",
+      "handlePath": "/test",
+      "accesslist": [],
+      "basicauth": [],
+      "header": [],
+      "handleDirective": "reverse_proxy",
+      "toDomain": [
+        "127.0.0.1"
+      ],
+      "toPort": "8080",
+      "httpTls": false,
+      "ntlm": false,
+      "description": "App",
+      "lb_policy": "",
+      "lb_retries": 0,
+      "lb_try_duration": "",
+      "lb_try_interval": "",
+      "health_fails": 0,
+      "health_passes": 0,
+      "health_timeout": "",
+      "health_interval": "",
+      "health_uri": "",
+      "health_port": "",
+      "health_status": "",
+      "health_body": "",
+      "health_follow_redirects": false
+    }
+  ],
+  "accessLists": [
+    {
+      "id": "1",
+      "accesslistName": "BlockIPs",
+      "clientIps": [
+        "1.2.3.4"
+      ],
+      "invert": true,
+      "description": "Block hacker"
+    }
+  ],
+  "basicAuths": [],
+  "headers": [],
+  "layer4": []
 }
