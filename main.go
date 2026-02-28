@@ -505,6 +505,11 @@ func csrfMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
+		log.Println("Usage: server [options]")
+		os.Exit(0)
+	}
+
 	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("./static"))
 	mux.Handle("/", fs)
