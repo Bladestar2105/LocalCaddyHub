@@ -55,7 +55,7 @@ const app = {
         try {
             const res = await fetch('/api/config/structured', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: JSON.stringify(this.config)
             });
             if (res.ok) {
@@ -71,7 +71,7 @@ const app = {
 
     validateConfig: async function() {
         try {
-            const res = await fetch('/api/validate', { method: 'POST' });
+            const res = await fetch('/api/validate', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
             if (res.ok && !data.error) {
                 this.showStatus('Configuration is valid!\n\n' + data.output, 'success');
@@ -91,7 +91,7 @@ const app = {
 
     control: async function(action) {
         try {
-            const res = await fetch('/api/' + action, { method: 'POST' });
+            const res = await fetch('/api/' + action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
             let msg = data.output || "Success";
             if (data.error) msg += "\nError: " + data.error;
@@ -130,7 +130,7 @@ const app = {
         formData.append('file', fileInput.files[0]);
 
         try {
-            const res = await fetch('/api/certs', { method: 'POST', body: formData });
+            const res = await fetch('/api/certs', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
             if (res.ok) {
                 $('#certUploadStatus').text("File uploaded successfully!").show();
                 fileInput.value = "";
@@ -146,7 +146,7 @@ const app = {
     deleteCert: async function(filename) {
         if (!confirm(`Delete ${filename}?`)) return;
         try {
-            const res = await fetch(`/api/certs?file=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            const res = await fetch(`/api/certs?file=${encodeURIComponent(filename)}`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (res.ok) {
                 this.loadCerts();
             } else {
