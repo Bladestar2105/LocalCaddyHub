@@ -1,0 +1,3 @@
+## 2024-03-14 - Modal Input Accessibility
+**Learning:** The Caddy Manager UI heavily relies on dynamically generated Bootstrap 5 modals in `static/app.js` (`app.ui.initModals`). These dynamically injected forms lacked `id` attributes on inputs and corresponding `for` attributes on labels, causing accessibility issues for screen readers and preventing click-to-focus behavior.
+**Action:** When working with dynamically generated HTML strings in this codebase (especially for modals), always ensure standard HTML accessibility attributes (`id`, `for`, `aria-*`) are explicitly included in the template strings, as they are not automatically applied.
