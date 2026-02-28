@@ -52,6 +52,38 @@ To use the NTLM transport in your `Caddyfile`, you need a custom Caddy build tha
 
 A `Dockerfile` is provided to build a container image with the custom Caddy binary and the manager application.
 
+### Using Docker Compose (Compatible with Portainer)
+
+1.  **Prepare Environment (Required):**
+    Before running the container, create the necessary files and directories on your host to persist your configuration and certificates. If you don't create the files beforehand, Docker might create directories instead of files.
+
+    ```bash
+    touch config.json Caddyfile
+    mkdir certs
+    ```
+
+2.  Create `docker-compose.yml`:
+
+    ```yaml
+    services:
+      caddy-manager:
+        image: caddy-manager:latest
+        container_name: caddy-manager
+        restart: unless-stopped
+        ports:
+          - "8090:8090"
+          - "80:80"
+          - "443:443"
+        volumes:
+          - ./config.json:/app/config.json
+          - ./Caddyfile:/app/Caddyfile
+          - ./certs:/app/certs
+    ```
+
+3.  Run `docker-compose up -d`.
+
+4.  Access at `http://localhost:8090`.
+
 ### Using Pre-built Image from GitHub Actions
 
 1.  **Download the Artifact:**
