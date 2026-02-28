@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - uses: actions/checkout@v3
@@ -19,15 +22,30 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    - name: Build and push (dry run)
+    - name: Log in to the Container registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and load image for verification
       uses: docker/build-push-action@v4
       with:
         context: .
-        push: false # Only build to verify success
+        push: false
         tags: caddy-manager:latest
-        load: true # Load image into docker daemon for testing
+        load: true
 
     - name: Verify image
       run: |
         docker run --rm caddy-manager:latest caddy version
         docker run --rm caddy-manager:latest /app/server -h || true # Just check it runs
+
+    - name: Build and push to GHCR
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/bladestar2105/localcaddyhub:latest
