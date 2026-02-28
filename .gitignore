@@ -3,3 +3,4 @@ server.log
 verification/
 config.json
 Caddyfile
+node_modules/
