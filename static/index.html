@@ -4,279 +4,230 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Caddy Manager</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .tabs { display: flex; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
-        .tab { padding: 10px 20px; cursor: pointer; border: 1px solid transparent; border-bottom: none; }
-        .tab.active { background-color: #f0f0f0; border-color: #ccc; border-radius: 5px 5px 0 0; }
-        .content { display: none; }
-        .content.active { display: block; }
+        body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
+        .tab-content { padding: 20px; border: 1px solid #dee2e6; border-top: none; background: white; }
         textarea { width: 100%; height: 300px; font-family: monospace; }
-        .status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #eee; white-space: pre-wrap; }
-        button { margin-right: 10px; padding: 8px 16px; cursor: pointer; }
-        .config-section { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
-        .config-section h3 { margin-top: 0; }
-        .config-item { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; }
-        .config-item input { padding: 5px; }
-        .config-item label { display: flex; align-items: center; gap: 5px; }
-        .remove-btn { background-color: #ffcccc; border: 1px solid #ff9999; color: #cc0000; }
-        .add-btn { background-color: #ccffcc; border: 1px solid #99ff99; color: #006600; margin-top: 10px; }
+        .status-box { margin-top: 20px; padding: 15px; border-radius: 5px; background-color: #e9ecef; white-space: pre-wrap; display: none; }
+        .table-responsive { margin-top: 20px; }
+        .action-btns button { margin-right: 5px; }
     </style>
 </head>
 <body>
 
-<h1>Caddy Manager</h1>
+<div class="container-fluid">
+    <h1 class="mb-4">Caddy Manager <small class="text-muted" style="font-size: 0.5em;">(like OPNsense)</small></h1>
 
-<div class="tabs">
-    <div class="tab active" onclick="showTab('config')">Configuration</div>
-    <div class="tab" onclick="showTab('raw-config')">Raw Caddyfile</div>
-    <div class="tab" onclick="showTab('control')">Control</div>
-    <div class="tab" onclick="showTab('stats')">Stats</div>
-</div>
-
-<div id="config" class="content active">
-    <div class="config-section">
-        <h3>Reverse Proxy</h3>
-        <div id="proxyList"></div>
-        <button class="add-btn" onclick="addProxy()">+ Add Proxy</button>
+    <div class="d-flex justify-content-between mb-3">
+        <div>
+            <button class="btn btn-primary" onclick="app.saveStructuredConfig()">Apply Configuration</button>
+            <button class="btn btn-secondary" onclick="app.validateConfig()">Validate Configuration</button>
+        </div>
+        <div id="globalStatus" class="status-box" style="margin-top:0; padding: 8px 15px; display:inline-block; font-weight: bold;"></div>
     </div>
 
-    <div class="config-section">
-        <h3>Layer 4 Proxy</h3>
-        <div id="layer4List"></div>
-        <button class="add-btn" onclick="addLayer4()">+ Add Layer 4</button>
+    <!-- Main Tabs -->
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+        <li class="nav-item"><a class="nav-link active" id="general-tab" data-bs-toggle="tab" href="#general" role="tab">General</a></li>
+        <li class="nav-item"><a class="nav-link" id="reverse-proxy-tab" data-bs-toggle="tab" href="#reverse-proxy" role="tab">Reverse Proxy</a></li>
+        <li class="nav-item"><a class="nav-link" id="layer4-tab" data-bs-toggle="tab" href="#layer4" role="tab">Layer 4</a></li>
+        <li class="nav-item"><a class="nav-link" id="certs-tab" data-bs-toggle="tab" href="#certs" role="tab">Certificates</a></li>
+        <li class="nav-item"><a class="nav-link" id="control-tab" data-bs-toggle="tab" href="#control" role="tab">Control & Raw</a></li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="mainTabsContent">
+
+        <!-- General Tab -->
+        <div class="tab-pane fade show active" id="general" role="tabpanel">
+            <h3>General Settings</h3>
+            <form id="generalForm">
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="genEnabled">
+                    <label class="form-check-label" for="genEnabled">Enable Caddy Configuration</label>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="genEnableLayer4">
+                    <label class="form-check-label" for="genEnableLayer4">Enable Layer 4 Configuration</label>
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpPort" class="form-label">HTTP Port</label>
+                    <input type="text" class="form-control" id="genHttpPort" placeholder="80">
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpsPort" class="form-label">HTTPS Port</label>
+                    <input type="text" class="form-control" id="genHttpsPort" placeholder="443">
+                </div>
+                <div class="mb-3">
+                    <label for="genLogLevel" class="form-label">Log Level</label>
+                    <select class="form-select" id="genLogLevel">
+                        <option value="">Default (INFO)</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <!-- Reverse Proxy Tab -->
+        <div class="tab-pane fade" id="reverse-proxy" role="tabpanel">
+            <!-- Sub Tabs for Reverse Proxy -->
+            <ul class="nav nav-pills mb-3" id="rpTabs" role="tablist">
+                <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#rp-domains">Domains</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-subdomains">Subdomains</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-handlers">Handlers</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-accesslists">Access Lists</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-basicauth">Basic Auth</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-headers">Headers</a></li>
+            </ul>
+
+            <div class="tab-content border-0 p-0">
+                <!-- Domains -->
+                <div class="tab-pane fade show active" id="rp-domains">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Domains</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('domainModal')">+ Add Domain</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="domainsTable">
+                            <thead><tr><th>En</th><th>Domain</th><th>Port</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subdomains -->
+                <div class="tab-pane fade" id="rp-subdomains">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Subdomains</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('subdomainModal')">+ Add Subdomain</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="subdomainsTable">
+                            <thead><tr><th>En</th><th>Subdomain</th><th>Parent Domain</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Handlers -->
+                <div class="tab-pane fade" id="rp-handlers">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Handlers</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('handlerModal')">+ Add Handler</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="handlersTable">
+                            <thead><tr><th>En</th><th>Domain/Sub</th><th>Path</th><th>Upstream</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Access Lists -->
+                <div class="tab-pane fade" id="rp-accesslists">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Access Lists</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('accessListModal')">+ Add Access List</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="accessListsTable">
+                            <thead><tr><th>Name</th><th>Client IPs</th><th>Invert</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Basic Auth -->
+                <div class="tab-pane fade" id="rp-basicauth">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Basic Auth</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('basicAuthModal')">+ Add Basic Auth</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="basicAuthsTable">
+                            <thead><tr><th>User</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Headers -->
+                <div class="tab-pane fade" id="rp-headers">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Headers</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('headerModal')">+ Add Header</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="headersTable">
+                            <thead><tr><th>Type</th><th>Header</th><th>Value</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Layer 4 Tab -->
+        <div class="tab-pane fade" id="layer4" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4>Layer 4 Routes</h4>
+                <button class="btn btn-sm btn-success" onclick="app.ui.openModal('layer4Modal')">+ Add Route</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="layer4Table">
+                    <thead><tr><th>En</th><th>Seq</th><th>Matcher</th><th>Listen Port</th><th>Upstream</th><th>Desc</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Certificates Tab -->
+        <div class="tab-pane fade" id="certs" role="tabpanel">
+            <h4>Custom Certificates</h4>
+            <p>Upload your <code>.pem</code> and <code>.key</code> files here. They will be available for selection in Domains.</p>
+            <div class="mb-3">
+                <input class="form-control" type="file" id="certUploadInput">
+                <button class="btn btn-primary mt-2" onclick="app.uploadCert()">Upload File</button>
+            </div>
+            <div id="certUploadStatus" class="status-box mb-3"></div>
+            <h5>Available Files in ./certs/</h5>
+            <ul id="certsList" class="list-group"></ul>
+        </div>
+
+        <!-- Control Tab -->
+        <div class="tab-pane fade" id="control" role="tabpanel">
+            <h4>Process Control</h4>
+            <div class="mb-4">
+                <button class="btn btn-success" onclick="app.control('start')">Start</button>
+                <button class="btn btn-danger" onclick="app.control('stop')">Stop</button>
+                <button class="btn btn-warning" onclick="app.control('reload')">Reload</button>
+            </div>
+            <div id="controlStatus" class="status-box mb-4"></div>
+
+            <h4>Raw Caddyfile</h4>
+            <textarea id="rawCaddyfile" readonly class="form-control bg-light mb-2"></textarea>
+
+            <h4 class="mt-4">Stats</h4>
+            <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
+            <pre id="statsOutput" class="status-box" style="display:block;"></pre>
+        </div>
+
     </div>
-
-    <br>
-    <button onclick="saveStructuredConfig()">Save Configuration</button>
-    <button onclick="validateConfig()">Validate</button>
-    <div id="structuredConfigStatus" class="status"></div>
 </div>
 
-<div id="raw-config" class="content">
-    <h2>Caddyfile</h2>
-    <textarea id="caddyfile"></textarea>
-    <br><br>
-    <button onclick="saveConfig()">Save Raw Config</button>
-    <div id="configStatus" class="status"></div>
-</div>
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/app.js"></script>
 
-<div id="control" class="content">
-    <h2>Process Control</h2>
-    <button onclick="startCaddy()">Start</button>
-    <button onclick="stopCaddy()">Stop</button>
-    <button onclick="reloadCaddy()">Reload</button>
-    <div id="controlStatus" class="status"></div>
-</div>
-
-<div id="stats" class="content">
-    <h2>Backend Stats</h2>
-    <button onclick="fetchStats()">Refresh</button>
-    <pre id="statsOutput" class="status"></pre>
-</div>
-
-<script>
-    function showTab(tabName) {
-        // Remove active class from all tabs
-        const tabs = document.querySelectorAll('.tab');
-        tabs.forEach(t => t.classList.remove('active'));
-
-        // Remove active class from all content
-        const contents = document.querySelectorAll('.content');
-        contents.forEach(c => c.classList.remove('active'));
-
-        // Add active class to clicked tab
-        const activeTab = document.querySelector(`.tab[onclick="showTab('${tabName}')"]`);
-        if (activeTab) {
-            activeTab.classList.add('active');
-        }
-
-        // Add active class to corresponding content
-        const activeContent = document.getElementById(tabName);
-        if (activeContent) {
-            activeContent.classList.add('active');
-        }
-    }
-
-    async function loadConfig() {
-        try {
-            const res = await fetch('/api/config');
-            if (!res.ok) throw new Error('Failed to load config');
-            const data = await res.json();
-            document.getElementById('caddyfile').value = data.content;
-        } catch (e) {
-            console.error("Failed to load config", e);
-            document.getElementById('configStatus').innerText = "Error loading config: " + e.message;
-        }
-    }
-
-    async function saveConfig() {
-        const content = document.getElementById('caddyfile').value;
-        try {
-            const res = await fetch('/api/config', {
-                method: 'POST',
-                body: JSON.stringify({ content }),
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (res.ok) {
-                document.getElementById('configStatus').innerText = "Saved successfully.";
-            } else {
-                document.getElementById('configStatus').innerText = "Failed to save.";
-            }
-        } catch (e) {
-            document.getElementById('configStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    async function validateConfig() {
-        try {
-            const res = await fetch('/api/validate', { method: 'POST' });
-            const data = await res.json();
-            let msg = data.output || "";
-            if (data.error) msg += "\nError: " + data.error;
-            document.getElementById('configStatus').innerText = msg;
-        } catch (e) {
-            document.getElementById('configStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    async function startCaddy() {
-        try {
-            const res = await fetch('/api/start', { method: 'POST' });
-            const data = await res.json();
-             let msg = data.output || "";
-            if (data.error) msg += "\nError: " + data.error;
-            document.getElementById('controlStatus').innerText = msg;
-        } catch (e) {
-            document.getElementById('controlStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    async function stopCaddy() {
-        try {
-            const res = await fetch('/api/stop', { method: 'POST' });
-            const data = await res.json();
-             let msg = data.output || "";
-            if (data.error) msg += "\nError: " + data.error;
-            document.getElementById('controlStatus').innerText = msg;
-        } catch (e) {
-            document.getElementById('controlStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    async function reloadCaddy() {
-        try {
-            const res = await fetch('/api/reload', { method: 'POST' });
-            const data = await res.json();
-             let msg = data.output || "";
-            if (data.error) msg += "\nError: " + data.error;
-            document.getElementById('controlStatus').innerText = msg;
-        } catch (e) {
-            document.getElementById('controlStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    async function fetchStats() {
-        try {
-            const res = await fetch('/api/stats');
-            const text = await res.text();
-            document.getElementById('statsOutput').innerText = text;
-        } catch (e) {
-             document.getElementById('statsOutput').innerText = "Error: " + e.message;
-        }
-    }
-
-    // --- Structured Config Logic ---
-
-    function addProxy(listen = "", upstream = "", ntlm = false) {
-        const div = document.createElement('div');
-        div.className = 'config-item';
-        div.innerHTML = `
-            <input type="text" placeholder="Listen Address (e.g., :80)" class="proxy-listen" value="${listen}">
-            <input type="text" placeholder="Upstream Address (e.g., localhost:8080)" class="proxy-upstream" value="${upstream}">
-            <label><input type="checkbox" class="proxy-ntlm" ${ntlm ? 'checked' : ''}> NTLM</label>
-            <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
-        `;
-        document.getElementById('proxyList').appendChild(div);
-    }
-
-    function addLayer4(listen = "", upstream = "") {
-        const div = document.createElement('div');
-        div.className = 'config-item';
-        div.innerHTML = `
-            <input type="text" placeholder="Listen Address (e.g., :443)" class="l4-listen" value="${listen}">
-            <input type="text" placeholder="Upstream Address (e.g., localhost:8443)" class="l4-upstream" value="${upstream}">
-            <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
-        `;
-        document.getElementById('layer4List').appendChild(div);
-    }
-
-    async function loadStructuredConfig() {
-        try {
-            const res = await fetch('/api/config/structured');
-            if (!res.ok) throw new Error('Failed to load structured config');
-            const data = await res.json();
-
-            // Clear existing lists
-            document.getElementById('proxyList').innerHTML = '';
-            document.getElementById('layer4List').innerHTML = '';
-
-            if (data.proxies) {
-                data.proxies.forEach(p => addProxy(p.listen, p.upstream, p.ntlm));
-            }
-            if (data.layer4) {
-                data.layer4.forEach(l => addLayer4(l.listen, l.upstream));
-            }
-
-        } catch (e) {
-            console.error("Failed to load structured config", e);
-             document.getElementById('structuredConfigStatus').innerText = "Error loading config: " + e.message;
-        }
-    }
-
-    async function saveStructuredConfig() {
-        const proxies = [];
-        document.querySelectorAll('#proxyList .config-item').forEach(item => {
-            proxies.push({
-                listen: item.querySelector('.proxy-listen').value,
-                upstream: item.querySelector('.proxy-upstream').value,
-                ntlm: item.querySelector('.proxy-ntlm').checked
-            });
-        });
-
-        const layer4 = [];
-        document.querySelectorAll('#layer4List .config-item').forEach(item => {
-            layer4.push({
-                listen: item.querySelector('.l4-listen').value,
-                upstream: item.querySelector('.l4-upstream').value
-            });
-        });
-
-        const config = { proxies, layer4 };
-
-        try {
-            const res = await fetch('/api/config/structured', {
-                method: 'POST',
-                body: JSON.stringify(config),
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (res.ok) {
-                document.getElementById('structuredConfigStatus').innerText = "Saved successfully.";
-                // Reload raw config to show changes
-                loadConfig();
-            } else {
-                document.getElementById('structuredConfigStatus').innerText = "Failed to save.";
-            }
-        } catch (e) {
-            document.getElementById('structuredConfigStatus').innerText = "Error: " + e.message;
-        }
-    }
-
-    // Load config on startup
-    loadConfig();
-    loadStructuredConfig();
-    fetchStats();
-</script>
+<!-- Modals Container (Injected by JS) -->
+<div id="modalsContainer"></div>
 
 </body>
 </html>
