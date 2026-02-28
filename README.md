@@ -66,15 +66,7 @@ A `Dockerfile` is provided to build a multi-stage container image that compiles 
 
 ### Using Docker Compose (Recommended)
 
-1.  **Prepare Environment (Required):**
-    Before running the container, create the necessary files and directories on your host to persist your configuration, database, and certificates. If you don't create the files beforehand, Docker might create directories instead of files.
-
-    ```bash
-    touch config.json Caddyfile caddyhub.db
-    mkdir certs
-    ```
-
-2.  Create `docker-compose.yml`:
+1.  Create `docker-compose.yml`:
 
     ```yaml
     services:
@@ -87,28 +79,20 @@ A `Dockerfile` is provided to build a multi-stage container image that compiles 
           - "80:80"
           - "443:443"
         volumes:
-          - ./config.json:/app/config.json
-          - ./Caddyfile:/app/Caddyfile
-          - ./caddyhub.db:/app/caddyhub.db
-          - ./certs:/app/certs
+          - ./data:/app/data
     ```
 
-3.  Run `docker-compose up -d`.
+2.  Run `docker-compose up -d`.
 
-4.  Access at `http://localhost:8090` (Login: `admin` / `admin`).
+3.  Access at `http://localhost:8090` (Login: `admin` / `admin`).
+
+> **Note on Legacy Configurations**: If you were previously mapping `Caddyfile`, `config.json`, `caddyhub.db`, and `certs` as individual files/folders, LocalCaddyHub will still detect and support them. However, mapping a single `/app/data` volume prevents a common Docker issue where mapping a non-existent file on the host creates a directory instead.
 
 ### Using Pre-built Image from GitHub Actions or Building Locally
 
 If using `docker run` directly:
 
-1.  **Prepare Environment (Required):**
-
-    ```bash
-    touch config.json Caddyfile caddyhub.db
-    mkdir certs
-    ```
-
-2.  **Run the Container:**
+1.  **Run the Container:**
 
     ```bash
     docker run -d \
@@ -116,10 +100,7 @@ If using `docker run` directly:
       -p 8090:8090 \
       -p 80:80 \
       -p 443:443 \
-      -v $(pwd)/config.json:/app/config.json \
-      -v $(pwd)/Caddyfile:/app/Caddyfile \
-      -v $(pwd)/caddyhub.db:/app/caddyhub.db \
-      -v $(pwd)/certs:/app/certs \
+      -v $(pwd)/data:/app/data \
       ghcr.io/bladestar2105/localcaddyhub:latest
     ```
     *(Replace the image tag with `localcaddyhub` if you built the image locally via `docker build -t localcaddyhub .`)*

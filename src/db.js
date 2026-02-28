@@ -1,9 +1,9 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const appPaths = require('./paths');
 
-const dbPath = path.join(__dirname, '..', 'caddyhub.db');
-const db = new Database(dbPath);
+const db = new Database(appPaths.db);
 
 db.pragma('journal_mode = WAL');
 
