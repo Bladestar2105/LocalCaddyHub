@@ -187,6 +187,21 @@ const app = {
 
         renderTable: function(configKey, tableId, cols) {
             const tbody = $(`#${tableId} tbody`).empty();
+
+            // Optimization: Create lookup maps for O(1) resolution instead of O(N) array finds
+            let domainMap = null;
+            let subdomainMap = null;
+            if (configKey === 'handlers' || configKey === 'subdomains') {
+                domainMap = {};
+                (app.config.domains || []).forEach(d => domainMap[d.id] = d);
+            }
+            if (configKey === 'handlers') {
+                subdomainMap = {};
+                (app.config.subdomains || []).forEach(s => subdomainMap[s.id] = s);
+            }
+
+            // Optimization: Batch DOM appends to prevent layout thrashing
+            const rows = [];
             (app.config[configKey] || []).forEach(item => {
                 let tr = $('<tr>');
                 cols.forEach(col => {
@@ -195,12 +210,12 @@ const app = {
                     if (Array.isArray(val)) val = val.join(', ');
                     if (col === 'reverse' && configKey === 'handlers') {
                         // resolve domain name
-                        const dom = app.config.domains.find(d => d.id === item.reverse);
-                        const sub = app.config.subdomains.find(s => s.id === item.subdomain);
+                        const dom = domainMap[item.reverse];
+                        const sub = subdomainMap[item.subdomain];
                         val = dom ? dom.fromDomain : '';
                         if (sub) val = sub.fromDomain + '.' + val;
                     } else if (col === 'reverse' && configKey === 'subdomains') {
-                         const dom = app.config.domains.find(d => d.id === item.reverse);
+                         const dom = domainMap[item.reverse];
                          val = dom ? dom.fromDomain : '';
                     }
 
@@ -211,8 +226,9 @@ const app = {
                 let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').click(() => this.editItem(configKey, item.id));
                 let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').click(() => app.deleteItem(configKey, item.id));
                 tr.append(actions.append(editBtn, delBtn));
-                tbody.append(tr);
+                rows.push(tr);
             });
+            tbody.append(rows);
         },
 
         renderCerts: function() {
