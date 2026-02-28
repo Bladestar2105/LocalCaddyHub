@@ -1,0 +1,5 @@
+caddy-manager
+server.log
+verification/
+config.json
+Caddyfile

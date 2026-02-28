@@ -24,61 +24,68 @@ def run():
         # Take initial screenshot
         page.screenshot(path="verification/initial_load.png")
 
-        # --- Add Proxy ---
-        print("Adding Proxy...")
-        # Use a more robust selector if possible, or wait for visibility
+        # --- Add Domain ---
+        print("Adding Domain...")
         try:
-            # Check if button is visible
-            add_proxy_btn = page.locator("button.add-btn", has_text="+ Add Proxy")
-            add_proxy_btn.wait_for(state="visible", timeout=5000)
-            add_proxy_btn.click()
-            print("Proxy added.")
+            page.click("text=Reverse Proxy")
+            page.click("a[href='#rp-domains']")
+            page.click("button:has-text('+ Add Domain')")
+            page.wait_for_selector("#domainModal", state="visible")
+            page.fill("#d_fd", "example.com")
+            page.fill("#d_fp", "443")
+            page.check("#d_en")
+            page.click("#domainModal .btn-primary:has-text('Save')")
+            page.wait_for_selector("#domainModal", state="hidden")
+            print("Domain added.")
         except Exception as e:
-            print(f"Failed to click Add Proxy: {e}")
-            page.screenshot(path="verification/error_add_proxy.png")
+            print(f"Failed to add Domain: {e}")
+            page.screenshot(path="verification/error_add_domain.png")
             return
 
-        # Fill in Proxy details
+        # --- Add Handler ---
+        print("Adding Handler...")
         try:
-            proxy_item = page.locator("#proxyList .config-item").first
-            proxy_item.wait_for(state="visible")
-            proxy_item.locator(".proxy-listen").fill(":8080")
-            proxy_item.locator(".proxy-upstream").fill("localhost:9000")
-            proxy_item.locator(".proxy-ntlm").check()
-            print("Proxy details filled.")
+            page.click("a[href='#rp-handlers']")
+            page.click("button:has-text('+ Add Handler')")
+            page.wait_for_selector("#handlerModal", state="visible")
+            page.check("#h_en")
+            # Select the domain we just added (example.com)
+            page.select_option("#h_rev", label="example.com")
+            page.fill("#h_td", "localhost")
+            page.fill("#h_tp", "9000")
+            page.click("#handlerModal .btn-primary:has-text('Save')")
+            page.wait_for_selector("#handlerModal", state="hidden")
+            print("Handler added.")
         except Exception as e:
-            print(f"Failed to fill proxy details: {e}")
-            page.screenshot(path="verification/error_fill_proxy.png")
+            print(f"Failed to add Handler: {e}")
+            page.screenshot(path="verification/error_add_handler.png")
             return
 
         # --- Add Layer 4 ---
         print("Adding Layer 4...")
         try:
-            add_l4_btn = page.locator("button.add-btn", has_text="+ Add Layer 4")
-            add_l4_btn.click()
+            page.click("text=Layer 4")
+            page.click("button:has-text('+ Add Route')")
+            page.wait_for_selector("#layer4Modal", state="visible")
+            page.check("#l4_en")
+            page.fill("#l4_fp", "8443")
+            page.fill("#l4_td", "localhost")
+            page.fill("#l4_tp", "9443")
+            page.click("#layer4Modal .btn-primary:has-text('Save')")
+            page.wait_for_selector("#layer4Modal", state="hidden")
             print("Layer 4 added.")
         except Exception as e:
             print(f"Failed to click Add Layer 4: {e}")
-            return
-
-        # Fill in Layer 4 details
-        try:
-            l4_item = page.locator("#layer4List .config-item").first
-            l4_item.wait_for(state="visible")
-            l4_item.locator(".l4-listen").fill(":8443")
-            l4_item.locator(".l4-upstream").fill("localhost:9443")
-            print("Layer 4 details filled.")
-        except Exception as e:
-            print(f"Failed to fill Layer 4 details: {e}")
+            page.screenshot(path="verification/error_add_l4.png")
             return
 
         # Save Configuration
         print("Saving configuration...")
         try:
-            page.click("text=Save Configuration")
+            page.click("text=Apply Configuration")
             # Wait for success message
-            page.wait_for_selector("#structuredConfigStatus", timeout=5000)
-            status_text = page.inner_text("#structuredConfigStatus")
+            page.wait_for_selector("#globalStatus", timeout=5000)
+            status_text = page.inner_text("#globalStatus")
             print(f"Status: {status_text}")
         except Exception as e:
             print(f"Failed to save configuration: {e}")
@@ -88,10 +95,10 @@ def run():
         page.screenshot(path="verification/ui_configured.png")
         print("UI screenshot saved.")
 
-        # Switch to Raw Caddyfile tab to verify generation
-        print("Switching to Raw Caddyfile tab...")
+        # Switch to Control & Raw tab to verify generation
+        print("Switching to Control & Raw tab...")
         try:
-            page.click("text=Raw Caddyfile")
+            page.click("text=Control & Raw")
             page.wait_for_timeout(1000)
 
             # Take a screenshot of the generated Caddyfile
