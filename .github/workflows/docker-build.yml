@@ -34,13 +34,13 @@ jobs:
       with:
         context: .
         push: false
-        tags: caddy-manager:latest
+        tags: localcaddyhub:latest
         load: true
 
     - name: Verify image
       run: |
-        docker run --rm caddy-manager:latest caddy version
-        docker run --rm caddy-manager:latest /app/server -h || true # Just check it runs
+        docker run --rm localcaddyhub:latest caddy version
+        docker run --rm localcaddyhub:latest /app/server -h || true # Just check it runs
 
     - name: Build and push to GHCR
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
