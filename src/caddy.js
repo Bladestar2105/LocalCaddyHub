@@ -91,10 +91,12 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       // Find subdomains for this domain
       const domainSubdomains = [];
+      const domainSubdomainIds = new Set();
       if (config.subdomains) {
         for (const sub of config.subdomains) {
           if (sub.enabled && sub.reverse === domain.id) {
             domainSubdomains.push(sub);
+            domainSubdomainIds.add(sub.id);
           }
         }
       }
@@ -177,15 +179,8 @@ function generateCaddyfile(config, certsDir = './certs') {
           }
 
           // Subdomain check
-          let isSubdomainMatch = false;
-          if (handler.subdomain) {
-            for (const sub of domainSubdomains) {
-              if (handler.subdomain === sub.id) {
-                isSubdomainMatch = true;
-                break;
-              }
-            }
-            if (!isSubdomainMatch) continue;
+          if (handler.subdomain && !domainSubdomainIds.has(handler.subdomain)) {
+            continue;
           }
 
           // Construct handler matchers
