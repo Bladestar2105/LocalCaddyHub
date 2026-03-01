@@ -11,8 +11,16 @@ function generateCaddyfile(config, certsDir = './certs') {
   if (config.general.https_port) {
     sb += `\thttps_port ${config.general.https_port}\n`;
   }
+  const rollSize = config.general.log_roll_size_mb || 10;
+  const rollKeep = config.general.log_roll_keep || 7;
+  const logsDir = path.join(process.cwd(), 'data', 'logs').replace(/\\/g, '/');
+
   if (config.general.log_level) {
     sb += '\tlog {\n';
+    sb += `\t\toutput file ${logsDir}/caddy-global.log {\n`;
+    sb += `\t\t\troll_size ${rollSize}MiB\n`;
+    sb += `\t\t\troll_keep ${rollKeep}\n`;
+    sb += '\t\t}\n';
     sb += `\t\tlevel ${config.general.log_level}\n`;
     sb += '\t}\n';
   }
@@ -234,7 +242,12 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       // Access Log
       if (domain.accessLog) {
-        sb += '\tlog\n';
+        sb += '\tlog {\n';
+        sb += `\t\toutput file ${logsDir}/${domain.fromDomain}.log {\n`;
+        sb += `\t\t\troll_size ${rollSize}MiB\n`;
+        sb += `\t\t\troll_keep ${rollKeep}\n`;
+        sb += '\t\t}\n';
+        sb += '\t}\n';
       }
 
       // Domain Access Lists
