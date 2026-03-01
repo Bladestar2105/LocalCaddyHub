@@ -72,7 +72,9 @@ router.get('/config/structured', (req, res) => {
         timeout_write: general.timeout_write || '',
         timeout_idle: general.timeout_idle || '',
         log_credentials: Boolean(general.log_credentials),
-        auto_https: general.auto_https || ''
+        auto_https: general.auto_https || '',
+        log_roll_size_mb: general.log_roll_size_mb || 10,
+        log_roll_keep: general.log_roll_keep || 7
       },
       domains: domainsRows.map(d => ({
         ...d,
@@ -142,8 +144,8 @@ router.post('/config/structured', express.json(), async (req, res) => {
     const saveTransaction = db.transaction(() => {
       // General
       if (config.general) {
-        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=? WHERE id=1')
-          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https);
+        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1')
+          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
       }
 
       // Domains
@@ -232,6 +234,66 @@ router.post('/config/structured', express.json(), async (req, res) => {
     console.error(err);
     res.status(500).send('Failed to save config');
   }
+});
+
+// Logs
+const logsDir = path.join(__dirname, '..', 'data', 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+router.get('/logs/files', async (req, res) => {
+  try {
+    const files = await fs.promises.readdir(logsDir, { withFileTypes: true });
+    const logFiles = files.filter(f => f.isFile() && f.name.endsWith('.log')).map(f => f.name);
+    res.json(logFiles);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.json([]);
+    res.status(500).send('Failed to read logs directory');
+  }
+});
+
+router.get('/logs/stream', (req, res) => {
+  const filename = req.query.file;
+  if (!filename || filename.includes('..') || filename.includes('/') || !filename.endsWith('.log')) {
+    return res.status(400).send('Invalid filename');
+  }
+
+  const filePath = path.join(logsDir, filename);
+
+  // Set headers for SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  if (!fs.existsSync(filePath)) {
+    res.write(`data: ${JSON.stringify({ error: 'Log file not found' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Use child_process tail to read the file
+  const tail = execFile('tail', ['-f', '-n', '100', filePath]);
+
+  tail.stdout.on('data', (data) => {
+    // Split by lines and send each line as an event
+    const lines = data.split('\n');
+    lines.forEach(line => {
+      if (line.trim()) {
+        res.write(`data: ${line}\n\n`);
+      }
+    });
+  });
+
+  tail.stderr.on('data', (data) => {
+    console.error(`Tail error: ${data}`);
+  });
+
+  req.on('close', () => {
+    tail.kill();
+  });
 });
 
 // Exec Caddy commands

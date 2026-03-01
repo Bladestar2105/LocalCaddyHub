@@ -24,7 +24,9 @@ function initDb() {
       timeout_write TEXT,
       timeout_idle TEXT,
       log_credentials INTEGER DEFAULT 0,
-      auto_https TEXT
+      auto_https TEXT,
+      log_roll_size_mb INTEGER DEFAULT 10,
+      log_roll_keep INTEGER DEFAULT 7
     );
 
     CREATE TABLE IF NOT EXISTS domains (
@@ -176,6 +178,8 @@ function initDb() {
     { table: 'general_config', column: 'timeout_idle', def: 'TEXT' },
     { table: 'general_config', column: 'log_credentials', def: 'INTEGER DEFAULT 0' },
     { table: 'general_config', column: 'auto_https', def: 'TEXT' },
+    { table: 'general_config', column: 'log_roll_size_mb', def: 'INTEGER DEFAULT 10' },
+    { table: 'general_config', column: 'log_roll_keep', def: 'INTEGER DEFAULT 7' },
     { table: 'domains', column: 'client_auth_mode', def: 'TEXT' },
     { table: 'domains', column: 'client_auth_trust_pool', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_mode', def: 'TEXT' },

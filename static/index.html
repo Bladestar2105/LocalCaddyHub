@@ -49,6 +49,7 @@
         <li class="nav-item"><a class="nav-link" id="layer4-tab" data-bs-toggle="tab" href="#layer4" role="tab">Layer 4</a></li>
         <li class="nav-item"><a class="nav-link" id="certs-tab" data-bs-toggle="tab" href="#certs" role="tab">Certificates</a></li>
         <li class="nav-item"><a class="nav-link" id="control-tab" data-bs-toggle="tab" href="#control" role="tab">Control & Raw</a></li>
+        <li class="nav-item"><a class="nav-link" id="logs-tab" data-bs-toggle="tab" href="#logs" role="tab">Live Logs</a></li>
     </ul>
 
     <!-- Tab Content -->
@@ -90,6 +91,16 @@
                         <input type="checkbox" class="form-check-input" id="genLogCreds">
                         Log Credentials <i class="text-muted" style="font-size:0.9em;">(?) Enables logging of credentials.</i>
                     </label>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="genLogRollSize" class="form-label">Log Roll Size (MB) <i class="text-muted" style="font-size:0.9em;">(?) Max size of a log file before it gets rotated.</i></label>
+                        <input type="number" class="form-control" id="genLogRollSize" placeholder="10">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="genLogRollKeep" class="form-label">Log Keep Days <i class="text-muted" style="font-size:0.9em;">(?) Max number of rotated log files to keep.</i></label>
+                        <input type="number" class="form-control" id="genLogRollKeep" placeholder="7">
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="genTlsEmail" class="form-label">TLS Email <i class="text-muted" style="font-size:0.9em;">(?) The email address to use for the ACME account.</i></label>
@@ -271,6 +282,68 @@
             <h4 class="mt-4">Stats</h4>
             <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
             <pre id="statsOutput" class="status-box" style="display:block;"></pre>
+        </div>
+
+        <!-- Live Logs Tab -->
+        <div class="tab-pane fade" id="logs" role="tabpanel">
+            <h4>Live Log Viewer</h4>
+            <div class="row mb-3 mt-3">
+                <div class="col-md-4">
+                    <label for="logFileSelect" class="form-label">Log File</label>
+                    <select id="logFileSelect" class="form-select"></select>
+                </div>
+                <div class="col-md-8 d-flex align-items-end">
+                    <button class="btn btn-primary me-2" id="startTailBtn" onclick="app.startTailing()">Start Tailing</button>
+                    <button class="btn btn-danger me-2" id="stopTailBtn" onclick="app.stopTailing()" style="display:none;">Stop Tailing</button>
+                    <button class="btn btn-secondary" onclick="app.clearLogs()">Clear Output</button>
+                </div>
+            </div>
+
+            <div class="card bg-dark mb-3">
+                <div class="card-header text-white">Filters</div>
+                <div class="card-body row">
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterLevel" class="form-label text-white">Log Level</label>
+                        <select id="logFilterLevel" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option value="error">ERROR</option>
+                            <option value="warn">WARN</option>
+                            <option value="info">INFO</option>
+                            <option value="debug">DEBUG</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterStatus" class="form-label text-white">Status</label>
+                        <input type="text" id="logFilterStatus" class="form-control form-control-sm" placeholder="e.g. 404, 5xx">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterMethod" class="form-label text-white">Method</label>
+                        <select id="logFilterMethod" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="OPTIONS">OPTIONS</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterIp" class="form-label text-white">Client IP</label>
+                        <input type="text" id="logFilterIp" class="form-control form-control-sm" placeholder="e.g. 192.168.1.1">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterPath" class="form-label text-white">Path / URI</label>
+                        <input type="text" id="logFilterPath" class="form-control form-control-sm" placeholder="e.g. /api">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterText" class="form-label text-white">Free-text Search</label>
+                        <input type="text" id="logFilterText" class="form-control form-control-sm" placeholder="Keyword...">
+                    </div>
+                </div>
+            </div>
+
+            <pre id="logOutputArea" class="form-control bg-dark text-light" style="height: 600px; overflow-y: scroll; font-size: 0.85em; white-space: pre-wrap; font-family: monospace;"></pre>
         </div>
 
     </div>
