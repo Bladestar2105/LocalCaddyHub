@@ -485,23 +485,43 @@ const app = {
                 </div>
 
                 <!-- Handler Modal -->
+
+                <!-- Handler Modal -->
                 <div class="modal fade" id="handlerModal" tabindex="-1">
                   <div class="modal-dialog modal-lg"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Handler</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body"><form id="handlerModalForm">
-                        <div class="row">
-                            <div class="col-md-6">
+
+                        <ul class="nav nav-tabs mb-3" id="handlerTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="h-general-tab" data-bs-toggle="tab" data-bs-target="#h-general" type="button" role="tab">General</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link directive-rp" id="h-upstream-tab" data-bs-toggle="tab" data-bs-target="#h-upstream" type="button" role="tab">Upstream</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link directive-rp" id="h-health-tab" data-bs-toggle="tab" data-bs-target="#h-health" type="button" role="tab">Health Checks</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link directive-rp" id="h-access-tab" data-bs-toggle="tab" data-bs-target="#h-access" type="button" role="tab">Access & Headers</button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="handlerTabsContent">
+                            <!-- General Tab -->
+                            <div class="tab-pane fade show active" id="h-general" role="tabpanel">
                                 <div class="mb-2"><input type="checkbox" name="enabled" id="h_en"> <label for="h_en">Enabled</label></div>
                                 <div class="mb-2"><label for="h_rev">Domain</label><select id="h_rev" name="reverse" class="form-select domain-select" required></select></div>
                                 <div class="mb-2"><label for="h_sub">Subdomain Filter</label><select id="h_sub" name="subdomain" class="form-select subdomain-select"></select></div>
                                 <div class="mb-2"><label for="h_ht">Handle Type</label><select id="h_ht" name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
                                 <div class="mb-2"><label for="h_hp">Path Matcher (e.g. /api/*)</label><input type="text" id="h_hp" name="handlePath" class="form-control"></div>
-                                <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select" onchange="$('.directive-rp').toggle(this.value === 'reverse_proxy'); $('.directive-redir').toggle(this.value === 'redir');"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
+                                <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select" onchange="if (this.value === 'reverse_proxy') { $('.directive-rp').show(); } else { $('.directive-rp').hide(); } $('.directive-redir').toggle(this.value === 'redir'); if (this.value === 'redir') { $('#h-general-tab').tab('show'); }"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
                                 <div class="mb-2"><label for="h_desc">Description</label><input type="text" id="h_desc" name="description" class="form-control"></div>
-
                                 <div class="mb-2 directive-redir"><label for="h_rstat">Redirect Status Code</label><input type="text" id="h_rstat" name="redir_status" class="form-control" placeholder="301"></div>
                             </div>
-                            <div class="col-md-6 directive-rp">
+
+                            <!-- Upstream Tab -->
+                            <div class="tab-pane fade" id="h-upstream" role="tabpanel">
                                 <div class="mb-2"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
                                 <div class="mb-2"><label for="h_tp">Upstream Port</label><input type="text" id="h_tp" name="toPort" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="httpTls" id="h_tls"> <label for="h_tls">Upstream TLS (HTTPS)</label></div>
@@ -510,11 +530,37 @@ const app = {
                                 <div class="mb-2"><label for="h_tls_ca">Upstream TLS Trusted CA Cert</label><select id="h_tls_ca" name="http_tls_trusted_ca_certs" class="form-select cert-select"></select></div>
                                 <div class="mb-2"><label for="h_hver">HTTP Versions (e.g. h1, h2, h3)</label><input type="text" id="h_hver" name="http_version" class="form-control"></div>
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
-
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
-                                <div class="mb-2"><label for="h_hfd">Passive Health Fail Duration (e.g. 10s)</label><input type="text" id="h_hfd" name="passive_health_fail_duration" class="form-control"></div>
-                                <div class="mb-2"><label for="h_hmf">Passive Health Max Fails</label><input type="number" id="h_hmf" name="passive_health_max_fails" class="form-control"></div>
+                            </div>
+
+                            <!-- Health Checks Tab -->
+                            <div class="tab-pane fade" id="h-health" role="tabpanel">
+                                <div class="mb-3">
+                                    <h6>Active Health Checks</h6>
+                                    <div class="mb-2"><label for="h_hu">Health URI <i class="text-muted" style="font-size:0.9em;">(?) The URI for active health checks.</i></label><input type="text" id="h_hu" name="health_uri" class="form-control" placeholder="/health"></div>
+                                    <div class="mb-2"><label for="h_hp_h">Health Port <i class="text-muted" style="font-size:0.9em;">(?) The port for active health checks.</i></label><input type="text" id="h_hp_h" name="health_port" class="form-control" placeholder="80"></div>
+                                    <div class="mb-2"><label for="h_hi">Health Interval <i class="text-muted" style="font-size:0.9em;">(?) The interval between active health checks.</i></label><input type="text" id="h_hi" name="health_interval" class="form-control" placeholder="30s"></div>
+                                    <div class="mb-2"><label for="h_hto">Health Timeout <i class="text-muted" style="font-size:0.9em;">(?) The timeout for active health checks.</i></label><input type="text" id="h_hto" name="health_timeout" class="form-control" placeholder="5s"></div>
+                                    <div class="mb-2"><label for="h_hs">Health Status <i class="text-muted" style="font-size:0.9em;">(?) Expected HTTP status code (e.g. 200).</i></label><input type="text" id="h_hs" name="health_status" class="form-control" placeholder="2xx"></div>
+                                    <div class="mb-2"><label for="h_hb">Health Body <i class="text-muted" style="font-size:0.9em;">(?) Expected text in the response body.</i></label><input type="text" id="h_hb" name="health_body" class="form-control" placeholder="OK"></div>
+                                    <div class="mb-2"><label for="h_hp_passes">Health Passes <i class="text-muted" style="font-size:0.9em;">(?) Number of passes to consider healthy.</i></label><input type="number" id="h_hp_passes" name="health_passes" class="form-control"></div>
+                                    <div class="mb-2"><label for="h_hp_fails">Health Fails <i class="text-muted" style="font-size:0.9em;">(?) Number of failures to consider unhealthy.</i></label><input type="number" id="h_hp_fails" name="health_fails" class="form-control"></div>
+                                    <div class="mb-2"><input type="checkbox" name="health_follow_redirects" id="h_hfr"> <label for="h_hfr">Follow Redirects <i class="text-muted" style="font-size:0.9em;">(?) Follow HTTP redirects during health checks.</i></label></div>
+                                </div>
+
+                                <div class="mb-3 mt-3 border-top pt-3">
+                                    <h6>Passive Health Checks</h6>
+                                    <div class="mb-2"><label for="h_hfd">Fail Duration <i class="text-muted" style="font-size:0.9em;">(?) How long to remember a failure.</i></label><input type="text" id="h_hfd" name="passive_health_fail_duration" class="form-control" placeholder="10s"></div>
+                                    <div class="mb-2"><label for="h_hmf">Max Fails <i class="text-muted" style="font-size:0.9em;">(?) Number of fails to consider a host down.</i></label><input type="number" id="h_hmf" name="passive_health_max_fails" class="form-control" placeholder="1"></div>
+                                    <div class="mb-2"><label for="h_hus">Unhealthy Status <i class="text-muted" style="font-size:0.9em;">(?) HTTP status code that implies failure (e.g. 5xx).</i></label><input type="text" id="h_hus" name="passive_health_unhealthy_status" class="form-control" placeholder="5xx"></div>
+                                    <div class="mb-2"><label for="h_hul">Unhealthy Latency <i class="text-muted" style="font-size:0.9em;">(?) Latency that implies failure (e.g. 5s).</i></label><input type="text" id="h_hul" name="passive_health_unhealthy_latency" class="form-control" placeholder="5s"></div>
+                                    <div class="mb-2"><label for="h_hurc">Unhealthy Request Count <i class="text-muted" style="font-size:0.9em;">(?) Request count that implies failure.</i></label><input type="number" id="h_hurc" name="passive_health_unhealthy_request_count" class="form-control"></div>
+                                </div>
+                            </div>
+
+                            <!-- Access & Headers Tab -->
+                            <div class="tab-pane fade" id="h-access" role="tabpanel">
                                 <div class="mb-2"><label for="h_al">Access Lists</label><select id="h_al" name="accesslist" class="form-select al-select" multiple></select></div>
                                 <div class="mb-2"><label for="h_head">Headers</label><select id="h_head" name="header" class="form-select header-select" multiple></select></div>
                             </div>
@@ -523,6 +569,7 @@ const app = {
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('handlerModal', 'handlers')">Save</button></div>
                   </div></div>
                 </div>
+
 
                 <!-- Access List Modal -->
                 <div class="modal fade" id="accessListModal" tabindex="-1">
