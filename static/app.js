@@ -8,7 +8,7 @@ function uuidv4() {
 
 const app = {
     config: {
-        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false },
+        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false, log_roll_size_mb: 10, log_roll_keep: 7 },
         domains: [],
         subdomains: [],
         handlers: [],
@@ -18,6 +18,7 @@ const app = {
         layer4: []
     },
     certs: [],
+    logStreamSource: null,
 
     init: async function() {
         await this.loadCerts();
@@ -25,6 +26,15 @@ const app = {
         this.ui.initModals();
         this.ui.renderAll();
         this.fetchStats();
+        this.fetchLogFiles();
+
+        // Add event listeners for dynamic log filtering
+        $('#logFilterLevel, #logFilterStatus, #logFilterMethod, #logFilterIp, #logFilterPath, #logFilterText').on('input change', () => {
+             // Since it's a stream we only filter incoming, but let's re-filter what's in the DOM if possible,
+             // but that is hard for plain text. We will just filter new lines.
+             // Actually, a better UX is to hide/show existing lines if they don't match.
+             app.applyLogFiltersToDOM();
+        });
     },
 
     loadConfig: async function() {
@@ -59,6 +69,8 @@ const app = {
         this.config.general.timeout_write = $('#genTOutWrite').val();
         this.config.general.timeout_idle = $('#genTOutIdle').val();
         this.config.general.log_credentials = $('#genLogCreds').is(':checked');
+        this.config.general.log_roll_size_mb = parseInt($('#genLogRollSize').val()) || 10;
+        this.config.general.log_roll_keep = parseInt($('#genLogRollKeep').val()) || 7;
 
         try {
             const res = await fetch('/api/config/structured', {
@@ -218,6 +230,163 @@ const app = {
         } catch(e) { console.error(e); }
     },
 
+    // --- Logs Management ---
+    fetchLogFiles: async function() {
+        try {
+            const res = await fetch('/api/logs/files');
+            if (res.ok) {
+                const files = await res.json();
+                const select = $('#logFileSelect').empty();
+                files.forEach(f => select.append(new Option(f, f)));
+            }
+        } catch (e) {
+            console.error("Failed to load log files", e);
+        }
+    },
+
+    startTailing: function() {
+        const file = $('#logFileSelect').val();
+        if (!file) return;
+
+        this.stopTailing(); // Ensure previous is closed
+        $('#logOutputArea').empty();
+        $('#startTailBtn').hide();
+        $('#stopTailBtn').show();
+
+        this.logStreamSource = new EventSource(`/api/logs/stream?file=${encodeURIComponent(file)}`);
+
+        this.logStreamSource.onmessage = (event) => {
+            const lineStr = event.data;
+            let lineData = null;
+            let isJson = false;
+
+            try {
+                lineData = JSON.parse(lineStr);
+                isJson = true;
+            } catch (e) {
+                // Not JSON, just plain text line
+            }
+
+            if (this.passesLogFilters(lineStr, lineData)) {
+                this.appendLogLine(lineStr, lineData, isJson);
+            }
+        };
+
+        this.logStreamSource.onerror = (err) => {
+            console.error("EventSource failed:", err);
+            this.stopTailing();
+        };
+    },
+
+    stopTailing: function() {
+        if (this.logStreamSource) {
+            this.logStreamSource.close();
+            this.logStreamSource = null;
+        }
+        $('#startTailBtn').show();
+        $('#stopTailBtn').hide();
+    },
+
+    clearLogs: function() {
+        $('#logOutputArea').empty();
+    },
+
+    passesLogFilters: function(lineStr, lineData) {
+        const fLevel = $('#logFilterLevel').val().toLowerCase();
+        const fStatus = $('#logFilterStatus').val().toLowerCase();
+        const fMethod = $('#logFilterMethod').val().toUpperCase();
+        const fIp = $('#logFilterIp').val().toLowerCase();
+        const fPath = $('#logFilterPath').val().toLowerCase();
+        const fText = $('#logFilterText').val().toLowerCase();
+
+        if (fText && !lineStr.toLowerCase().includes(fText)) return false;
+
+        if (lineData) {
+            if (fLevel && lineData.level && lineData.level.toLowerCase() !== fLevel) return false;
+
+            const req = lineData.request;
+            if (req) {
+                 if (fMethod && req.method && req.method.toUpperCase() !== fMethod) return false;
+                 if (fIp && req.remote_ip && !req.remote_ip.toLowerCase().includes(fIp)) return false;
+                 if (fPath && req.uri && !req.uri.toLowerCase().includes(fPath)) return false;
+            }
+
+            if (fStatus && lineData.status !== undefined) {
+                 const statStr = String(lineData.status);
+                 // Handle 5xx, 4xx filters
+                 if (fStatus.endsWith('xx')) {
+                      if (!statStr.startsWith(fStatus.charAt(0))) return false;
+                 } else {
+                      if (statStr !== fStatus) return false;
+                 }
+            }
+        }
+
+        return true;
+    },
+
+    escapeHtml: function(unsafe) {
+        return (unsafe || '').toString()
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    },
+
+    appendLogLine: function(lineStr, lineData, isJson) {
+        const area = $('#logOutputArea');
+        const div = $('<div>').addClass('log-line').css('border-bottom', '1px solid #444').css('padding', '2px 0');
+
+        // Store data on the element so we can re-filter the DOM later if needed
+        div.attr('data-raw', lineStr);
+        if (isJson) {
+             div.attr('data-json', JSON.stringify(lineData));
+
+             // Format JSON nicely
+             const levelColor = lineData.level === 'error' ? '#ff4444' : lineData.level === 'warn' ? '#ffbb33' : '#00C851';
+             const time = lineData.ts ? new Date(lineData.ts * 1000).toLocaleString() : '';
+
+             let reqStr = '';
+             if (lineData.request) {
+                 reqStr = ` <span style="color:#33b5e5">${this.escapeHtml(lineData.request.method)}</span> ${this.escapeHtml(lineData.request.uri)} [${this.escapeHtml(lineData.request.remote_ip)}]`;
+             }
+             let statusStr = lineData.status !== undefined ? ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status)}</span>` : '';
+
+             div.html(`<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}`);
+        } else {
+             div.text(lineStr);
+        }
+
+        area.append(div);
+
+        // Auto-scroll to bottom
+        area.scrollTop(area[0].scrollHeight);
+
+        // Keep DOM from getting too large
+        if (area.children().length > 1000) {
+            area.children().first().remove();
+        }
+    },
+
+    applyLogFiltersToDOM: function() {
+        $('#logOutputArea .log-line').each(function() {
+             const div = $(this);
+             const raw = div.attr('data-raw');
+             const jsonStr = div.attr('data-json');
+             let data = null;
+             if (jsonStr) {
+                 try { data = JSON.parse(jsonStr); } catch(e){}
+             }
+
+             if (app.passesLogFilters(raw, data)) {
+                 div.show();
+             } else {
+                 div.hide();
+             }
+        });
+    },
+
     // --- Data Management ---
     deleteItem: function(type, id) {
         if (confirm('Are you sure you want to delete this item?')) {
@@ -252,6 +421,8 @@ const app = {
             $('#genTOutWrite').val(app.config.general.timeout_write);
             $('#genTOutIdle').val(app.config.general.timeout_idle);
             $('#genLogCreds').prop('checked', app.config.general.log_credentials);
+            $('#genLogRollSize').val(app.config.general.log_roll_size_mb);
+            $('#genLogRollKeep').val(app.config.general.log_roll_keep);
 
             this.renderTable('domains', 'domainsTable', ['enabled', 'fromDomain', 'fromPort', 'description']);
             this.renderTable('subdomains', 'subdomainsTable', ['enabled', 'fromDomain', 'reverse', 'description']);
