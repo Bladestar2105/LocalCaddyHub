@@ -14,12 +14,14 @@ const certDir = appPaths.certsDir;
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // /api/config
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
   try {
     const caddyfilePath = appPaths.caddyfile;
     let content = '';
-    if (fs.existsSync(caddyfilePath)) {
-      content = fs.readFileSync(caddyfilePath, 'utf-8');
+    try {
+      content = await fs.promises.readFile(caddyfilePath, 'utf-8');
+    } catch (readErr) {
+      if (readErr.code !== 'ENOENT') throw readErr;
     }
     res.json({ content });
   } catch (err) {

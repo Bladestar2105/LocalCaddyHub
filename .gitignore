@@ -4,3 +4,5 @@ verification/
 config.json
 Caddyfile
 node_modules/
+data/caddyhub.db-shm
+data/caddyhub.db-wal
