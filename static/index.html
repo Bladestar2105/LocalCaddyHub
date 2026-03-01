@@ -84,6 +84,47 @@
                         <option value="ERROR">ERROR</option>
                     </select>
                 </div>
+
+                <div class="mb-3">
+                    <label for="genLogCreds" class="form-check-label">
+                        <input type="checkbox" class="form-check-input" id="genLogCreds">
+                        Log Credentials <i class="text-muted" style="font-size:0.9em;">(?) Enables logging of credentials.</i>
+                    </label>
+                </div>
+                <div class="mb-3">
+                    <label for="genTlsEmail" class="form-label">TLS Email <i class="text-muted" style="font-size:0.9em;">(?) The email address to use for the ACME account.</i></label>
+                    <input type="email" class="form-control" id="genTlsEmail" placeholder="admin@example.com">
+                </div>
+                <div class="mb-3">
+                    <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures automatic HTTPS settings.</i></label>
+                    <select class="form-select" id="genAutoHttps">
+                        <option value="">On (Default)</option>
+                        <option value="off">Off</option>
+                        <option value="disable_redirects">Disable Redirects</option>
+                        <option value="disable_certs">Disable Certs</option>
+                        <option value="ignore_loaded_certs">Ignore Loaded Certs</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpVersions" class="form-label">HTTP Versions <i class="text-muted" style="font-size:0.9em;">(?) Space-separated list of supported HTTP versions (e.g., h1 h2 h3).</i></label>
+                    <input type="text" class="form-control" id="genHttpVersions" placeholder="h1 h2 h3">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutReadBody" class="form-label">Read Body Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for reading the request body.</i></label>
+                    <input type="text" class="form-control" id="genTOutReadBody" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutReadHeader" class="form-label">Read Header Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for reading the request headers.</i></label>
+                    <input type="text" class="form-control" id="genTOutReadHeader" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutWrite" class="form-label">Write Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for writing the response.</i></label>
+                    <input type="text" class="form-control" id="genTOutWrite" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutIdle" class="form-label">Idle Timeout <i class="text-muted" style="font-size:0.9em;">(?) Maximum time to wait for the next request when keep-alives are enabled.</i></label>
+                    <input type="text" class="form-control" id="genTOutIdle" placeholder="10s">
+                </div>
             </form>
         </div>
 

@@ -23,7 +23,8 @@ function initDb() {
       timeout_read_header TEXT,
       timeout_write TEXT,
       timeout_idle TEXT,
-      log_credentials INTEGER DEFAULT 0
+      log_credentials INTEGER DEFAULT 0,
+      auto_https TEXT
     );
 
     CREATE TABLE IF NOT EXISTS domains (
@@ -174,6 +175,7 @@ function initDb() {
     { table: 'general_config', column: 'timeout_write', def: 'TEXT' },
     { table: 'general_config', column: 'timeout_idle', def: 'TEXT' },
     { table: 'general_config', column: 'log_credentials', def: 'INTEGER DEFAULT 0' },
+    { table: 'general_config', column: 'auto_https', def: 'TEXT' },
     { table: 'domains', column: 'client_auth_mode', def: 'TEXT' },
     { table: 'domains', column: 'client_auth_trust_pool', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_mode', def: 'TEXT' },

@@ -71,7 +71,8 @@ router.get('/config/structured', (req, res) => {
         timeout_read_header: general.timeout_read_header || '',
         timeout_write: general.timeout_write || '',
         timeout_idle: general.timeout_idle || '',
-        log_credentials: Boolean(general.log_credentials)
+        log_credentials: Boolean(general.log_credentials),
+        auto_https: general.auto_https || ''
       },
       domains: domainsRows.map(d => ({
         ...d,
@@ -128,8 +129,8 @@ router.post('/config/structured', express.json(), async (req, res) => {
     const saveTransaction = db.transaction(() => {
       // General
       if (config.general) {
-        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=? WHERE id=1')
-          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0);
+        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=? WHERE id=1')
+          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https);
       }
 
       // Domains

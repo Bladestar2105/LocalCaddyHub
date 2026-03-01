@@ -17,6 +17,10 @@ function generateCaddyfile(config, certsDir = './certs') {
     sb += '\t}\n';
   }
 
+  if (config.general.auto_https) {
+    sb += `\tauto_https ${config.general.auto_https}\n`;
+  }
+
   if (config.general.tls_email) {
     sb += `\temail ${config.general.tls_email}\n`;
   }

@@ -8,7 +8,7 @@ function uuidv4() {
 
 const app = {
     config: {
-        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false },
+        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false },
         domains: [],
         subdomains: [],
         handlers: [],
@@ -52,6 +52,7 @@ const app = {
         this.config.general.https_port = $('#genHttpsPort').val();
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
+        this.config.general.auto_https = $('#genAutoHttps').val();
         this.config.general.http_versions = $('#genHttpVersions').val();
         this.config.general.timeout_read_body = $('#genTOutReadBody').val();
         this.config.general.timeout_read_header = $('#genTOutReadHeader').val();
@@ -244,6 +245,7 @@ const app = {
             $('#genHttpsPort').val(app.config.general.https_port);
             $('#genLogLevel').val(app.config.general.log_level);
             $('#genTlsEmail').val(app.config.general.tls_email);
+            $('#genAutoHttps').val(app.config.general.auto_https);
             $('#genHttpVersions').val(app.config.general.http_versions);
             $('#genTOutReadBody').val(app.config.general.timeout_read_body);
             $('#genTOutReadHeader').val(app.config.general.timeout_read_header);
