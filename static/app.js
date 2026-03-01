@@ -388,6 +388,22 @@ const app = {
     },
 
     // --- Data Management ---
+    duplicateItem: function(type, id) {
+        const item = this.config[type].find(i => i.id === id);
+        if (!item) return;
+
+        const clone = JSON.parse(JSON.stringify(item));
+        clone.id = uuidv4();
+        if (clone.description) {
+            clone.description = clone.description + " (Copy)";
+        } else {
+            clone.description = "Copy";
+        }
+
+        this.config[type].push(clone);
+        this.ui.renderAll();
+    },
+
     deleteItem: function(type, id) {
         if (confirm('Are you sure you want to delete this item?')) {
             if (type === 'domains') {
@@ -474,8 +490,20 @@ const app = {
 
                 let actions = $('<td>').addClass('action-btns');
                 let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').click(() => this.editItem(configKey, item.id));
+
+                let dupBtn = null;
+                if (['domains', 'subdomains', 'handlers'].includes(configKey)) {
+                    dupBtn = $('<button>').addClass('btn btn-sm btn-outline-info').text('Dup').click(() => app.duplicateItem(configKey, item.id));
+                }
+
                 let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').click(() => app.deleteItem(configKey, item.id));
-                tr.append(actions.append(editBtn, delBtn));
+
+                if (dupBtn) {
+                    tr.append(actions.append(editBtn, dupBtn, delBtn));
+                } else {
+                    tr.append(actions.append(editBtn, delBtn));
+                }
+
                 rows.push(tr);
             });
             tbody.append(rows);
