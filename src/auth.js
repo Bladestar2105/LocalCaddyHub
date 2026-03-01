@@ -6,7 +6,7 @@ function generateSessionToken() {
 }
 
 function authMiddleware(req, res, next) {
-  const allowList = ['/login', '/login.html'];
+  const allowList = ['/login', '/login.html', '/setup.html'];
   if (allowList.includes(req.path)) {
     return next();
   }
@@ -32,6 +32,14 @@ function authMiddleware(req, res, next) {
       return res.status(401).send('Unauthorized');
     } else {
       return res.redirect('/login.html');
+    }
+  }
+
+  // Enforce setup if trying to access main app but users table is empty
+  if (req.path === '/' || req.path === '/index.html') {
+    const userRow = db.prepare('SELECT id FROM users WHERE id = 1').get();
+    if (!userRow) {
+      return res.redirect('/setup.html');
     }
   }
 

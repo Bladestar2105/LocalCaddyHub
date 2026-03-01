@@ -17,6 +17,30 @@ function generateCaddyfile(config, certsDir = './certs') {
     sb += '\t}\n';
   }
 
+  if (config.general.tls_email) {
+    sb += `\temail ${config.general.tls_email}\n`;
+  }
+
+  if (config.general.log_credentials) {
+    sb += `\tlog_credentials\n`;
+  }
+
+  if (config.general.http_versions || config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle) {
+    sb += '\tservers {\n';
+    if (config.general.http_versions) {
+      sb += `\t\tprotocols ${config.general.http_versions}\n`;
+    }
+    if (config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle) {
+      sb += '\t\ttimeouts {\n';
+      if (config.general.timeout_read_body) sb += `\t\t\tread_body ${config.general.timeout_read_body}\n`;
+      if (config.general.timeout_read_header) sb += `\t\t\tread_header ${config.general.timeout_read_header}\n`;
+      if (config.general.timeout_write) sb += `\t\t\twrite ${config.general.timeout_write}\n`;
+      if (config.general.timeout_idle) sb += `\t\t\tidle ${config.general.timeout_idle}\n`;
+      sb += '\t\t}\n';
+    }
+    sb += '\t}\n';
+  }
+
   // Layer 4 configuration
   if (config.general.enable_layer4 && config.layer4 && config.layer4.length > 0) {
     sb += '\tlayer4 {\n';
@@ -46,12 +70,27 @@ function generateCaddyfile(config, certsDir = './certs') {
         if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
           sb += `\t\t\t\tproxy_protocol ${l4.proxyProtocol}\n`;
         }
+        if (l4.lb_policy) {
+          sb += `\t\t\t\tlb_policy ${l4.lb_policy}\n`;
+        }
+        if (l4.passive_health_fail_duration) {
+          sb += `\t\t\t\tpassive_health_fail_duration ${l4.passive_health_fail_duration}\n`;
+        }
+        if (l4.passive_health_max_fails) {
+          sb += `\t\t\t\tpassive_health_max_fails ${l4.passive_health_max_fails}\n`;
+        }
         sb += '\t\t\t}\n';
       }
 
       if (l4.terminateTls) {
         sb += '\t\t\ttls\n';
       }
+      if (l4.originate_tls === 'tls') {
+        sb += '\t\t\ttls_client\n';
+      } else if (l4.originate_tls === 'tls_insecure_skip_verify') {
+        sb += '\t\t\ttls_client {\n\t\t\t\tinsecure_skip_verify\n\t\t\t}\n';
+      }
+
       sb += '\t\t}\n';
     }
     sb += '\t}\n';
@@ -166,9 +205,27 @@ function generateCaddyfile(config, certsDir = './certs') {
         // Ensure path formatting uses forward slashes, even on Windows, to make Caddyfile happy
         const certPath = path.join(certsDir, domain.customCert).replace(/\\/g, '/');
         const keyPath = path.join(certsDir, domain.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
-        sb += `\ttls ${certPath} ${keyPath}\n`;
+        sb += `\ttls ${certPath} ${keyPath} {\n`;
+        if (domain.client_auth_mode) {
+           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
+           if (domain.client_auth_trust_pool) {
+             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
+             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
+           }
+           sb += `\t\t}\n`;
+        }
+        sb += `\t}\n`;
       } else {
-        sb += '\ttls internal\n'; // Auto HTTPS disabled by default in our app without ACME
+        sb += '\ttls internal {\n'; // Auto HTTPS disabled by default in our app without ACME
+        if (domain.client_auth_mode) {
+           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
+           if (domain.client_auth_trust_pool) {
+             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
+             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
+           }
+           sb += `\t\t}\n`;
+        }
+        sb += `\t}\n`;
       }
 
       // Access Log
@@ -182,13 +239,24 @@ function generateCaddyfile(config, certsDir = './certs') {
           const al = accessLists[alID];
           if (al && al.clientIps && al.clientIps.length > 0) {
             const matcherName = `@al_${al.id}`;
+            const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
+
             sb += `\t${matcherName} {\n`;
-            sb += `\t\tremote_ip ${al.clientIps.join(' ')}\n`;
+            sb += `\t\t${matcherType} ${al.clientIps.join(' ')}\n`;
             sb += '\t}\n';
+
+            let abortCmd = `abort`;
+            if (al.http_response_code) {
+               abortCmd = `respond ${al.http_response_code}`;
+               if (al.http_response_message) {
+                  abortCmd = `respond "${al.http_response_message}" ${al.http_response_code}`;
+               }
+            }
+
             if (al.invert) {
-              sb += `\tabort ${matcherName}\n`;
+              sb += `\t${abortCmd} ${matcherName}\n`;
             } else {
-              sb += `\tabort not ${matcherName}\n`;
+              sb += `\t${abortCmd} not ${matcherName}\n`;
             }
           }
         }
@@ -244,13 +312,24 @@ function generateCaddyfile(config, certsDir = './certs') {
               const al = accessLists[alID];
               if (al && al.clientIps && al.clientIps.length > 0) {
                 const matcherName = `@al_h_${al.id}`;
+                const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
+
                 sb += `\t\t${matcherName} {\n`;
-                sb += `\t\t\tremote_ip ${al.clientIps.join(' ')}\n`;
+                sb += `\t\t\t${matcherType} ${al.clientIps.join(' ')}\n`;
                 sb += '\t\t}\n';
+
+                let abortCmd = `abort`;
+                if (al.http_response_code) {
+                   abortCmd = `respond ${al.http_response_code}`;
+                   if (al.http_response_message) {
+                      abortCmd = `respond "${al.http_response_message}" ${al.http_response_code}`;
+                   }
+                }
+
                 if (al.invert) {
-                  sb += `\t\tabort ${matcherName}\n`;
+                  sb += `\t\t${abortCmd} ${matcherName}\n`;
                 } else {
-                  sb += `\t\tabort not ${matcherName}\n`;
+                  sb += `\t\t${abortCmd} not ${matcherName}\n`;
                 }
               }
             }
@@ -325,12 +404,38 @@ function generateCaddyfile(config, certsDir = './certs') {
               sb += '\t\t\ttransport http_ntlm {\n';
               if (handler.httpTls) {
                 sb += '\t\t\t\ttls\n';
+                if (handler.http_tls_insecure_skip_verify) {
+                  sb += '\t\t\t\ttls_insecure_skip_verify\n';
+                }
               }
               sb += '\t\t\t}\n';
-            } else if (handler.httpTls) {
-              sb += '\t\t\ttransport http {\n';
-              sb += '\t\t\t\ttls\n';
-              sb += '\t\t\t}\n';
+            } else {
+              let needsTransport = false;
+              let transportBlock = '\t\t\ttransport http {\n';
+              if (handler.httpTls) {
+                needsTransport = true;
+                transportBlock += '\t\t\t\ttls\n';
+                if (handler.http_tls_insecure_skip_verify) {
+                  transportBlock += '\t\t\t\ttls_insecure_skip_verify\n';
+                }
+                if (handler.http_tls_server_name) {
+                  transportBlock += `\t\t\t\ttls_server_name ${handler.http_tls_server_name}\n`;
+                }
+                if (handler.http_tls_trusted_ca_certs) {
+                  const caPath = path.join(certsDir, handler.http_tls_trusted_ca_certs).replace(/\\/g, '/');
+                  transportBlock += `\t\t\t\ttls_trusted_ca_certs ${caPath}\n`;
+                }
+              }
+              if (handler.http_version) {
+                 needsTransport = true;
+                 transportBlock += `\t\t\t\tversions ${handler.http_version}\n`;
+              }
+              if (handler.http_keepalive) {
+                 needsTransport = true;
+                 transportBlock += `\t\t\t\tkeepalive ${handler.http_keepalive}\n`;
+              }
+              transportBlock += '\t\t\t}\n';
+              if (needsTransport) sb += transportBlock;
             }
 
             // Load Balancing
@@ -348,7 +453,8 @@ function generateCaddyfile(config, certsDir = './certs') {
             sb += '\t\t}\n';
           } else if (directive === 'redir') {
             const to = handler.toDomain && handler.toDomain.length > 0 ? handler.toDomain[0] : '';
-            sb += `\t\tredir ${to}\n`;
+            const status = handler.redir_status || '301';
+            sb += `\t\tredir ${to} ${status}\n`;
           }
 
           sb += '\t}\n';
