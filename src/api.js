@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const db = require('./db');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
@@ -222,7 +222,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
 
 // Exec Caddy commands
 function execCaddy(cmdArgs, res) {
-  exec(`caddy ${cmdArgs.join(' ')}`, (error, stdout, stderr) => {
+  execFile('caddy', cmdArgs, (error, stdout, stderr) => {
     res.json({
       output: stdout,
       error: error ? error.message : undefined
