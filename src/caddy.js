@@ -1,5 +1,12 @@
 const path = require('path');
 
+function formatDuration(val) {
+  if (!val) return val;
+  const strVal = val.toString().trim();
+  if (/^\d+$/.test(strVal)) return strVal + 's';
+  return strVal;
+}
+
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
 
@@ -44,10 +51,10 @@ function generateCaddyfile(config, certsDir = './certs') {
     }
     if (config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle) {
       sb += '\t\ttimeouts {\n';
-      if (config.general.timeout_read_body) sb += `\t\t\tread_body ${config.general.timeout_read_body}\n`;
-      if (config.general.timeout_read_header) sb += `\t\t\tread_header ${config.general.timeout_read_header}\n`;
-      if (config.general.timeout_write) sb += `\t\t\twrite ${config.general.timeout_write}\n`;
-      if (config.general.timeout_idle) sb += `\t\t\tidle ${config.general.timeout_idle}\n`;
+      if (config.general.timeout_read_body) sb += `\t\t\tread_body ${formatDuration(config.general.timeout_read_body)}\n`;
+      if (config.general.timeout_read_header) sb += `\t\t\tread_header ${formatDuration(config.general.timeout_read_header)}\n`;
+      if (config.general.timeout_write) sb += `\t\t\twrite ${formatDuration(config.general.timeout_write)}\n`;
+      if (config.general.timeout_idle) sb += `\t\t\tidle ${formatDuration(config.general.timeout_idle)}\n`;
       sb += '\t\t}\n';
     }
     sb += '\t}\n';
@@ -86,7 +93,7 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `\t\t\t\tlb_policy ${l4.lb_policy}\n`;
         }
         if (l4.passive_health_fail_duration) {
-          sb += `\t\t\t\tpassive_health_fail_duration ${l4.passive_health_fail_duration}\n`;
+          sb += `\t\t\t\tpassive_health_fail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
         }
         if (l4.passive_health_max_fails) {
           sb += `\t\t\t\tpassive_health_max_fails ${l4.passive_health_max_fails}\n`;
@@ -458,14 +465,14 @@ function generateCaddyfile(config, certsDir = './certs') {
             // Load Balancing
             if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
             if (handler.lb_retries) sb += `\t\t\tlb_retries ${handler.lb_retries}\n`;
-            if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${handler.lb_try_duration}\n`;
-            if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${handler.lb_try_interval}\n`;
+            if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
+            if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
 
             // Active Health Checks
             if (handler.health_uri) sb += `\t\t\thealth_uri ${handler.health_uri}\n`;
             if (handler.health_port) sb += `\t\t\thealth_port ${handler.health_port}\n`;
-            if (handler.health_interval) sb += `\t\t\thealth_interval ${handler.health_interval}\n`;
-            if (handler.health_timeout) sb += `\t\t\thealth_timeout ${handler.health_timeout}\n`;
+            if (handler.health_interval) sb += `\t\t\thealth_interval ${formatDuration(handler.health_interval)}\n`;
+            if (handler.health_timeout) sb += `\t\t\thealth_timeout ${formatDuration(handler.health_timeout)}\n`;
             if (handler.health_status) sb += `\t\t\thealth_status ${handler.health_status}\n`;
             if (handler.health_body) sb += `\t\t\thealth_body "${handler.health_body}"\n`;
             if (handler.health_passes) sb += `\t\t\thealth_passes ${handler.health_passes}\n`;
@@ -473,10 +480,10 @@ function generateCaddyfile(config, certsDir = './certs') {
             if (handler.health_follow_redirects) sb += `\t\t\thealth_follow_redirects\n`;
 
             // Passive Health Checks
-            if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${handler.passive_health_fail_duration}\n`;
+            if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${formatDuration(handler.passive_health_fail_duration)}\n`;
             if (handler.passive_health_max_fails) sb += `\t\t\tmax_fails ${handler.passive_health_max_fails}\n`;
             if (handler.passive_health_unhealthy_status) sb += `\t\t\tunhealthy_status ${handler.passive_health_unhealthy_status}\n`;
-            if (handler.passive_health_unhealthy_latency) sb += `\t\t\tunhealthy_latency ${handler.passive_health_unhealthy_latency}\n`;
+            if (handler.passive_health_unhealthy_latency) sb += `\t\t\tunhealthy_latency ${formatDuration(handler.passive_health_unhealthy_latency)}\n`;
             if (handler.passive_health_unhealthy_request_count) sb += `\t\t\tunhealthy_request_count ${handler.passive_health_unhealthy_request_count}\n`;
 
             sb += '\t\t}\n';

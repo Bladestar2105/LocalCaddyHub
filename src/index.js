@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./db');
 const bcrypt = require('bcrypt');
-const { authenticator } = require('otplib');
+const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const apiRoutes = require('./api');
@@ -46,8 +46,17 @@ app.post('/login', async (req, res) => {
       const match = await bcrypt.compare(password, userRow.password_hash);
       if (match) {
         if (userRow.totp_enabled) {
-          if (!tokenInput || !authenticator.check(tokenInput, userRow.totp_secret)) {
+          if (!tokenInput) {
              return res.status(401).json({ error: 'invalid_totp' });
+          }
+          let isValid = false;
+          try {
+            isValid = verifySync({ token: tokenInput, secret: userRow.totp_secret }).valid;
+          } catch (err) {
+            // Ignore format errors etc and treat as invalid
+          }
+          if (!isValid) {
+            return res.status(401).json({ error: 'invalid_totp' });
           }
         }
         validLogin = true;
@@ -110,11 +119,11 @@ app.post('/api/setup', async (req, res) => {
 });
 
 app.post('/api/2fa/generate', async (req, res) => {
-  const secret = authenticator.generateSecret();
+  const secret = generateSecret();
   const userRow = db.prepare('SELECT username FROM users WHERE id = 1').get();
   const username = userRow ? userRow.username : (process.env.ADMIN_USER || 'admin');
 
-  const otpauth = authenticator.keyuri(username, 'LocalCaddyHub', secret);
+  const otpauth = generateURI({ label: username, issuer: 'LocalCaddyHub', secret });
   const imageUrl = await qrcode.toDataURL(otpauth);
 
   res.json({ secret, qrCodeUrl: imageUrl });
@@ -122,7 +131,14 @@ app.post('/api/2fa/generate', async (req, res) => {
 
 app.post('/api/2fa/verify', (req, res) => {
   const { token, secret } = req.body;
-  if (authenticator.check(token, secret)) {
+  let isValid = false;
+  try {
+    isValid = verifySync({ token, secret }).valid;
+  } catch (err) {
+    // Treat format/length errors as invalid
+  }
+
+  if (isValid) {
     db.prepare('UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=1').run(secret);
     res.json({ success: true });
   } else {
