@@ -71,7 +71,8 @@ router.get('/config/structured', (req, res) => {
         timeout_read_header: general.timeout_read_header || '',
         timeout_write: general.timeout_write || '',
         timeout_idle: general.timeout_idle || '',
-        log_credentials: Boolean(general.log_credentials)
+        log_credentials: Boolean(general.log_credentials),
+        auto_https: general.auto_https || ''
       },
       domains: domainsRows.map(d => ({
         ...d,
@@ -93,6 +94,19 @@ router.get('/config/structured', (req, res) => {
         httpTls: Boolean(h.httpTls),
         ntlm: Boolean(h.ntlm),
         health_follow_redirects: Boolean(h.health_follow_redirects),
+        health_status: h.health_status || '',
+        health_body: h.health_body || '',
+        health_passes: h.health_passes || 0,
+        health_fails: h.health_fails || 0,
+        health_uri: h.health_uri || '',
+        health_port: h.health_port || '',
+        health_interval: h.health_interval || '',
+        health_timeout: h.health_timeout || '',
+        passive_health_fail_duration: h.passive_health_fail_duration || '',
+        passive_health_max_fails: h.passive_health_max_fails || '',
+        passive_health_unhealthy_status: h.passive_health_unhealthy_status || '',
+        passive_health_unhealthy_latency: h.passive_health_unhealthy_latency || '',
+        passive_health_unhealthy_request_count: h.passive_health_unhealthy_request_count || '',
         http_tls_insecure_skip_verify: Boolean(h.http_tls_insecure_skip_verify),
         accesslist: parseJSON(h.accesslist),
         basicauth: parseJSON(h.basicauth),
@@ -128,8 +142,8 @@ router.post('/config/structured', express.json(), async (req, res) => {
     const saveTransaction = db.transaction(() => {
       // General
       if (config.general) {
-        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=? WHERE id=1')
-          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0);
+        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=? WHERE id=1')
+          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https);
       }
 
       // Domains
