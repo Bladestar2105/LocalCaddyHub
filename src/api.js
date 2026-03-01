@@ -14,12 +14,12 @@ const certDir = appPaths.certsDir;
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // /api/config
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
   try {
     const caddyfilePath = appPaths.caddyfile;
     let content = '';
     if (fs.existsSync(caddyfilePath)) {
-      content = fs.readFileSync(caddyfilePath, 'utf-8');
+      content = await fs.promises.readFile(caddyfilePath, 'utf-8');
     }
     res.json({ content });
   } catch (err) {
@@ -27,12 +27,12 @@ router.get('/config', (req, res) => {
   }
 });
 
-router.post('/config', express.json(), (req, res) => {
+router.post('/config', express.json(), async (req, res) => {
   try {
     const { content } = req.body;
     if (typeof content !== 'string') return res.status(400).send('Invalid request body');
     const caddyfilePath = appPaths.caddyfile;
-    fs.writeFileSync(caddyfilePath, content, 'utf-8');
+    await fs.promises.writeFile(caddyfilePath, content, 'utf-8');
     res.sendStatus(200);
   } catch (err) {
     res.status(500).send('Failed to write Caddyfile');
@@ -114,7 +114,7 @@ router.get('/config/structured', (req, res) => {
   }
 });
 
-router.post('/config/structured', express.json(), (req, res) => {
+router.post('/config/structured', express.json(), async (req, res) => {
   try {
     const config = req.body;
     const saveTransaction = db.transaction(() => {
@@ -199,7 +199,7 @@ router.post('/config/structured', express.json(), (req, res) => {
     saveTransaction();
 
     const caddyfileContent = generateCaddyfile(config, certDir);
-    fs.writeFileSync(appPaths.caddyfile, caddyfileContent, 'utf-8');
+    await fs.promises.writeFile(appPaths.caddyfile, caddyfileContent, 'utf-8');
 
     res.sendStatus(200);
   } catch (err) {
