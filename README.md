@@ -86,7 +86,6 @@ A `Dockerfile` is provided to build a multi-stage container image that compiles 
 
 3.  Access at `http://localhost:8090` (Login: `admin` / `admin`).
 
-> **Note on Legacy Configurations**: If you were previously mapping `Caddyfile`, `config.json`, `caddyhub.db`, and `certs` as individual files/folders, LocalCaddyHub will still detect and support them. However, mapping a single `/app/data` volume prevents a common Docker issue where mapping a non-existent file on the host creates a directory instead.
 
 ### Using Pre-built Image from GitHub Actions or Building Locally
 
