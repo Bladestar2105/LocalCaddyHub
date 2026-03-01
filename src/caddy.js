@@ -40,14 +40,13 @@ function generateCaddyfile(config, certsDir = './certs') {
     sb += `\temail ${config.general.tls_email}\n`;
   }
 
-  if (config.general.log_credentials) {
-    sb += `\tlog_credentials\n`;
-  }
-
-  if (config.general.http_versions || config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle) {
+  if (config.general.http_versions || config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle || config.general.log_credentials) {
     sb += '\tservers {\n';
     if (config.general.http_versions) {
       sb += `\t\tprotocols ${config.general.http_versions}\n`;
+    }
+    if (config.general.log_credentials) {
+      sb += `\t\tlog_credentials\n`;
     }
     if (config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle) {
       sb += '\t\ttimeouts {\n';
@@ -96,7 +95,7 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `\t\t\t\tpassive_health_fail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
         }
         if (l4.passive_health_max_fails) {
-          sb += `\t\t\t\tpassive_health_max_fails ${l4.passive_health_max_fails}\n`;
+          sb += `\t\t\t\tpassive_health_max_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
         }
         sb += '\t\t\t}\n';
       }
@@ -464,7 +463,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
             // Load Balancing
             if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
-            if (handler.lb_retries) sb += `\t\t\tlb_retries ${handler.lb_retries}\n`;
+            if (handler.lb_retries) sb += `\t\t\tlb_retries ${parseInt(handler.lb_retries, 10)}\n`;
             if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
             if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
 
@@ -475,16 +474,16 @@ function generateCaddyfile(config, certsDir = './certs') {
             if (handler.health_timeout) sb += `\t\t\thealth_timeout ${formatDuration(handler.health_timeout)}\n`;
             if (handler.health_status) sb += `\t\t\thealth_status ${handler.health_status}\n`;
             if (handler.health_body) sb += `\t\t\thealth_body "${handler.health_body}"\n`;
-            if (handler.health_passes) sb += `\t\t\thealth_passes ${handler.health_passes}\n`;
-            if (handler.health_fails) sb += `\t\t\thealth_fails ${handler.health_fails}\n`;
+            if (handler.health_passes) sb += `\t\t\thealth_passes ${parseInt(handler.health_passes, 10)}\n`;
+            if (handler.health_fails) sb += `\t\t\thealth_fails ${parseInt(handler.health_fails, 10)}\n`;
             if (handler.health_follow_redirects) sb += `\t\t\thealth_follow_redirects\n`;
 
             // Passive Health Checks
             if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${formatDuration(handler.passive_health_fail_duration)}\n`;
-            if (handler.passive_health_max_fails) sb += `\t\t\tmax_fails ${handler.passive_health_max_fails}\n`;
+            if (handler.passive_health_max_fails) sb += `\t\t\tmax_fails ${parseInt(handler.passive_health_max_fails, 10)}\n`;
             if (handler.passive_health_unhealthy_status) sb += `\t\t\tunhealthy_status ${handler.passive_health_unhealthy_status}\n`;
             if (handler.passive_health_unhealthy_latency) sb += `\t\t\tunhealthy_latency ${formatDuration(handler.passive_health_unhealthy_latency)}\n`;
-            if (handler.passive_health_unhealthy_request_count) sb += `\t\t\tunhealthy_request_count ${handler.passive_health_unhealthy_request_count}\n`;
+            if (handler.passive_health_unhealthy_request_count) sb += `\t\t\tunhealthy_request_count ${parseInt(handler.passive_health_unhealthy_request_count, 10)}\n`;
 
             sb += '\t\t}\n';
           } else if (directive === 'redir') {
