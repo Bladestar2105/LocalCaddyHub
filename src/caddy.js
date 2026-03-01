@@ -84,22 +84,57 @@ function generateCaddyfile(config, certsDir = './certs') {
     }
   }
 
+  // Pre-group subdomains
+  const subdomainsByDomain = {};
+  const subdomainsById = {};
+  if (config.subdomains) {
+    for (const sub of config.subdomains) {
+      if (sub.enabled) {
+        subdomainsById[sub.id] = sub;
+        if (sub.reverse) {
+          if (!subdomainsByDomain[sub.reverse]) {
+            subdomainsByDomain[sub.reverse] = [];
+          }
+          subdomainsByDomain[sub.reverse].push(sub);
+        }
+      }
+    }
+  }
+
+  // Pre-group handlers by domain.id
+  const handlersByDomain = {};
+  if (config.handlers) {
+    for (const handler of config.handlers) {
+      if (handler.enabled) {
+        // Handlers can be linked to a domain directly via handler.reverse
+        // OR indirectly via handler.subdomain. We map them by the final domain ID.
+        let domainId = null;
+        if (handler.reverse) {
+          domainId = handler.reverse;
+        } else if (handler.subdomain) {
+          const sub = subdomainsById[handler.subdomain];
+          if (sub && sub.reverse) {
+            domainId = sub.reverse;
+          }
+        }
+
+        if (domainId) {
+          if (!handlersByDomain[domainId]) {
+            handlersByDomain[domainId] = [];
+          }
+          handlersByDomain[domainId].push(handler);
+        }
+      }
+    }
+  }
+
   // Reverse Proxy Domains
   if (config.domains) {
     for (const domain of config.domains) {
       if (!domain.enabled) continue;
 
       // Find subdomains for this domain
-      const domainSubdomains = [];
-      const domainSubdomainIds = new Set();
-      if (config.subdomains) {
-        for (const sub of config.subdomains) {
-          if (sub.enabled && sub.reverse === domain.id) {
-            domainSubdomains.push(sub);
-            domainSubdomainIds.add(sub.id);
-          }
-        }
-      }
+      const domainSubdomains = subdomainsByDomain[domain.id] || [];
 
       // Determine site addresses
       const siteAddrs = [];
@@ -172,15 +207,17 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       // Handlers for this Domain
-      if (config.handlers) {
-        for (const handler of config.handlers) {
-          if (!handler.enabled || (handler.reverse !== domain.id && !handler.subdomain)) {
-            continue;
-          }
-
+      const domainHandlers = handlersByDomain[domain.id];
+      if (domainHandlers) {
+        for (const handler of domainHandlers) {
           // Subdomain check
-          if (handler.subdomain && !domainSubdomainIds.has(handler.subdomain)) {
-            continue;
+          let isSubdomainMatch = false;
+          if (handler.subdomain) {
+            const sub = subdomainsById[handler.subdomain];
+            if (sub && sub.reverse === domain.id) {
+              isSubdomainMatch = true;
+            }
+            if (!isSubdomainMatch) continue;
           }
 
           // Construct handler matchers
