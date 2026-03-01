@@ -160,7 +160,17 @@ const app = {
     // --- Data Management ---
     deleteItem: function(type, id) {
         if (confirm('Are you sure you want to delete this item?')) {
-            this.config[type] = this.config[type].filter(item => item.id !== id);
+            if (type === 'domains') {
+                const subdomainsToDelete = this.config.subdomains.filter(s => s.reverse === id).map(s => s.id);
+                this.config.domains = this.config.domains.filter(d => d.id !== id);
+                this.config.subdomains = this.config.subdomains.filter(s => s.reverse !== id);
+                this.config.handlers = this.config.handlers.filter(h => h.reverse !== id && !subdomainsToDelete.includes(h.subdomain));
+            } else if (type === 'subdomains') {
+                this.config.subdomains = this.config.subdomains.filter(s => s.id !== id);
+                this.config.handlers = this.config.handlers.filter(h => h.subdomain !== id);
+            } else {
+                this.config[type] = this.config[type].filter(item => item.id !== id);
+            }
             this.ui.renderAll();
         }
     },
