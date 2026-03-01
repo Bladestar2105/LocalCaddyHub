@@ -64,7 +64,14 @@ router.get('/config/structured', (req, res) => {
         enable_layer4: Boolean(general.enable_layer4),
         http_port: general.http_port || '',
         https_port: general.https_port || '',
-        log_level: general.log_level || ''
+        log_level: general.log_level || '',
+        tls_email: general.tls_email || '',
+        http_versions: general.http_versions || '',
+        timeout_read_body: general.timeout_read_body || '',
+        timeout_read_header: general.timeout_read_header || '',
+        timeout_write: general.timeout_write || '',
+        timeout_idle: general.timeout_idle || '',
+        log_credentials: Boolean(general.log_credentials)
       },
       domains: domainsRows.map(d => ({
         ...d,
@@ -86,6 +93,7 @@ router.get('/config/structured', (req, res) => {
         httpTls: Boolean(h.httpTls),
         ntlm: Boolean(h.ntlm),
         health_follow_redirects: Boolean(h.health_follow_redirects),
+        http_tls_insecure_skip_verify: Boolean(h.http_tls_insecure_skip_verify),
         accesslist: parseJSON(h.accesslist),
         basicauth: parseJSON(h.basicauth),
         header: parseJSON(h.header),
@@ -120,25 +128,25 @@ router.post('/config/structured', express.json(), async (req, res) => {
     const saveTransaction = db.transaction(() => {
       // General
       if (config.general) {
-        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=? WHERE id=1')
-          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level);
+        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=? WHERE id=1')
+          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0);
       }
 
       // Domains
       db.prepare('DELETE FROM domains').run();
       if (config.domains) {
-        const stmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const d of config.domains) {
-          stmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert);
+          stmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert, d.client_auth_mode, d.client_auth_trust_pool);
         }
       }
 
       // Subdomains
       db.prepare('DELETE FROM subdomains').run();
       if (config.subdomains) {
-        const stmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const s of config.subdomains) {
-          stmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description);
+          stmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description, s.client_auth_mode, s.client_auth_trust_pool);
         }
       }
 
@@ -148,13 +156,17 @@ router.post('/config/structured', express.json(), async (req, res) => {
         const stmt = db.prepare(`INSERT INTO handlers (
           id, enabled, reverse, subdomain, handleType, handlePath, accesslist, basicauth, header, handleDirective, toDomain, toPort, httpTls, ntlm, description,
           lb_policy, lb_retries, lb_try_duration, lb_try_interval,
-          health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+          health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects,
+          to_path, http_version, http_keepalive, http_tls_insecure_skip_verify, http_tls_trusted_ca_certs, http_tls_server_name,
+          passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const h of config.handlers) {
           stmt.run(
             h.id, h.enabled ? 1 : 0, h.reverse, h.subdomain, h.handleType, h.handlePath, JSON.stringify(h.accesslist || []), JSON.stringify(h.basicauth || []), JSON.stringify(h.header || []), h.handleDirective, JSON.stringify(h.toDomain || []), h.toPort, h.httpTls ? 1 : 0, h.ntlm ? 1 : 0, h.description,
             h.lb_policy, h.lb_retries, h.lb_try_duration, h.lb_try_interval,
-            h.health_fails, h.health_passes, h.health_timeout, h.health_interval, h.health_uri, h.health_port, h.health_status, h.health_body, h.health_follow_redirects ? 1 : 0
+            h.health_fails, h.health_passes, h.health_timeout, h.health_interval, h.health_uri, h.health_port, h.health_status, h.health_body, h.health_follow_redirects ? 1 : 0,
+            h.to_path, h.http_version, h.http_keepalive, h.http_tls_insecure_skip_verify ? 1 : 0, h.http_tls_trusted_ca_certs, h.http_tls_server_name,
+            h.passive_health_fail_duration, h.passive_health_max_fails, h.passive_health_unhealthy_status, h.passive_health_unhealthy_latency, h.passive_health_unhealthy_request_count, h.redir_status || '301'
           );
         }
       }
@@ -162,9 +174,9 @@ router.post('/config/structured', express.json(), async (req, res) => {
       // Access Lists
       db.prepare('DELETE FROM access_lists').run();
       if (config.accessLists) {
-        const stmt = db.prepare('INSERT INTO access_lists (id, accesslistName, clientIps, invert, description) VALUES (?, ?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO access_lists (id, accesslistName, clientIps, invert, description, http_response_code, http_response_message, request_matcher) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
         for (const a of config.accessLists) {
-          stmt.run(a.id, a.accesslistName, JSON.stringify(a.clientIps || []), a.invert ? 1 : 0, a.description);
+          stmt.run(a.id, a.accesslistName, JSON.stringify(a.clientIps || []), a.invert ? 1 : 0, a.description, a.http_response_code, a.http_response_message, a.request_matcher || 'client_ip');
         }
       }
 
@@ -189,9 +201,9 @@ router.post('/config/structured', express.json(), async (req, res) => {
       // Layer 4
       db.prepare('DELETE FROM layer4').run();
       if (config.layer4) {
-        const stmt = db.prepare('INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, toDomain, toPort, terminateTls, proxyProtocol, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const l of config.layer4) {
-          stmt.run(l.id, l.enabled ? 1 : 0, l.sequence, l.type, l.protocol, JSON.stringify(l.fromDomain || []), l.fromPort, l.matchers, JSON.stringify(l.toDomain || []), l.toPort, l.terminateTls ? 1 : 0, l.proxyProtocol, l.description);
+          stmt.run(l.id, l.enabled ? 1 : 0, l.sequence, l.type, l.protocol, JSON.stringify(l.fromDomain || []), l.fromPort, l.matchers, JSON.stringify(l.toDomain || []), l.toPort, l.terminateTls ? 1 : 0, l.proxyProtocol, l.description, l.originate_tls, JSON.stringify(l.remote_ip || []), l.lb_policy, l.passive_health_fail_duration, l.passive_health_max_fails);
         }
       }
     });

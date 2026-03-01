@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - LocalCaddyHub</title>
+    <!-- Bootstrap CSS (Darkly) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .setup-container { background: #222; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); width: 100%; max-width: 400px; border: 1px solid #444; }
+        .error-msg { color: #e74c3c; display: none; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="setup-container">
+    <h2 class="text-center mb-4">First Time Setup</h2>
+    <p class="text-muted text-center">Please change your admin credentials.</p>
+    <div id="errorMsg" class="error-msg text-center">Passwords do not match.</div>
+    <form id="setupForm">
+        <div class="mb-3">
+            <label for="newUsername" class="form-label">New Username</label>
+            <input type="text" class="form-control" id="newUsername" name="newUsername" required value="admin">
+        </div>
+        <div class="mb-3">
+            <label for="newPassword" class="form-label">New Password</label>
+            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+        </div>
+        <div class="mb-3">
+            <label for="confirmPassword" class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" id="confirmPassword" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Save & Continue</button>
+    </form>
+</div>
+
+<script>
+    document.getElementById('setupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const username = document.getElementById('newUsername').value;
+        const pass = document.getElementById('newPassword').value;
+        const confirm = document.getElementById('confirmPassword').value;
+
+        if (pass !== confirm) {
+            document.getElementById('errorMsg').style.display = 'block';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ newUsername: username, newPassword: pass })
+            });
+
+            if (res.ok) {
+                window.location.href = '/';
+            } else {
+                document.getElementById('errorMsg').textContent = 'Failed to save.';
+                document.getElementById('errorMsg').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Setup error:', error);
+            document.getElementById('errorMsg').textContent = 'Error: ' + error.message;
+            document.getElementById('errorMsg').style.display = 'block';
+        }
+    });
+</script>
+
+</body>
+</html>
