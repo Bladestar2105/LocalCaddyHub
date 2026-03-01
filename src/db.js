@@ -16,7 +16,14 @@ function initDb() {
       enable_layer4 INTEGER DEFAULT 0,
       http_port TEXT,
       https_port TEXT,
-      log_level TEXT
+      log_level TEXT,
+      tls_email TEXT,
+      http_versions TEXT,
+      timeout_read_body TEXT,
+      timeout_read_header TEXT,
+      timeout_write TEXT,
+      timeout_idle TEXT,
+      log_credentials INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS domains (
@@ -29,7 +36,9 @@ function initDb() {
       description TEXT,
       accessLog INTEGER DEFAULT 0,
       disableTls INTEGER DEFAULT 0,
-      customCert TEXT
+      customCert TEXT,
+      client_auth_mode TEXT,
+      client_auth_trust_pool TEXT
     );
 
     CREATE TABLE IF NOT EXISTS subdomains (
@@ -39,7 +48,9 @@ function initDb() {
       fromDomain TEXT,
       accesslist TEXT, -- JSON array
       basicauth TEXT, -- JSON array
-      description TEXT
+      description TEXT,
+      client_auth_mode TEXT,
+      client_auth_trust_pool TEXT
     );
 
     CREATE TABLE IF NOT EXISTS handlers (
@@ -70,7 +81,19 @@ function initDb() {
       health_port TEXT,
       health_status TEXT,
       health_body TEXT,
-      health_follow_redirects INTEGER DEFAULT 0
+      health_follow_redirects INTEGER DEFAULT 0,
+      to_path TEXT,
+      http_version TEXT,
+      http_keepalive TEXT,
+      http_tls_insecure_skip_verify INTEGER DEFAULT 0,
+      http_tls_trusted_ca_certs TEXT,
+      http_tls_server_name TEXT,
+      passive_health_fail_duration TEXT,
+      passive_health_max_fails TEXT,
+      passive_health_unhealthy_status TEXT,
+      passive_health_unhealthy_latency TEXT,
+      passive_health_unhealthy_request_count TEXT,
+      redir_status TEXT DEFAULT '301'
     );
 
     CREATE TABLE IF NOT EXISTS access_lists (
@@ -78,7 +101,10 @@ function initDb() {
       accesslistName TEXT,
       clientIps TEXT, -- JSON array
       invert INTEGER DEFAULT 0,
-      description TEXT
+      description TEXT,
+      http_response_code TEXT,
+      http_response_message TEXT,
+      request_matcher TEXT DEFAULT 'client_ip'
     );
 
     CREATE TABLE IF NOT EXISTS basic_auths (
@@ -110,7 +136,20 @@ function initDb() {
       toPort TEXT,
       terminateTls INTEGER DEFAULT 0,
       proxyProtocol TEXT,
-      description TEXT
+      description TEXT,
+      originate_tls TEXT,
+      remote_ip TEXT,
+      lb_policy TEXT,
+      passive_health_fail_duration TEXT,
+      passive_health_max_fails TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      totp_secret TEXT,
+      totp_enabled INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -124,6 +163,54 @@ function initDb() {
   const result = stmt.get();
   if (result.count === 0) {
     db.prepare("INSERT INTO general_config (id, enabled, enable_layer4, http_port, https_port, log_level) VALUES (1, 0, 0, '80', '443', 'INFO')").run();
+  }
+
+  // Perform schema migrations for existing databases
+  const migrations = [
+    { table: 'general_config', column: 'tls_email', def: 'TEXT' },
+    { table: 'general_config', column: 'http_versions', def: 'TEXT' },
+    { table: 'general_config', column: 'timeout_read_body', def: 'TEXT' },
+    { table: 'general_config', column: 'timeout_read_header', def: 'TEXT' },
+    { table: 'general_config', column: 'timeout_write', def: 'TEXT' },
+    { table: 'general_config', column: 'timeout_idle', def: 'TEXT' },
+    { table: 'general_config', column: 'log_credentials', def: 'INTEGER DEFAULT 0' },
+    { table: 'domains', column: 'client_auth_mode', def: 'TEXT' },
+    { table: 'domains', column: 'client_auth_trust_pool', def: 'TEXT' },
+    { table: 'subdomains', column: 'client_auth_mode', def: 'TEXT' },
+    { table: 'subdomains', column: 'client_auth_trust_pool', def: 'TEXT' },
+    { table: 'handlers', column: 'to_path', def: 'TEXT' },
+    { table: 'handlers', column: 'http_version', def: 'TEXT' },
+    { table: 'handlers', column: 'http_keepalive', def: 'TEXT' },
+    { table: 'handlers', column: 'http_tls_insecure_skip_verify', def: 'INTEGER DEFAULT 0' },
+    { table: 'handlers', column: 'http_tls_trusted_ca_certs', def: 'TEXT' },
+    { table: 'handlers', column: 'http_tls_server_name', def: 'TEXT' },
+    { table: 'handlers', column: 'passive_health_fail_duration', def: 'TEXT' },
+    { table: 'handlers', column: 'passive_health_max_fails', def: 'TEXT' },
+    { table: 'handlers', column: 'passive_health_unhealthy_status', def: 'TEXT' },
+    { table: 'handlers', column: 'passive_health_unhealthy_latency', def: 'TEXT' },
+    { table: 'handlers', column: 'passive_health_unhealthy_request_count', def: 'TEXT' },
+    { table: 'handlers', column: 'redir_status', def: "TEXT DEFAULT '301'" },
+    { table: 'access_lists', column: 'http_response_code', def: 'TEXT' },
+    { table: 'access_lists', column: 'http_response_message', def: 'TEXT' },
+    { table: 'access_lists', column: 'request_matcher', def: "TEXT DEFAULT 'client_ip'" },
+    { table: 'layer4', column: 'originate_tls', def: 'TEXT' },
+    { table: 'layer4', column: 'remote_ip', def: 'TEXT' },
+    { table: 'layer4', column: 'lb_policy', def: 'TEXT' },
+    { table: 'layer4', column: 'passive_health_fail_duration', def: 'TEXT' },
+    { table: 'layer4', column: 'passive_health_max_fails', def: 'TEXT' }
+  ];
+
+  for (const m of migrations) {
+    try {
+      // Check if column exists, if not, this will throw or we can just catch the error
+      const info = db.pragma(`table_info(${m.table})`);
+      const exists = info.some(col => col.name === m.column);
+      if (!exists) {
+        db.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.def}`).run();
+      }
+    } catch (e) {
+      console.warn(`Failed to migrate ${m.table}.${m.column}: ${e.message}`);
+    }
   }
 }
 
