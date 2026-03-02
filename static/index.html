@@ -15,10 +15,11 @@
         .btn-primary:hover { background-color: #006666; border-color: #006666; }
         body { font-family: sans-serif; padding: 20px; }
         .tab-content { padding: 20px; border: 1px solid #444; border-top: none; background: #222; border-radius: 0 0 5px 5px; }
-        .nav-tabs .nav-link { border: 1px solid transparent; color: #aaa; }
+        .nav-tabs .nav-link { border: 1px solid transparent; color: #adb5bd; }
         .nav-tabs .nav-link.active { background-color: #222; border-color: #444 #444 transparent; color: #fff; }
         textarea { width: 100%; height: 300px; font-family: monospace; }
         .status-box { margin-top: 20px; padding: 15px; border-radius: 5px; background-color: #333; color: #fff; white-space: pre-wrap; display: none; }
+        .text-muted { color: #adb5bd !important; }
         .table-responsive { margin-top: 20px; }
         .action-btns button { margin-right: 5px; }
 
@@ -277,7 +278,7 @@
             <div id="controlStatus" class="status-box mb-4"></div>
 
             <h4>Raw Caddyfile</h4>
-            <textarea id="rawCaddyfile" readonly class="form-control bg-light mb-2"></textarea>
+            <textarea id="rawCaddyfile" readonly class="form-control bg-dark text-light mb-2"></textarea>
 
             <h4 class="mt-4">Stats</h4>
             <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
