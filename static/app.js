@@ -565,7 +565,7 @@ const app = {
                         if (el.attr('type') === 'checkbox') {
                             el.prop('checked', item[key]);
                         } else if (el.prop('multiple')) {
-                            if (key === 'http_version' && typeof item[key] === 'string') {
+                            if ((key === 'http_version' || key === 'matchers') && typeof item[key] === 'string') {
                                 el.val(item[key].split(' ').filter(v => v));
                             } else {
                                 el.val(item[key]);
@@ -637,7 +637,7 @@ const app = {
             // Re-evaluating select[multiple] manually to guarantee array structure
             $(`#${modalId}Form select[multiple]`).each(function() {
                  let val = $(this).val() || [];
-                 if (this.name === 'http_version') {
+                 if (this.name === 'http_version' || this.name === 'matchers') {
                      obj[this.name] = val.join(' ');
                  } else {
                      obj[this.name] = val;
@@ -841,7 +841,7 @@ const app = {
                     <div class="modal-body"><form id="layer4ModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
                         <div class="mb-2"><label for="l4_seq">Sequence (Priority)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
-                        <div class="mb-2"><label for="l4_match">Matchers (e.g. tlssni, http, any)</label><input type="text" id="l4_match" name="matchers" class="form-control" value="any"></div>
+                        <div class="mb-2"><label for="l4_match">Matchers</label><select id="l4_match" name="matchers" class="form-select" multiple><option value="any" selected>any</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
                         <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
                         <div class="mb-2"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
                         <div class="mb-2"><label for="l4_td">Upstream IPs/Domains (comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
