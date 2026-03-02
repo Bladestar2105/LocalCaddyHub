@@ -104,6 +104,7 @@ router.get('/config/structured', (req, res) => {
         health_port: h.health_port || '',
         health_interval: h.health_interval || '',
         health_timeout: h.health_timeout || '',
+        health_headers: parseJSON(h.health_headers),
         passive_health_fail_duration: h.passive_health_fail_duration || '',
         passive_health_max_fails: h.passive_health_max_fails || '',
         passive_health_unhealthy_status: h.passive_health_unhealthy_status || '',
@@ -172,15 +173,15 @@ router.post('/config/structured', express.json(), async (req, res) => {
         const stmt = db.prepare(`INSERT INTO handlers (
           id, enabled, reverse, subdomain, handleType, handlePath, accesslist, basicauth, header, handleDirective, toDomain, toPort, httpTls, ntlm, description,
           lb_policy, lb_retries, lb_try_duration, lb_try_interval,
-          health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects,
+          health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects, health_headers,
           to_path, http_version, http_keepalive, http_tls_insecure_skip_verify, http_tls_trusted_ca_certs, http_tls_server_name,
           passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const h of config.handlers) {
           stmt.run(
             h.id, h.enabled ? 1 : 0, h.reverse, h.subdomain, h.handleType, h.handlePath, JSON.stringify(h.accesslist || []), JSON.stringify(h.basicauth || []), JSON.stringify(h.header || []), h.handleDirective, JSON.stringify(h.toDomain || []), h.toPort, h.httpTls ? 1 : 0, h.ntlm ? 1 : 0, h.description,
             h.lb_policy, h.lb_retries, h.lb_try_duration, h.lb_try_interval,
-            h.health_fails, h.health_passes, h.health_timeout, h.health_interval, h.health_uri, h.health_port, h.health_status, h.health_body, h.health_follow_redirects ? 1 : 0,
+            h.health_fails, h.health_passes, h.health_timeout, h.health_interval, h.health_uri, h.health_port, h.health_status, h.health_body, h.health_follow_redirects ? 1 : 0, JSON.stringify(h.health_headers || []),
             h.to_path, h.http_version, h.http_keepalive, h.http_tls_insecure_skip_verify ? 1 : 0, h.http_tls_trusted_ca_certs, h.http_tls_server_name,
             h.passive_health_fail_duration, h.passive_health_max_fails, h.passive_health_unhealthy_status, h.passive_health_unhealthy_latency, h.passive_health_unhealthy_request_count, h.redir_status || '301'
           );

@@ -477,6 +477,21 @@ function generateCaddyfile(config, certsDir = './certs') {
             if (handler.health_passes) sb += `\t\t\thealth_passes ${parseInt(handler.health_passes, 10)}\n`;
             if (handler.health_fails) sb += `\t\t\thealth_fails ${parseInt(handler.health_fails, 10)}\n`;
             if (handler.health_follow_redirects) sb += `\t\t\thealth_follow_redirects\n`;
+            if (handler.health_headers && handler.health_headers.length > 0) {
+              sb += `\t\t\thealth_headers {\n`;
+              for (const hID of handler.health_headers) {
+                const h = headersMap[hID];
+                if (h) {
+                  const action = h.headerValue ? 'set' : '-';
+                  if (action === '-') {
+                    sb += `\t\t\t\t-${h.headerType}\n`;
+                  } else {
+                    sb += `\t\t\t\t${h.headerType} ${h.headerValue}\n`;
+                  }
+                }
+              }
+              sb += `\t\t\t}\n`;
+            }
 
             // Passive Health Checks
             if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${formatDuration(handler.passive_health_fail_duration)}\n`;
