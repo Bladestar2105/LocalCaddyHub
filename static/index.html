@@ -118,8 +118,13 @@
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label for="genHttpVersions" class="form-label">HTTP Versions <i class="text-muted" style="font-size:0.9em;">(?) Space-separated list of supported HTTP versions (e.g., h1 h2 h3).</i></label>
-                    <input type="text" class="form-control" id="genHttpVersions" placeholder="h1 h2 h3">
+                    <label for="genHttpVersions" class="form-label">HTTP Versions <i class="text-muted" style="font-size:0.9em;">(?) Select supported HTTP versions.</i></label>
+                    <select id="genHttpVersions" class="form-select" multiple>
+                        <option value="h1">h1</option>
+                        <option value="h2">h2</option>
+                        <option value="h3">h3</option>
+                        <option value="h2c">h2c</option>
+                    </select>
                 </div>
                 <div class="mb-3">
                     <label for="genTOutReadBody" class="form-label">Read Body Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for reading the request body.</i></label>
