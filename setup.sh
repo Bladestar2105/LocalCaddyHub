@@ -23,19 +23,23 @@ apt install -y nodejs
 
 # 2. Build Custom Caddy
 echo "--> Building custom Caddy binary..."
-# Run as the original user to build in their home directory if possible, or build as root
-SUDO_USER_HOME=$(eval echo ~${SUDO_USER:-root})
+# Create a temporary directory for building and ensure the user has access
+BUILD_DIR=$(mktemp -d)
+chown "${SUDO_USER:-root}" "$BUILD_DIR"
 
-sudo -u ${SUDO_USER:-root} -H bash -c '
+# Run as the original user to build
+sudo -u "${SUDO_USER:-root}" -H bash -c '
+  cd "$1"
   export PATH=$PATH:/usr/local/go/bin:$(go env GOPATH)/bin
   go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
   $(go env GOPATH)/bin/xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4
-'
+' _ "$BUILD_DIR"
 
 echo "--> Moving Caddy to /usr/local/bin and setting capabilities..."
-mv caddy /usr/local/bin/
+mv "$BUILD_DIR/caddy" /usr/local/bin/
+rm -rf "$BUILD_DIR"
 setcap cap_net_bind_service=+ep /usr/local/bin/caddy
 
 # 3. Setup LocalCaddyHub
