@@ -63,7 +63,8 @@ const app = {
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
         this.config.general.auto_https = $('#genAutoHttps').val();
-        this.config.general.http_versions = $('#genHttpVersions').val();
+        let httpVer = $('#genHttpVersions').val();
+        this.config.general.http_versions = Array.isArray(httpVer) ? httpVer.join(' ') : (httpVer || '');
         this.config.general.timeout_read_body = $('#genTOutReadBody').val();
         this.config.general.timeout_read_header = $('#genTOutReadHeader').val();
         this.config.general.timeout_write = $('#genTOutWrite').val();
@@ -431,7 +432,8 @@ const app = {
             $('#genLogLevel').val(app.config.general.log_level);
             $('#genTlsEmail').val(app.config.general.tls_email);
             $('#genAutoHttps').val(app.config.general.auto_https);
-            $('#genHttpVersions').val(app.config.general.http_versions);
+            let hv = app.config.general.http_versions;
+            $('#genHttpVersions').val(hv ? hv.split(' ').filter(v => v) : []);
             $('#genTOutReadBody').val(app.config.general.timeout_read_body);
             $('#genTOutReadHeader').val(app.config.general.timeout_read_header);
             $('#genTOutWrite').val(app.config.general.timeout_write);
@@ -563,7 +565,11 @@ const app = {
                         if (el.attr('type') === 'checkbox') {
                             el.prop('checked', item[key]);
                         } else if (el.prop('multiple')) {
-                            el.val(item[key]);
+                            if ((key === 'http_version' || key === 'matchers') && typeof item[key] === 'string') {
+                                el.val(item[key].split(' ').filter(v => v));
+                            } else {
+                                el.val(item[key]);
+                            }
                         } else if (Array.isArray(item[key])) {
                              el.val(item[key].join(', '));
                         } else {
@@ -630,7 +636,12 @@ const app = {
 
             // Re-evaluating select[multiple] manually to guarantee array structure
             $(`#${modalId}Form select[multiple]`).each(function() {
-                 obj[this.name] = $(this).val() || [];
+                 let val = $(this).val() || [];
+                 if (this.name === 'http_version' || this.name === 'matchers') {
+                     obj[this.name] = val.join(' ');
+                 } else {
+                     obj[this.name] = val;
+                 }
             });
 
             const editId = $(`#${modalId}`).data('edit-id');
@@ -719,20 +730,21 @@ const app = {
                                 <div class="mb-2"><label for="h_sub">Subdomain Filter</label><select id="h_sub" name="subdomain" class="form-select subdomain-select"></select></div>
                                 <div class="mb-2"><label for="h_ht">Handle Type</label><select id="h_ht" name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
                                 <div class="mb-2"><label for="h_hp">Path Matcher (e.g. /api/*)</label><input type="text" id="h_hp" name="handlePath" class="form-control"></div>
-                                <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select" onchange="if (this.value === 'reverse_proxy') { $('.directive-rp').show(); } else { $('.directive-rp').hide(); } $('.directive-redir').toggle(this.value === 'redir'); if (this.value === 'redir') { $('#h-general-tab').tab('show'); }"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
+                                <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select" onchange="if (this.value === 'reverse_proxy') { $('.directive-rp').show(); $('.directive-redir').hide(); $('#h_td').prop('disabled', false); $('#h_rtarg').prop('disabled', true); } else { $('.directive-rp').hide(); $('.directive-redir').show(); $('#h_td').prop('disabled', true); $('#h_rtarg').prop('disabled', false); $('#h-general-tab').tab('show'); }"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
                                 <div class="mb-2"><label for="h_desc">Description</label><input type="text" id="h_desc" name="description" class="form-control"></div>
-                                <div class="mb-2 directive-redir"><label for="h_rstat">Redirect Status Code</label><input type="text" id="h_rstat" name="redir_status" class="form-control" placeholder="301"></div>
+                                <div class="mb-2 directive-redir" style="display:none;"><label for="h_rtarg">Redirect Target URL</label><input type="text" id="h_rtarg" name="toDomain" class="form-control array-input" placeholder="https://example.com" disabled></div>
+                                <div class="mb-2 directive-redir" style="display:none;"><label for="h_rstat">Redirect Status Code</label><select id="h_rstat" name="redir_status" class="form-select"><option value="301" selected>301 (Moved Permanently)</option><option value="302">302 (Found / Temporary)</option><option value="303">303 (See Other)</option><option value="307">307 (Temporary Redirect)</option><option value="308">308 (Permanent Redirect)</option><option value="html">html (HTML Document)</option></select></div>
                             </div>
 
                             <!-- Upstream Tab -->
                             <div class="tab-pane fade" id="h-upstream" role="tabpanel">
-                                <div class="mb-2"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
+                                <div class="mb-2 directive-rp"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
                                 <div class="mb-2"><label for="h_tp">Upstream Port</label><input type="text" id="h_tp" name="toPort" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="httpTls" id="h_tls"> <label for="h_tls">Upstream TLS (HTTPS)</label></div>
                                 <div class="mb-2"><input type="checkbox" name="http_tls_insecure_skip_verify" id="h_tls_skip"> <label for="h_tls_skip">Insecure Skip TLS Verify</label></div>
                                 <div class="mb-2"><label for="h_tls_sni">Upstream TLS Server Name (SNI)</label><input type="text" id="h_tls_sni" name="http_tls_server_name" class="form-control"></div>
                                 <div class="mb-2"><label for="h_tls_ca">Upstream TLS Trusted CA Cert</label><select id="h_tls_ca" name="http_tls_trusted_ca_certs" class="form-select cert-select"></select></div>
-                                <div class="mb-2"><label for="h_hver">HTTP Versions (e.g. h1, h2, h3)</label><input type="text" id="h_hver" name="http_version" class="form-control"></div>
+                                <div class="mb-2"><label for="h_hver">HTTP Versions</label><select id="h_hver" name="http_version" class="form-select" multiple><option value="h1">h1</option><option value="h2">h2</option><option value="h3">h3</option><option value="h2c">h2c</option></select></div>
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
@@ -830,7 +842,7 @@ const app = {
                     <div class="modal-body"><form id="layer4ModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
                         <div class="mb-2"><label for="l4_seq">Sequence (Priority)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
-                        <div class="mb-2"><label for="l4_match">Matchers (e.g. tlssni, http, any)</label><input type="text" id="l4_match" name="matchers" class="form-control" value="any"></div>
+                        <div class="mb-2"><label for="l4_match">Matchers</label><select id="l4_match" name="matchers" class="form-select" multiple><option value="any" selected>any</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
                         <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
                         <div class="mb-2"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
                         <div class="mb-2"><label for="l4_td">Upstream IPs/Domains (comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
