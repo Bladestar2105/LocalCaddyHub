@@ -24,16 +24,38 @@ def run():
         # Take initial screenshot
         page.screenshot(path="verification/initial_load.png")
 
-        # --- Login ---
-        print("Logging in...")
+        # --- Login / Setup ---
+        print("Logging in or Setting up...")
         try:
-            page.fill("input[name='username']", "admin")
-            page.fill("input[name='password']", "admin")
-            page.click("button:has-text('Login')")
+            page.goto("http://localhost:8090/login.html")
+            try:
+                page.fill("#username", "admin")
+                page.fill("#password", "admin")
+                with page.expect_response("**/login"):
+                    page.click("button:has-text('Login')")
+                page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            page.goto("http://localhost:8090/")
+
+            if "setup" in page.url:
+                try:
+                    page.fill("#newUsername", "admin")
+                    page.fill("#newPassword", "admin")
+                    page.fill("#confirmPassword", "admin")
+                    with page.expect_response("**/api/setup"):
+                        page.click("button:has-text('Save & Continue')")
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
+
+                page.goto("http://localhost:8090/")
+
             page.wait_for_selector("text=Reverse Proxy")
-            print("Logged in.")
+            print("Logged in/Set up.")
         except Exception as e:
-            print(f"Failed to log in: {e}")
+            print(f"Failed to log in or set up: {e}")
             page.screenshot(path="verification/error_login.png")
             return
 
@@ -64,8 +86,19 @@ def run():
             page.check("#h_en")
             # Select the domain we just added (example.com)
             page.select_option("#h_rev", label="example.com")
+
+            # Click Upstream tab to make fields visible
+            page.click("#h-upstream-tab")
+            page.wait_for_selector("#h-upstream.active")
+
             page.fill("#h_td", "localhost")
             page.fill("#h_tp", "9000")
+
+            # Fill the new load balancer fields
+            page.fill("#h_lb_retries", "3")
+            page.fill("#h_lb_try_duration", "5s")
+            page.fill("#h_lb_try_interval", "250ms")
+
             page.click("#handlerModal .btn-primary:has-text('Save')")
             page.wait_for_selector("#handlerModal", state="hidden")
             print("Handler added.")
