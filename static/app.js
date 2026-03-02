@@ -736,6 +736,9 @@ const app = {
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
+                                <div class="mb-2"><label for="h_lb_retries">LB Retries <i class="text-muted" style="font-size:0.9em;">(?) Number of retries.</i></label><input type="number" id="h_lb_retries" name="lb_retries" class="form-control"></div>
+                                <div class="mb-2"><label for="h_lb_try_duration">LB Try Duration <i class="text-muted" style="font-size:0.9em;">(?) How long to try selecting upstream (e.g. 5s).</i></label><input type="text" id="h_lb_try_duration" name="lb_try_duration" class="form-control" placeholder="5s"></div>
+                                <div class="mb-2"><label for="h_lb_try_interval">LB Try Interval <i class="text-muted" style="font-size:0.9em;">(?) Time between retries (e.g. 250ms).</i></label><input type="text" id="h_lb_try_interval" name="lb_try_interval" class="form-control" placeholder="250ms"></div>
                             </div>
 
                             <!-- Health Checks Tab -->
