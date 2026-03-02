@@ -63,7 +63,8 @@ const app = {
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
         this.config.general.auto_https = $('#genAutoHttps').val();
-        this.config.general.http_versions = $('#genHttpVersions').val();
+        let httpVer = $('#genHttpVersions').val();
+        this.config.general.http_versions = Array.isArray(httpVer) ? httpVer.join(' ') : (httpVer || '');
         this.config.general.timeout_read_body = $('#genTOutReadBody').val();
         this.config.general.timeout_read_header = $('#genTOutReadHeader').val();
         this.config.general.timeout_write = $('#genTOutWrite').val();
@@ -431,7 +432,8 @@ const app = {
             $('#genLogLevel').val(app.config.general.log_level);
             $('#genTlsEmail').val(app.config.general.tls_email);
             $('#genAutoHttps').val(app.config.general.auto_https);
-            $('#genHttpVersions').val(app.config.general.http_versions);
+            let hv = app.config.general.http_versions;
+            $('#genHttpVersions').val(hv ? hv.split(' ').filter(v => v) : []);
             $('#genTOutReadBody').val(app.config.general.timeout_read_body);
             $('#genTOutReadHeader').val(app.config.general.timeout_read_header);
             $('#genTOutWrite').val(app.config.general.timeout_write);
@@ -563,7 +565,11 @@ const app = {
                         if (el.attr('type') === 'checkbox') {
                             el.prop('checked', item[key]);
                         } else if (el.prop('multiple')) {
-                            el.val(item[key]);
+                            if (key === 'http_version' && typeof item[key] === 'string') {
+                                el.val(item[key].split(' ').filter(v => v));
+                            } else {
+                                el.val(item[key]);
+                            }
                         } else if (Array.isArray(item[key])) {
                              el.val(item[key].join(', '));
                         } else {
@@ -630,7 +636,12 @@ const app = {
 
             // Re-evaluating select[multiple] manually to guarantee array structure
             $(`#${modalId}Form select[multiple]`).each(function() {
-                 obj[this.name] = $(this).val() || [];
+                 let val = $(this).val() || [];
+                 if (this.name === 'http_version') {
+                     obj[this.name] = val.join(' ');
+                 } else {
+                     obj[this.name] = val;
+                 }
             });
 
             const editId = $(`#${modalId}`).data('edit-id');
@@ -732,7 +743,7 @@ const app = {
                                 <div class="mb-2"><input type="checkbox" name="http_tls_insecure_skip_verify" id="h_tls_skip"> <label for="h_tls_skip">Insecure Skip TLS Verify</label></div>
                                 <div class="mb-2"><label for="h_tls_sni">Upstream TLS Server Name (SNI)</label><input type="text" id="h_tls_sni" name="http_tls_server_name" class="form-control"></div>
                                 <div class="mb-2"><label for="h_tls_ca">Upstream TLS Trusted CA Cert</label><select id="h_tls_ca" name="http_tls_trusted_ca_certs" class="form-select cert-select"></select></div>
-                                <div class="mb-2"><label for="h_hver">HTTP Versions (e.g. h1, h2, h3)</label><input type="text" id="h_hver" name="http_version" class="form-control"></div>
+                                <div class="mb-2"><label for="h_hver">HTTP Versions</label><select id="h_hver" name="http_version" class="form-select" multiple><option value="h1">h1</option><option value="h2">h2</option><option value="h3">h3</option><option value="h2c">h2c</option></select></div>
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
