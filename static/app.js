@@ -615,7 +615,7 @@ const app = {
             for (let [key, value] of data.entries()) {
                  const el = $(`#${modalId}Form [name="${key}"]`);
                  if (el.prop('multiple')) {
-                      obj[key] = el.val() || [];
+                      // FormData only gives the last or first item sometimes for multiple, better to re-query the DOM
                  } else if (el.hasClass('array-input')) {
                       obj[key] = value.split(',').map(s => s.trim()).filter(s => s);
                  } else if (el.attr('type') !== 'checkbox') {
@@ -627,6 +627,11 @@ const app = {
                       }
                  }
             }
+
+            // Re-evaluating select[multiple] manually to guarantee array structure
+            $(`#${modalId}Form select[multiple]`).each(function() {
+                 obj[this.name] = $(this).val() || [];
+            });
 
             const editId = $(`#${modalId}`).data('edit-id');
             if (editId) {
@@ -743,6 +748,7 @@ const app = {
                                     <div class="mb-2"><label for="h_hto">Health Timeout <i class="text-muted" style="font-size:0.9em;">(?) The timeout for active health checks.</i></label><input type="text" id="h_hto" name="health_timeout" class="form-control" placeholder="5s"></div>
                                     <div class="mb-2"><label for="h_hs">Health Status <i class="text-muted" style="font-size:0.9em;">(?) Expected HTTP status code (e.g. 200).</i></label><input type="text" id="h_hs" name="health_status" class="form-control" placeholder="2xx"></div>
                                     <div class="mb-2"><label for="h_hb">Health Body <i class="text-muted" style="font-size:0.9em;">(?) Expected text in the response body.</i></label><input type="text" id="h_hb" name="health_body" class="form-control" placeholder="OK"></div>
+                                    <div class="mb-2"><label for="h_hhead">Health Headers <i class="text-muted" style="font-size:0.9em;">(?) Select headers to use for health checks.</i></label><select id="h_hhead" name="health_headers" class="form-select header-select" multiple></select></div>
                                     <div class="mb-2"><label for="h_hp_passes">Health Passes <i class="text-muted" style="font-size:0.9em;">(?) Number of passes to consider healthy.</i></label><input type="number" id="h_hp_passes" name="health_passes" class="form-control"></div>
                                     <div class="mb-2"><label for="h_hp_fails">Health Fails <i class="text-muted" style="font-size:0.9em;">(?) Number of failures to consider unhealthy.</i></label><input type="number" id="h_hp_fails" name="health_fails" class="form-control"></div>
                                     <div class="mb-2"><input type="checkbox" name="health_follow_redirects" id="h_hfr"> <label for="h_hfr">Follow Redirects <i class="text-muted" style="font-size:0.9em;">(?) Follow HTTP redirects during health checks.</i></label></div>
