@@ -7,9 +7,7 @@ const db = new Database(appPaths.db);
 
 db.pragma('journal_mode = WAL');
 
-// Initialize database schema
-function initDb() {
-  db.exec(`
+const SCHEMA_SQL = `
     CREATE TABLE IF NOT EXISTS general_config (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       enabled INTEGER DEFAULT 0,
@@ -159,15 +157,25 @@ function initDb() {
       token TEXT PRIMARY KEY,
       expires_at INTEGER NOT NULL
     );
-  `);
+`;
 
+// Initialize database schema
+function initDb() {
+  db.exec(SCHEMA_SQL);
+  initGeneralConfig();
+  runMigrations();
+}
+
+function initGeneralConfig() {
   // Initialize general_config if empty
   const stmt = db.prepare('SELECT COUNT(*) AS count FROM general_config');
   const result = stmt.get();
   if (result.count === 0) {
     db.prepare("INSERT INTO general_config (id, enabled, enable_layer4, http_port, https_port, log_level) VALUES (1, 0, 0, '80', '443', 'INFO')").run();
   }
+}
 
+function runMigrations() {
   // Perform schema migrations for existing databases
   const migrations = [
     { table: 'general_config', column: 'tls_email', def: 'TEXT' },
