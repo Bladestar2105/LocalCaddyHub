@@ -12,6 +12,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
   // Global options
   sb += '{\n';
+  sb += '\torder coraza_waf first\n';
   if (config.general.http_port) {
     sb += `\thttp_port ${config.general.http_port}\n`;
   }
@@ -327,6 +328,19 @@ function generateCaddyfile(config, certsDir = './certs') {
             sb += `\thandle_path${matcherStr} {\n`;
           } else {
             sb += `\thandle${matcherStr} {\n`;
+          }
+
+          // WAF Integration
+          if (handler.waf_enabled) {
+            sb += '\t\tcoraza_waf {\n';
+            sb += '\t\t\tload_owasp_crs\n';
+            sb += '\t\t\tdirectives `\n';
+            sb += '\t\t\t\tInclude @coraza.conf-recommended\n';
+            sb += '\t\t\t\tInclude @crs-setup.conf.example\n';
+            sb += '\t\t\t\tInclude @owasp_crs/*.conf\n';
+            sb += '\t\t\t\tSecRuleEngine On\n';
+            sb += '\t\t\t`\n';
+            sb += '\t\t}\n';
           }
 
           // Handler Access Lists

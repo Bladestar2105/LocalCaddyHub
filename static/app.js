@@ -748,6 +748,7 @@ const app = {
                             <!-- General Tab -->
                             <div class="tab-pane fade show active" id="h-general" role="tabpanel">
                                 <div class="mb-2"><input type="checkbox" name="enabled" id="h_en"> <label for="h_en">Enabled</label></div>
+                                <div class="mb-2"><input type="checkbox" name="waf_enabled" id="h_waf"> <label for="h_waf">Enable WAF (Coraza OWASP CRS)</label></div>
                                 <div class="mb-2"><label for="h_rev">Domain</label><select id="h_rev" name="reverse" class="form-select domain-select" required></select></div>
                                 <div class="mb-2"><label for="h_sub">Subdomain Filter</label><select id="h_sub" name="subdomain" class="form-select subdomain-select"></select></div>
                                 <div class="mb-2"><label for="h_ht">Handle Type</label><select id="h_ht" name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
