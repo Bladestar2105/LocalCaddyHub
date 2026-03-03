@@ -4,3 +4,4 @@ verification/
 config.json
 Caddyfile
 node_modules/
+data/
