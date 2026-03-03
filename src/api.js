@@ -330,42 +330,48 @@ router.get('/stats', (req, res) => {
 });
 
 // Certs
-router.get('/certs', (req, res) => {
+router.get('/certs', async (req, res) => {
   try {
-    const files = fs.readdirSync(certDir).filter(f => !fs.statSync(path.join(certDir, f)).isDirectory());
+    // ⚡ Bolt: Use asynchronous readdir with { withFileTypes: true } to prevent event loop blocking
+    // and eliminate O(n) synchronous statSync calls.
+    const dirents = await fs.promises.readdir(certDir, { withFileTypes: true });
+    const files = dirents.filter(dirent => !dirent.isDirectory()).map(dirent => dirent.name);
     res.json(files);
   } catch (err) {
     res.status(500).send('Failed to read certs directory');
   }
 });
 
-router.post('/certs', upload.single('file'), (req, res) => {
+router.post('/certs', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).send('Failed to get file');
   const safeName = path.basename(req.file.originalname);
   const dstPath = path.join(certDir, safeName);
   try {
-    fs.renameSync(req.file.path, dstPath);
+    // ⚡ Bolt: Use asynchronous rename to prevent event loop blocking.
+    await fs.promises.rename(req.file.path, dstPath);
     res.sendStatus(200);
   } catch (err) {
     res.status(500).send('Failed to write file');
   }
 });
 
-router.delete('/certs', (req, res) => {
+router.delete('/certs', async (req, res) => {
   const filename = req.query.file;
   if (!filename || filename.includes('..') || filename.includes('/')) {
     return res.status(400).send('Invalid filename');
   }
   const filePath = path.join(certDir, filename);
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      res.sendStatus(200);
-    } else {
-      res.status(404).send('File not found');
-    }
+    // ⚡ Bolt: Use asynchronous unlink to prevent event loop blocking,
+    // and catch ENOENT instead of using existsSync to avoid TOCTOU races.
+    await fs.promises.unlink(filePath);
+    res.sendStatus(200);
   } catch (err) {
-    res.status(500).send('Failed to delete file');
+    if (err.code === 'ENOENT') {
+      res.status(404).send('File not found');
+    } else {
+      res.status(500).send('Failed to delete file');
+    }
   }
 });
 
