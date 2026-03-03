@@ -354,7 +354,18 @@ const app = {
              }
              let statusStr = lineData.status !== undefined ? ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status)}</span>` : '';
 
-             div.html(`<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}`);
+             let extraStr = '';
+             if (lineData.upstream) {
+                 extraStr += ` <span style="color:#ffbb33">Upstream: ${this.escapeHtml(lineData.upstream)}</span>`;
+             }
+             if (lineData.error) {
+                 extraStr += ` <span style="color:#ff4444">Error: ${this.escapeHtml(lineData.error)}</span>`;
+             }
+             if (lineData.status_code !== undefined && lineData.status === undefined) {
+                 extraStr += ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status_code)}</span>`;
+             }
+
+             div.html(`<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}${extraStr}`);
         } else {
              div.text(lineStr);
         }
