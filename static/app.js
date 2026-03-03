@@ -456,6 +456,12 @@ const app = {
         renderTable: function(configKey, tableId, cols) {
             const tbody = $(`#${tableId} tbody`).empty();
 
+            const items = app.config[configKey] || [];
+            if (items.length === 0) {
+                tbody.append(`<tr><td colspan="${cols.length + 1}" class="text-center text-muted py-3">No items found. Click Add to create one.</td></tr>`);
+                return;
+            }
+
             // Optimization: Create lookup maps for O(1) resolution instead of O(N) array finds
             let domainMap = null;
             let subdomainMap = null;
@@ -470,7 +476,7 @@ const app = {
 
             // Optimization: Batch DOM appends to prevent layout thrashing
             const rows = [];
-            (app.config[configKey] || []).forEach(item => {
+            items.forEach(item => {
                 let tr = $('<tr>');
                 cols.forEach(col => {
                     let val = item[col];
@@ -513,11 +519,16 @@ const app = {
 
         renderCerts: function() {
             const list = $('#certsList').empty();
-            (app.certs || []).forEach(c => {
-                let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').text(c);
-                let btn = $('<button>').addClass('btn btn-sm btn-danger').text('Delete').click(() => app.deleteCert(c));
-                list.append(li.append(btn));
-            });
+            const certs = app.certs || [];
+            if (certs.length === 0) {
+                 list.append($('<li>').addClass('list-group-item text-center text-muted py-3').text('No certificates found. Upload one above.'));
+            } else {
+                certs.forEach(c => {
+                    let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').text(c);
+                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text('Delete').click(() => app.deleteCert(c));
+                    list.append(li.append(btn));
+                });
+            }
             this.populateSelects();
         },
 
