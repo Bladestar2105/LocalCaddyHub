@@ -1,9 +1,24 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const crypto = require('crypto');
 const path = require('path');
 const db = require('./db');
 const bcrypt = require('bcrypt');
+
+// Helper for timing-safe comparison to prevent timing attacks on fallback login
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufferA = Buffer.from(a, 'utf8');
+  const bufferB = Buffer.from(b, 'utf8');
+
+  if (bufferA.length !== bufferB.length) {
+    // Dummy comparison to prevent leaking length difference early
+    crypto.timingSafeEqual(bufferA, bufferA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufferA, bufferB);
+}
 const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
@@ -32,8 +47,8 @@ app.post('/login', async (req, res) => {
   const password = req.body.password;
   const tokenInput = req.body.totp;
 
-  const expectedUserEnv = process.env.ADMIN_USER || 'admin';
-  const expectedPassEnv = process.env.ADMIN_PASS || 'admin';
+  const expectedUserEnv = process.env.ADMIN_USER;
+  const expectedPassEnv = process.env.ADMIN_PASS;
 
   const userRow = db.prepare('SELECT * FROM users WHERE id = 1').get();
 
@@ -62,9 +77,9 @@ app.post('/login', async (req, res) => {
         validLogin = true;
       }
     }
-  } else {
-    // Fallback to env vars if no DB user is set up yet
-    if (username === expectedUserEnv && password === expectedPassEnv) {
+  } else if (expectedUserEnv && expectedPassEnv) {
+    // Fallback to env vars if no DB user is set up yet, and env vars are explicitly defined
+    if (safeCompare(username, expectedUserEnv) && safeCompare(password, expectedPassEnv)) {
       validLogin = true;
       needsSetup = true; // Must change password
     }
@@ -121,7 +136,7 @@ app.post('/api/setup', async (req, res) => {
 app.post('/api/2fa/generate', async (req, res) => {
   const secret = generateSecret();
   const userRow = db.prepare('SELECT username FROM users WHERE id = 1').get();
-  const username = userRow ? userRow.username : (process.env.ADMIN_USER || 'admin');
+  const username = userRow ? userRow.username : process.env.ADMIN_USER;
 
   const otpauth = generateURI({ label: username, issuer: 'LocalCaddyHub', secret });
   const imageUrl = await qrcode.toDataURL(otpauth);
