@@ -111,6 +111,8 @@ router.get('/config/structured', (req, res) => {
         passive_health_unhealthy_latency: h.passive_health_unhealthy_latency || '',
         passive_health_unhealthy_request_count: h.passive_health_unhealthy_request_count || '',
         http_tls_insecure_skip_verify: Boolean(h.http_tls_insecure_skip_verify),
+        http_tls_server_name: h.http_tls_server_name || '',
+        http_tls_trusted_ca_certs: h.http_tls_trusted_ca_certs || '',
         accesslist: parseJSON(h.accesslist),
         basicauth: parseJSON(h.basicauth),
         header: parseJSON(h.header),
