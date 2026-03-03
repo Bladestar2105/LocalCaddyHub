@@ -27,7 +27,8 @@ To use the NTLM transport and layer4 proxying in your `Caddyfile`, you need a cu
     ```bash
     xcaddy build \
       --with github.com/caddyserver/ntlm-transport \
-      --with github.com/mholt/caddy-l4
+      --with github.com/mholt/caddy-l4 \
+      --with github.com/corazawaf/coraza-caddy/v2
     ```
 
     This will produce a `caddy` binary in your current directory. Make sure to place it in your system PATH or in the same directory where you run LocalCaddyHub.
@@ -133,7 +134,8 @@ go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 # Build the custom Caddy binary
 ~/go/bin/xcaddy build \
   --with github.com/caddyserver/ntlm-transport \
-  --with github.com/mholt/caddy-l4
+  --with github.com/mholt/caddy-l4 \
+  --with github.com/corazawaf/coraza-caddy/v2
 
 # Move to a system-wide location and grant privileges to bind to low ports (80/443)
 sudo mv caddy /usr/local/bin/
