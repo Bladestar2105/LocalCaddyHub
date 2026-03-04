@@ -47,6 +47,10 @@ app.post('/login', async (req, res) => {
   const password = req.body.password;
   const tokenInput = req.body.totp;
 
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
   const expectedUserEnv = process.env.ADMIN_USER;
   const expectedPassEnv = process.env.ADMIN_PASS;
 
@@ -121,6 +125,7 @@ app.use(csrfMiddleware);
 app.post('/api/setup', async (req, res) => {
   const { newUsername, newPassword } = req.body;
   if (!newUsername || !newPassword) return res.status(400).send('Missing fields');
+  if (typeof newUsername !== 'string' || typeof newPassword !== 'string') return res.status(400).send('Invalid fields');
 
   const userRow = db.prepare('SELECT * FROM users WHERE id = 1').get();
   if (userRow) {
