@@ -685,7 +685,7 @@ const app = {
                 <!-- Domain Modal -->
                 <div class="modal fade" id="domainModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="domainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="d_en"> <label for="d_en">Enabled</label></div>
                         <div class="mb-2"><label for="d_fd">Domain</label><input type="text" id="d_fd" name="fromDomain" class="form-control" required placeholder="example.com"></div>
@@ -706,7 +706,7 @@ const app = {
                 <!-- Subdomain Modal -->
                 <div class="modal fade" id="subdomainModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="subdomainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="sd_en"> <label for="sd_en">Enabled</label></div>
                         <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
@@ -726,7 +726,7 @@ const app = {
                 <!-- Handler Modal -->
                 <div class="modal fade" id="handlerModal" tabindex="-1">
                   <div class="modal-dialog modal-lg"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Handler</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Handler</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="handlerModalForm">
 
                         <ul class="nav nav-tabs mb-3" id="handlerTabs" role="tablist">
@@ -817,7 +817,7 @@ const app = {
                 <!-- Access List Modal -->
                 <div class="modal fade" id="accessListModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Access List</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Access List</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="accessListModalForm">
                         <div class="mb-2"><label for="al_name">Name</label><input type="text" id="al_name" name="accesslistName" class="form-control" required></div>
                         <div class="mb-2"><label for="al_match">Request Matcher</label><select id="al_match" name="request_matcher" class="form-select"><option value="client_ip">Client IP</option><option value="remote_ip">Remote IP</option></select></div>
@@ -834,7 +834,7 @@ const app = {
                 <!-- Basic Auth Modal -->
                 <div class="modal fade" id="basicAuthModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Basic Auth</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Basic Auth</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="basicAuthModalForm">
                         <div class="mb-2"><label for="ba_user">Username</label><input type="text" id="ba_user" name="basicauthuser" class="form-control" required></div>
                         <div class="mb-2"><label for="ba_pass">Password (BCrypt Hash in Caddyfile)</label><input type="password" id="ba_pass" name="basicauthpass" class="form-control" required></div>
@@ -847,7 +847,7 @@ const app = {
                 <!-- Header Modal -->
                 <div class="modal fade" id="headerModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="headerModalForm">
                         <div class="mb-2"><label for="hd_dir">Direction</label><select id="hd_dir" name="headerUpDown" class="form-select"><option value="header_up">Request (Up)</option><option value="header_down">Response (Down)</option></select></div>
                         <div class="mb-2"><label for="hd_name">Header Name</label><input type="text" id="hd_name" name="headerType" class="form-control" required placeholder="X-Forwarded-For"></div>
@@ -861,7 +861,7 @@ const app = {
                 <!-- Layer 4 Modal -->
                 <div class="modal fade" id="layer4Modal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="layer4ModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
                         <div class="mb-2"><label for="l4_seq">Sequence (Priority)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
