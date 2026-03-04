@@ -8,3 +8,6 @@
 ## 2024-05-18 - Fix unreadable table rows in dark theme
 **Learning:** Bootstrap 5 `table-striped` and `table-hover` with custom table backgrounds (or transparent backgrounds) in Darkly theme can cause text color for alternating/hovered rows to fall back to dark body text color making it unreadable on a dark background.
 **Action:** explicitly set `--bs-table-striped-color: #fff;` and `--bs-table-hover-color: #fff;` to `.table` class when `--bs-table-color: #fff;` is used.
+## 2026-03-04 - Accessible Close Buttons
+**Learning:** Bootstrap 5 `.btn-close` elements used across the application's modals (both static and dynamically generated) lacked visible text or an `aria-label`, making them inaccessible to screen readers.
+**Action:** Always explicitly add `aria-label="Close"` to `<button class="btn-close">` elements in both static HTML and JavaScript template literals to ensure screen reader accessibility.
