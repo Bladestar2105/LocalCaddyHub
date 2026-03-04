@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const db = require('./db');
 
+// ⚡ Bolt: Pre-compile frequently used statements to eliminate parsing overhead on every request
+const getSessionStmt = db.prepare('SELECT expires_at FROM sessions WHERE token = ?');
+const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token = ?');
+const getFirstUserStmt = db.prepare('SELECT id FROM users WHERE id = 1');
+
 function generateSessionToken() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -15,14 +20,13 @@ function authMiddleware(req, res, next) {
   let valid = false;
 
   if (token) {
-    const stmt = db.prepare('SELECT expires_at FROM sessions WHERE token = ?');
-    const session = stmt.get(token);
+    const session = getSessionStmt.get(token);
 
     if (session) {
       if (Date.now() < session.expires_at) {
         valid = true;
       } else {
-        db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+        deleteSessionStmt.run(token);
       }
     }
   }
@@ -37,7 +41,7 @@ function authMiddleware(req, res, next) {
 
   // Enforce setup if trying to access main app but users table is empty
   if (req.path === '/' || req.path === '/index.html') {
-    const userRow = db.prepare('SELECT id FROM users WHERE id = 1').get();
+    const userRow = getFirstUserStmt.get();
     if (!userRow) {
       return res.redirect('/setup.html');
     }
