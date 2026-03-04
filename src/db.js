@@ -95,7 +95,8 @@ const SCHEMA_SQL = `
       passive_health_unhealthy_status TEXT,
       passive_health_unhealthy_latency TEXT,
       passive_health_unhealthy_request_count TEXT,
-      redir_status TEXT DEFAULT '301'
+      redir_status TEXT DEFAULT '301',
+      waf_enabled INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS access_lists (
@@ -205,6 +206,7 @@ function runMigrations() {
     { table: 'handlers', column: 'passive_health_unhealthy_latency', def: 'TEXT' },
     { table: 'handlers', column: 'passive_health_unhealthy_request_count', def: 'TEXT' },
     { table: 'handlers', column: 'redir_status', def: "TEXT DEFAULT '301'" },
+    { table: 'handlers', column: 'waf_enabled', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'health_headers', def: 'TEXT' },
     { table: 'handlers', column: 'lb_retries', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'lb_try_duration', def: 'TEXT' },
