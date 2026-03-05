@@ -23,7 +23,7 @@ const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const apiRoutes = require('./api');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const appPaths = require('./paths');
 const fs = require('fs');
 
@@ -189,7 +189,8 @@ app.listen(port, () => {
   // Auto-start Caddy if a Caddyfile exists
   if (fs.existsSync(appPaths.caddyfile)) {
     console.log('Found Caddyfile, starting Caddy...');
-    exec(`caddy start --config ${appPaths.caddyfile}`, (error, stdout, stderr) => {
+    // 🛡️ Sentinel: Fix command injection vulnerability by using execFile instead of exec
+    execFile('caddy', ['start', '--config', appPaths.caddyfile], (error, stdout, stderr) => {
       if (error) {
         console.error('Failed to start Caddy on boot:', error.message);
       } else {
