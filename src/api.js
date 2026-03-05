@@ -45,18 +45,28 @@ function parseJSON(str, def = []) {
   try { return JSON.parse(str); } catch { return def; }
 }
 
+// ⚡ Bolt: Cache prepared SQL statements at module level to eliminate parsing overhead on every request
+const getGeneralStmt = db.prepare('SELECT * FROM general_config WHERE id = 1');
+const getDomainsStmt = db.prepare('SELECT * FROM domains');
+const getSubdomainsStmt = db.prepare('SELECT * FROM subdomains');
+const getHandlersStmt = db.prepare('SELECT * FROM handlers');
+const getAccessListsStmt = db.prepare('SELECT * FROM access_lists');
+const getBasicAuthsStmt = db.prepare('SELECT * FROM basic_auths');
+const getHeadersStmt = db.prepare('SELECT * FROM headers');
+const getLayer4Stmt = db.prepare('SELECT * FROM layer4');
+
 // /api/config/structured
 router.get('/config/structured', (req, res) => {
   try {
-    const general = db.prepare('SELECT * FROM general_config WHERE id = 1').get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO' };
+    const general = getGeneralStmt.get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO' };
 
-    const domainsRows = db.prepare('SELECT * FROM domains').all();
-    const subdomainsRows = db.prepare('SELECT * FROM subdomains').all();
-    const handlersRows = db.prepare('SELECT * FROM handlers').all();
-    const accessListsRows = db.prepare('SELECT * FROM access_lists').all();
-    const basicAuthsRows = db.prepare('SELECT * FROM basic_auths').all();
-    const headersRows = db.prepare('SELECT * FROM headers').all();
-    const layer4Rows = db.prepare('SELECT * FROM layer4').all();
+    const domainsRows = getDomainsStmt.all();
+    const subdomainsRows = getSubdomainsStmt.all();
+    const handlersRows = getHandlersStmt.all();
+    const accessListsRows = getAccessListsStmt.all();
+    const basicAuthsRows = getBasicAuthsStmt.all();
+    const headersRows = getHeadersStmt.all();
+    const layer4Rows = getLayer4Stmt.all();
 
     const config = {
       general: {
@@ -142,6 +152,35 @@ router.get('/config/structured', (req, res) => {
   }
 });
 
+const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
+
+const deleteDomainsStmt = db.prepare('DELETE FROM domains');
+const insertDomainStmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+const deleteSubdomainsStmt = db.prepare('DELETE FROM subdomains');
+const insertSubdomainStmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+const deleteHandlersStmt = db.prepare('DELETE FROM handlers');
+const insertHandlerStmt = db.prepare(`INSERT INTO handlers (
+  id, enabled, reverse, subdomain, handleType, handlePath, accesslist, basicauth, header, handleDirective, toDomain, toPort, httpTls, ntlm, description,
+  lb_policy, lb_retries, lb_try_duration, lb_try_interval,
+  health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects, health_headers,
+  to_path, http_version, http_keepalive, http_tls_insecure_skip_verify, http_tls_trusted_ca_certs, http_tls_server_name,
+  passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status, waf_enabled
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+const deleteAccessListsStmt = db.prepare('DELETE FROM access_lists');
+const insertAccessListStmt = db.prepare('INSERT INTO access_lists (id, accesslistName, clientIps, invert, description, http_response_code, http_response_message, request_matcher) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+
+const deleteBasicAuthsStmt = db.prepare('DELETE FROM basic_auths');
+const insertBasicAuthStmt = db.prepare('INSERT INTO basic_auths (id, basicauthuser, basicauthpass, description) VALUES (?, ?, ?, ?)');
+
+const deleteHeadersStmt = db.prepare('DELETE FROM headers');
+const insertHeaderStmt = db.prepare('INSERT INTO headers (id, headerUpDown, headerType, headerValue, headerReplace, description) VALUES (?, ?, ?, ?, ?, ?)');
+
+const deleteLayer4Stmt = db.prepare('DELETE FROM layer4');
+const insertLayer4Stmt = db.prepare('INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
 router.post('/config/structured', express.json(), async (req, res) => {
   try {
     const config = req.body;
@@ -149,40 +188,30 @@ router.post('/config/structured', express.json(), async (req, res) => {
       // General
       if (config.general) {
         const http_versions = Array.isArray(config.general.http_versions) ? config.general.http_versions.join(' ') : (config.general.http_versions || '');
-        db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1')
-          .run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
+        updateGeneralStmt.run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
       }
 
       // Domains
-      db.prepare('DELETE FROM domains').run();
+      deleteDomainsStmt.run();
       if (config.domains) {
-        const stmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const d of config.domains) {
-          stmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert, d.client_auth_mode, d.client_auth_trust_pool);
+          insertDomainStmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert, d.client_auth_mode, d.client_auth_trust_pool);
         }
       }
 
       // Subdomains
-      db.prepare('DELETE FROM subdomains').run();
+      deleteSubdomainsStmt.run();
       if (config.subdomains) {
-        const stmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const s of config.subdomains) {
-          stmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description, s.client_auth_mode, s.client_auth_trust_pool);
+          insertSubdomainStmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description, s.client_auth_mode, s.client_auth_trust_pool);
         }
       }
 
       // Handlers
-      db.prepare('DELETE FROM handlers').run();
+      deleteHandlersStmt.run();
       if (config.handlers) {
-        const stmt = db.prepare(`INSERT INTO handlers (
-          id, enabled, reverse, subdomain, handleType, handlePath, accesslist, basicauth, header, handleDirective, toDomain, toPort, httpTls, ntlm, description,
-          lb_policy, lb_retries, lb_try_duration, lb_try_interval,
-          health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects, health_headers,
-          to_path, http_version, http_keepalive, http_tls_insecure_skip_verify, http_tls_trusted_ca_certs, http_tls_server_name,
-          passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status, waf_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const h of config.handlers) {
-          stmt.run(
+          insertHandlerStmt.run(
             h.id, h.enabled ? 1 : 0, h.reverse, h.subdomain, h.handleType, h.handlePath, JSON.stringify(h.accesslist || []), JSON.stringify(h.basicauth || []), JSON.stringify(h.header || []), h.handleDirective, JSON.stringify(h.toDomain || []), h.toPort, h.httpTls ? 1 : 0, h.ntlm ? 1 : 0, h.description,
             h.lb_policy, h.lb_retries, h.lb_try_duration, h.lb_try_interval,
             h.health_fails, h.health_passes, h.health_timeout, h.health_interval, h.health_uri, h.health_port, h.health_status, h.health_body, h.health_follow_redirects ? 1 : 0, JSON.stringify(h.health_headers || []),
@@ -193,38 +222,34 @@ router.post('/config/structured', express.json(), async (req, res) => {
       }
 
       // Access Lists
-      db.prepare('DELETE FROM access_lists').run();
+      deleteAccessListsStmt.run();
       if (config.accessLists) {
-        const stmt = db.prepare('INSERT INTO access_lists (id, accesslistName, clientIps, invert, description, http_response_code, http_response_message, request_matcher) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
         for (const a of config.accessLists) {
-          stmt.run(a.id, a.accesslistName, JSON.stringify(a.clientIps || []), a.invert ? 1 : 0, a.description, a.http_response_code, a.http_response_message, a.request_matcher || 'client_ip');
+          insertAccessListStmt.run(a.id, a.accesslistName, JSON.stringify(a.clientIps || []), a.invert ? 1 : 0, a.description, a.http_response_code, a.http_response_message, a.request_matcher || 'client_ip');
         }
       }
 
       // Basic Auths
-      db.prepare('DELETE FROM basic_auths').run();
+      deleteBasicAuthsStmt.run();
       if (config.basicAuths) {
-        const stmt = db.prepare('INSERT INTO basic_auths (id, basicauthuser, basicauthpass, description) VALUES (?, ?, ?, ?)');
         for (const b of config.basicAuths) {
-          stmt.run(b.id, b.basicauthuser, b.basicauthpass, b.description);
+          insertBasicAuthStmt.run(b.id, b.basicauthuser, b.basicauthpass, b.description);
         }
       }
 
       // Headers
-      db.prepare('DELETE FROM headers').run();
+      deleteHeadersStmt.run();
       if (config.headers) {
-        const stmt = db.prepare('INSERT INTO headers (id, headerUpDown, headerType, headerValue, headerReplace, description) VALUES (?, ?, ?, ?, ?, ?)');
         for (const h of config.headers) {
-          stmt.run(h.id, h.headerUpDown, h.headerType, h.headerValue, h.headerReplace, h.description);
+          insertHeaderStmt.run(h.id, h.headerUpDown, h.headerType, h.headerValue, h.headerReplace, h.description);
         }
       }
 
       // Layer 4
-      db.prepare('DELETE FROM layer4').run();
+      deleteLayer4Stmt.run();
       if (config.layer4) {
-        const stmt = db.prepare('INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const l of config.layer4) {
-          stmt.run(l.id, l.enabled ? 1 : 0, l.sequence, l.type, l.protocol, JSON.stringify(l.fromDomain || []), l.fromPort, l.matchers, JSON.stringify(l.toDomain || []), l.toPort, l.terminateTls ? 1 : 0, l.proxyProtocol, l.description, l.originate_tls, JSON.stringify(l.remote_ip || []), l.lb_policy, l.passive_health_fail_duration, l.passive_health_max_fails);
+          insertLayer4Stmt.run(l.id, l.enabled ? 1 : 0, l.sequence, l.type, l.protocol, JSON.stringify(l.fromDomain || []), l.fromPort, l.matchers, JSON.stringify(l.toDomain || []), l.toPort, l.terminateTls ? 1 : 0, l.proxyProtocol, l.description, l.originate_tls, JSON.stringify(l.remote_ip || []), l.lb_policy, l.passive_health_fail_duration, l.passive_health_max_fails);
         }
       }
     });
