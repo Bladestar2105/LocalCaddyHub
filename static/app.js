@@ -508,14 +508,14 @@ const app = {
                 });
 
                 let actions = $('<td>').addClass('action-btns');
-                let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').click(() => this.editItem(configKey, item.id));
+                let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').attr('title', 'Edit').attr('aria-label', 'Edit').click(() => this.editItem(configKey, item.id));
 
                 let dupBtn = null;
                 if (['domains', 'subdomains', 'handlers'].includes(configKey)) {
-                    dupBtn = $('<button>').addClass('btn btn-sm btn-outline-info').text('Dup').click(() => app.duplicateItem(configKey, item.id));
+                    dupBtn = $('<button>').addClass('btn btn-sm btn-outline-info').text('Dup').attr('title', 'Duplicate').attr('aria-label', 'Duplicate').click(() => app.duplicateItem(configKey, item.id));
                 }
 
-                let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').click(() => app.deleteItem(configKey, item.id));
+                let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').attr('title', 'Delete').attr('aria-label', 'Delete').click(() => app.deleteItem(configKey, item.id));
 
                 if (dupBtn) {
                     tr.append(actions.append(editBtn, dupBtn, delBtn));
@@ -536,7 +536,7 @@ const app = {
             } else {
                 certs.forEach(c => {
                     let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').text(c);
-                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text('Delete').click(() => app.deleteCert(c));
+                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text('Delete').attr('title', 'Delete certificate').attr('aria-label', 'Delete certificate').click(() => app.deleteCert(c));
                     list.append(li.append(btn));
                 });
             }
