@@ -1,3 +1,4 @@
-## 2024-05-24 - Add basic auth form middleware
-**Learning:** Adding cookie-based authentication requires protecting both API and static file routes, leaving `/login` and `/login.html` accessible. Session cookies need `HttpOnly` to protect against XSS.
-**Action:** When adding auth barriers in Go, implement middleware that intercepts requests before reaching the main mux (or applies to all mux routes), and explicitly permit login pages/endpoints.
+## 2024-05-24 - Fix Command Injection in Caddy Startup
+**Vulnerability:** Command injection vulnerability in `src/index.js` caused by executing Caddy startup with `exec()` and passing `appPaths.caddyfile` unescaped. While `appPaths.caddyfile` currently resolves safely, if it is modified in the future to depend on user input or environment variables without sanitization, it could execute arbitrary commands.
+**Learning:** Never use `child_process.exec()` with any dynamically resolved arguments, even if the resolution seems safe currently. It establishes a risky pattern that can lead to remote code execution (RCE) if paths change. `exec()` runs in a shell and evaluates shell metacharacters.
+**Prevention:** Use `child_process.execFile()` instead, which executes the executable directly without invoking a shell. Pass arguments as an array to ensure they are treated as literal arguments rather than executed.
