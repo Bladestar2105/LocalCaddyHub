@@ -340,9 +340,10 @@ const app = {
         const div = $('<div>').addClass('log-line').css('border-bottom', '1px solid #444').css('padding', '2px 0');
 
         // Store data on the element so we can re-filter the DOM later if needed
-        div.attr('data-raw', lineStr);
+        // ⚡ Bolt: Store parsed JSON and raw text directly using jQuery data() instead of serializing to DOM attributes
+        div.data('raw', lineStr);
         if (isJson) {
-             div.attr('data-json', JSON.stringify(lineData));
+             div.data('json', lineData);
 
              // Format JSON nicely
              const levelColor = lineData.level === 'error' ? '#ff4444' : lineData.level === 'warn' ? '#ffbb33' : '#00C851';
@@ -384,12 +385,9 @@ const app = {
     applyLogFiltersToDOM: function() {
         $('#logOutputArea .log-line').each(function() {
              const div = $(this);
-             const raw = div.attr('data-raw');
-             const jsonStr = div.attr('data-json');
-             let data = null;
-             if (jsonStr) {
-                 try { data = JSON.parse(jsonStr); } catch(e){}
-             }
+             // ⚡ Bolt: Retrieve parsed JSON object directly from memory, eliminating O(n) JSON.parse overhead
+             const raw = div.data('raw');
+             const data = div.data('json');
 
              if (app.passesLogFilters(raw, data)) {
                  div.show();
