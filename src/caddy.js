@@ -104,16 +104,14 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       // Upstreams
       if (l4.toDomain && l4.toDomain.length > 0) {
-        sb += `${indent}proxy {\n`;
-
         let hasTlsClient = (l4.originate_tls === 'tls' || l4.originate_tls === 'tls_insecure_skip_verify');
 
-        sb += `${indent}\tupstream`;
-        for (const to of l4.toDomain) {
-          sb += ` ${protocol}/${to}:${l4.toPort}`;
-        }
-
         if (hasTlsClient) {
+          sb += `${indent}proxy {\n`;
+          sb += `${indent}\tupstream`;
+          for (const to of l4.toDomain) {
+            sb += ` ${protocol}/${to}:${l4.toPort}`;
+          }
           sb += ' {\n';
           sb += `${indent}\t\ttls\n`;
           if (l4.originate_tls === 'tls_insecure_skip_verify') {
@@ -121,7 +119,11 @@ function generateCaddyfile(config, certsDir = './certs') {
           }
           sb += `${indent}\t}\n`;
         } else {
-          sb += '\n';
+          sb += `${indent}proxy`;
+          for (const to of l4.toDomain) {
+            sb += ` ${protocol}/${to}:${l4.toPort}`;
+          }
+          sb += ' {\n';
         }
 
         if (l4.lb_policy) {
