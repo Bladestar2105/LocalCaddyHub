@@ -17,3 +17,7 @@
 ## 2026-03-04 - Cache db.prepare() SQL Statements in Express Middlewares
 **Learning:** Re-preparing SQL statements via `db.prepare(sql)` on every incoming request in Node.js with `better-sqlite3` causes unnecessary parsing overhead and increases execution time significantly (~85% slower in high-throughput endpoints).
 **Action:** Always extract static `db.prepare(...)` statements to module-level scope and cache the compiled statement instances, then call `.get()` or `.run()` inside the request handler/middleware.
+
+## 2024-03-05 - Optimize log filtering by avoiding redundant JSON serialization and parsing
+**Learning:** In `static/app.js`, the log filter function `applyLogFiltersToDOM` iterated through up to 1000 DOM elements and performed synchronous `JSON.parse` on the `data-json` string attribute of each element whenever the filter input changed. This causes significant main thread blocking and lag when filtering high-volume logs.
+**Action:** Used jQuery's `data()` API to attach the already parsed JSON object directly to the DOM element in memory (`div.data('json', lineData)`) instead of serializing it to a string attribute. This eliminates `O(n)` JSON parsing operations when filtering logs, dramatically improving UI responsiveness.
