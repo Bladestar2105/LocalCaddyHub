@@ -469,7 +469,7 @@ const app = {
             this.renderTable('accessLists', 'accessListsTable', ['accesslistName', 'clientIps', 'invert', 'description']);
             this.renderTable('basicAuths', 'basicAuthsTable', ['basicauthuser', 'description']);
             this.renderTable('headers', 'headersTable', ['headerUpDown', 'headerType', 'headerValue', 'description']);
-            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'matchers', 'fromPort', 'toDomain', 'description']);
+            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'type', 'protocol', 'fromPort', 'toDomain', 'description']);
 
             this.populateSelects();
         },
@@ -873,20 +873,36 @@ const app = {
                   <div class="modal-dialog"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="layer4ModalForm">
-                        <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
-                        <div class="mb-2"><label for="l4_seq">Sequence (Priority)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
-                        <div class="mb-2"><label for="l4_match">Matchers</label><select id="l4_match" name="matchers" class="form-select" multiple><option value="any" selected>any</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
+
+                        <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Aktiviert (Enabled)</label></div>
+                        <div class="mb-3"><label for="l4_seq">Sequenz (Sequence)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
+
+                        <h6 class="mt-3 border-bottom pb-2">Schicht 4 (Layer 4)</h6>
+                        <div class="mb-2"><label for="l4_type">Routing-Typ (Routing Type)</label><select id="l4_type" name="type" class="form-select"><option value="global" selected>Global</option><option value="listener_wrappers">Listener Wrappers</option></select></div>
+                        <div class="mb-2"><label for="l4_proto">Protokoll (Protocol)</label><select id="l4_proto" name="protocol" class="form-select"><option value="tcp" selected>TCP</option><option value="udp">UDP</option></select></div>
+                        <div class="mb-3"><label for="l4_fp">Lokaler Port (Listen Port)</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
+
+                        <h6 class="mt-3 border-bottom pb-2">Schicht 7 (Layer 7)</h6>
+                        <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select" multiple><option value="any" selected>ANY</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
                         <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
-                        <div class="mb-2"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
-                        <div class="mb-2"><label for="l4_td">Upstream IPs/Domains (comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
-                        <div class="mb-2"><label for="l4_tp">Upstream Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
-                        <div class="mb-2"><label for="l4_lb">LB Policy</label><select id="l4_lb" name="lb_policy" class="form-select"><option value="">Default (Random)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option></select></div>
-                        <div class="mb-2"><label for="l4_hfd">Passive Health Fail Duration</label><input type="text" id="l4_hfd" name="passive_health_fail_duration" class="form-control"></div>
-                        <div class="mb-2"><label for="l4_hmf">Passive Health Max Fails</label><input type="number" id="l4_hmf" name="passive_health_max_fails" class="form-control"></div>
+                        <div class="mb-3"><input type="checkbox" name="invert_matchers" id="l4_inv_match"> <label for="l4_inv_match">Matcher umkehren (Invert matcher)</label></div>
+
+                        <h6 class="mt-3 border-bottom pb-2">Upstream</h6>
+                        <div class="mb-2"><label for="l4_td">Upstream-Domain (IPs/Domains, comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
+                        <div class="mb-2"><label for="l4_tp">Upstream-Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option></select></div>
-                        <div class="mb-2"><label for="l4_pp">Proxy Protocol</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Off</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
-                        <div class="mb-2"><label for="l4_desc">Description</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="l4_pp">Proxyprotokoll (Proxy Protocol)</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Aus (Standard)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
+                        <div class="mb-3"><label for="l4_desc">Beschreibung (Description)</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
+
+                        <h6 class="mt-3 border-bottom pb-2">Lastausgleich (Load Balancing)</h6>
+                        <div class="mb-2"><label for="l4_lb">Lastverteilungsrichtlinie (LB Policy)</label><select id="l4_lb" name="lb_policy" class="form-select"><option value="">Default (Random)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option></select></div>
+                        <div class="mb-2"><label for="l4_hfd">Passive-Health-Ausfalldauer (Sekunden)</label><input type="text" id="l4_hfd" name="passive_health_fail_duration" class="form-control"></div>
+                        <div class="mb-3"><label for="l4_hmf">Max. Fehlversuche bei Passive Health (Max Fails)</label><input type="number" id="l4_hmf" name="passive_health_max_fails" class="form-control"></div>
+
+                        <h6 class="mt-3 border-bottom pb-2">Zugriff (Access)</h6>
+                        <div class="mb-3"><label for="l4_rem_ip">Ferne IP (Remote IPs, comma separated)</label><input type="text" id="l4_rem_ip" name="remote_ip" class="form-control array-input"></div>
+
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('layer4Modal', 'layer4')">Save</button></div>
                   </div></div>

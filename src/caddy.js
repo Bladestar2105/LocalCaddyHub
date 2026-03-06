@@ -69,45 +69,81 @@ function generateCaddyfile(config, certsDir = './certs') {
       let listenPort = l4.fromPort;
       if (!listenPort) listenPort = '443';
 
-      sb += `\t\t:${listenPort} {\n`;
-      if (l4.matchers && l4.matchers !== 'any') {
-        sb += '\t\t\tmatch {\n';
-        sb += `\t\t\t\t${l4.matchers}`;
+      let protocol = l4.protocol || 'tcp';
+
+      sb += `\t\t${protocol}/:${listenPort} {\n`;
+
+      let hasMatcher = l4.matchers && l4.matchers !== 'any';
+      let matcherName = '';
+      if (hasMatcher) {
+        matcherName = `@${l4.id}`;
+        sb += `\t\t\t${matcherName}`;
+        if (l4.invert_matchers) {
+          sb += ` not`;
+        }
+        sb += ` ${l4.matchers}`;
         if (l4.fromDomain && l4.fromDomain.length > 0) {
           sb += ' ' + l4.fromDomain.join(' ');
         }
-        sb += '\n\t\t\t}\n';
+        sb += `\n\n`;
+
+        sb += `\t\t\troute ${matcherName} {\n`;
+        sb += `\t\t\t\tsubroute {\n`;
+      } else {
+        sb += `\t\t\troute {\n`;
+      }
+
+      let indent = hasMatcher ? '\t\t\t\t\t' : '\t\t\t\t';
+
+      let hasRemoteIp = l4.remote_ip && l4.remote_ip.length > 0;
+      if (hasRemoteIp) {
+        sb += `${indent}@allowed_ips remote_ip ${l4.remote_ip.join(' ')}\n`;
+        sb += `${indent}route @allowed_ips {\n`;
+        indent += '\t';
       }
 
       // Upstreams
       if (l4.toDomain && l4.toDomain.length > 0) {
-        sb += '\t\t\tproxy';
+        sb += `${indent}proxy`;
         for (const to of l4.toDomain) {
-          sb += ` ${to}:${l4.toPort}`;
+          sb += ` ${protocol}/${to}:${l4.toPort}`;
         }
         sb += ' {\n';
-        if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
-          sb += `\t\t\t\tproxy_protocol ${l4.proxyProtocol}\n`;
-        }
         if (l4.lb_policy) {
-          sb += `\t\t\t\tlb_policy ${l4.lb_policy}\n`;
+          sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
         }
         if (l4.passive_health_fail_duration) {
-          sb += `\t\t\t\tpassive_health_fail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
+          sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
         }
         if (l4.passive_health_max_fails) {
-          sb += `\t\t\t\tpassive_health_max_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
+          sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
         }
-        sb += '\t\t\t}\n';
+        if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
+          sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
+        }
+        sb += `${indent}}\n`;
       }
 
       if (l4.terminateTls) {
-        sb += '\t\t\ttls\n';
+        sb += `${indent}tls\n`;
       }
       if (l4.originate_tls === 'tls') {
-        sb += '\t\t\ttls_client\n';
+        sb += `${indent}tls_client\n`;
       } else if (l4.originate_tls === 'tls_insecure_skip_verify') {
-        sb += '\t\t\ttls_client {\n\t\t\t\tinsecure_skip_verify\n\t\t\t}\n';
+        sb += `${indent}tls_client {\n${indent}\tinsecure_skip_verify\n${indent}}\n`;
+      }
+
+      if (hasRemoteIp) {
+        // close route @allowed_ips
+        indent = indent.slice(0, -1);
+        sb += `${indent}}\n`;
+      }
+
+      if (hasMatcher) {
+        sb += `\t\t\t\t}\n`;
+        sb += `\t\t\t}\n`;
+      } else {
+        sb += `\t\t\t}\n`;
       }
 
       sb += '\t\t}\n';
