@@ -1,10 +1,13 @@
 # Stage 1: Build Custom Caddy with NTLM Support
 FROM caddy:builder AS caddy-builder
 
+COPY src/modules/caddystarttls /build/src/modules/caddystarttls
+
 # xcaddy is pre-installed in caddy:builder
 RUN xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4 \
+    --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=/build/src/modules/caddystarttls \
     --output /caddy
 
 # Stage 2: Node Application setup
