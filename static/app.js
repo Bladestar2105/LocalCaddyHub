@@ -890,6 +890,7 @@ const app = {
                         <h6 class="mt-3 border-bottom pb-2">Upstream</h6>
                         <div class="mb-2"><label for="l4_td">Upstream-Domain (IPs/Domains, comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
                         <div class="mb-2"><label for="l4_tp">Upstream-Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
+                        <div class="mb-2"><input type="checkbox" name="starttls" id="l4_starttls"> <label for="l4_starttls">STARTTLS (SMTP Port 587)</label></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option></select></div>
                         <div class="mb-2"><label for="l4_pp">Proxyprotokoll (Proxy Protocol)</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Aus (Standard)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>

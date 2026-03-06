@@ -102,6 +102,21 @@ function generateCaddyfile(config, certsDir = './certs') {
         indent += '\t';
       }
 
+      // Handlers are executed in order but defined here. In caddy layer4,
+      // order matters depending on matcher, but in a simple route the handlers
+      // run in the order they are defined.
+      if (l4.starttls) {
+        sb += `${indent}starttls\n`;
+      }
+
+      if (l4.terminateTls || l4.starttls) {
+        sb += `${indent}tls\n`;
+      }
+
+      if (l4.starttls) {
+        sb += `${indent}drop220\n`;
+      }
+
       // Upstreams
       if (l4.toDomain && l4.toDomain.length > 0) {
         let hasTlsClient = (l4.originate_tls === 'tls' || l4.originate_tls === 'tls_insecure_skip_verify');
@@ -141,9 +156,6 @@ function generateCaddyfile(config, certsDir = './certs') {
         sb += `${indent}}\n`;
       }
 
-      if (l4.terminateTls) {
-        sb += `${indent}tls\n`;
-      }
 
       if (hasRemoteIp) {
         // close route @allowed_ips
