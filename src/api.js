@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const db = require('./db');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
@@ -305,11 +305,15 @@ router.get('/logs/stream', (req, res) => {
   }
 
   // Use child_process tail to read the file
-  const tail = execFile('tail', ['-f', '-n', '100', filePath]);
+  const tail = spawn('tail', ['-f', '-n', '100', filePath]);
+
+  let buffer = '';
 
   tail.stdout.on('data', (data) => {
-    // Split by lines and send each line as an event
-    const lines = data.split('\n');
+    buffer += data.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // The last element is the remainder of an incomplete line
+
     lines.forEach(line => {
       if (line.trim()) {
         res.write(`data: ${line}\n\n`);
@@ -318,7 +322,7 @@ router.get('/logs/stream', (req, res) => {
   });
 
   tail.stderr.on('data', (data) => {
-    console.error(`Tail error: ${data}`);
+    console.error(`Tail error: ${data.toString()}`);
   });
 
   req.on('close', () => {
