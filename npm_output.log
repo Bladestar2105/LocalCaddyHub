@@ -1,0 +1,7 @@
+
+> localcaddyhub@1.0.0 start
+> node src/index.js
+
+LocalCaddyHub running on port 8090
+Found Caddyfile, starting Caddy...
+Failed to start Caddy on boot: spawn caddy ENOENT

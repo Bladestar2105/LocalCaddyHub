@@ -145,7 +145,8 @@ const SCHEMA_SQL = `
       remote_ip TEXT,
       lb_policy TEXT,
       passive_health_fail_duration TEXT,
-      passive_health_max_fails TEXT
+      passive_health_max_fails TEXT,
+      starttls INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -220,7 +221,8 @@ function runMigrations() {
     { table: 'layer4', column: 'lb_policy', def: 'TEXT' },
     { table: 'layer4', column: 'passive_health_fail_duration', def: 'TEXT' },
     { table: 'layer4', column: 'passive_health_max_fails', def: 'TEXT' },
-    { table: 'layer4', column: 'invert_matchers', def: 'INTEGER DEFAULT 0' }
+    { table: 'layer4', column: 'invert_matchers', def: 'INTEGER DEFAULT 0' },
+    { table: 'layer4', column: 'starttls', def: 'INTEGER DEFAULT 0' }
   ];
 
   for (const m of migrations) {
