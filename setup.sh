@@ -35,7 +35,8 @@ sudo -u "${SUDO_USER:-root}" -H bash -c '
   $(go env GOPATH)/bin/xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4 \
-    --with github.com/corazawaf/coraza-caddy/v2
+    --with github.com/corazawaf/coraza-caddy/v2 \
+    --with github.com/ssakalis/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
 ' _ "$BUILD_DIR"
 
 echo "--> Moving Caddy to /usr/local/bin and setting capabilities..."
