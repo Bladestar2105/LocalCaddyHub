@@ -56,6 +56,10 @@ const app = {
     },
 
     saveStructuredConfig: async function() {
+        const btn = $('#applyConfigBtn');
+        const originalText = btn.html();
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+
         this.config.general.enabled = $('#genEnabled').is(':checked');
         this.config.general.enable_layer4 = $('#genEnableLayer4').is(':checked');
         this.config.general.http_port = $('#genHttpPort').val();
@@ -87,10 +91,16 @@ const app = {
             }
         } catch (e) {
             this.showStatus('Error: ' + e.message, 'danger');
+        } finally {
+            btn.prop('disabled', false).html(originalText);
         }
     },
 
     validateConfig: async function() {
+        const btn = $('#validateConfigBtn');
+        const originalText = btn.html();
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Validating...');
+
         try {
             const res = await fetch('/api/validate', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
@@ -101,6 +111,8 @@ const app = {
             }
         } catch (e) {
             this.showStatus('Error: ' + e.message, 'danger');
+        } finally {
+            btn.prop('disabled', false).html(originalText);
         }
     },
 
