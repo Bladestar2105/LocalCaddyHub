@@ -104,11 +104,26 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       // Upstreams
       if (l4.toDomain && l4.toDomain.length > 0) {
-        sb += `${indent}proxy`;
+        sb += `${indent}proxy {\n`;
+
+        let hasTlsClient = (l4.originate_tls === 'tls' || l4.originate_tls === 'tls_insecure_skip_verify');
+
+        sb += `${indent}\tupstream`;
         for (const to of l4.toDomain) {
           sb += ` ${protocol}/${to}:${l4.toPort}`;
         }
-        sb += ' {\n';
+
+        if (hasTlsClient) {
+          sb += ' {\n';
+          sb += `${indent}\t\ttls\n`;
+          if (l4.originate_tls === 'tls_insecure_skip_verify') {
+            sb += `${indent}\t\ttls_insecure_skip_verify\n`;
+          }
+          sb += `${indent}\t}\n`;
+        } else {
+          sb += '\n';
+        }
+
         if (l4.lb_policy) {
           sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
         }
@@ -126,11 +141,6 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       if (l4.terminateTls) {
         sb += `${indent}tls\n`;
-      }
-      if (l4.originate_tls === 'tls') {
-        sb += `${indent}tls_client\n`;
-      } else if (l4.originate_tls === 'tls_insecure_skip_verify') {
-        sb += `${indent}tls_client {\n${indent}\tinsecure_skip_verify\n${indent}}\n`;
       }
 
       if (hasRemoteIp) {
