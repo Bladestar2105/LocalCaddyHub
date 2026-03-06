@@ -31,7 +31,7 @@
             <label for="confirmPassword" class="form-label">Confirm Password</label>
             <input type="password" class="form-control" id="confirmPassword" required>
         </div>
-        <button type="submit" class="btn btn-primary w-100">Save & Continue</button>
+        <button type="submit" class="btn btn-primary w-100" id="setupSubmitBtn">Save & Continue</button>
     </form>
 </div>
 
@@ -43,10 +43,15 @@
         const pass = document.getElementById('newPassword').value;
         const confirm = document.getElementById('confirmPassword').value;
 
+        const btn = document.getElementById('setupSubmitBtn');
         if (pass !== confirm) {
             document.getElementById('errorMsg').style.display = 'block';
             return;
         }
+
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
 
         try {
             const res = await fetch('/api/setup', {
@@ -68,6 +73,9 @@
             console.error('Setup error:', error);
             document.getElementById('errorMsg').textContent = 'Error: ' + error.message;
             document.getElementById('errorMsg').style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     });
 </script>

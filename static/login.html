@@ -30,7 +30,7 @@
             <label for="totp" class="form-label">2FA Code</label>
             <input type="text" class="form-control" id="totp" name="totp" placeholder="123456" autocomplete="off">
         </div>
-        <button type="submit" class="btn btn-primary w-100">Login</button>
+        <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn">Login</button>
     </form>
 </div>
 
@@ -38,6 +38,11 @@
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+
+        const btn = document.getElementById('loginSubmitBtn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...';
 
         try {
             const res = await fetch('/login', {
@@ -70,6 +75,9 @@
             console.error('Login error:', error);
             document.getElementById('errorMsg').textContent = 'Error occurred during login.';
             document.getElementById('errorMsg').style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     });
 </script>
