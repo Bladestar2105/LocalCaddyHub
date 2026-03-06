@@ -135,6 +135,7 @@ const SCHEMA_SQL = `
       fromDomain TEXT, -- JSON array
       fromPort TEXT,
       matchers TEXT,
+      invert_matchers INTEGER DEFAULT 0,
       toDomain TEXT, -- JSON array
       toPort TEXT,
       terminateTls INTEGER DEFAULT 0,
@@ -218,7 +219,8 @@ function runMigrations() {
     { table: 'layer4', column: 'remote_ip', def: 'TEXT' },
     { table: 'layer4', column: 'lb_policy', def: 'TEXT' },
     { table: 'layer4', column: 'passive_health_fail_duration', def: 'TEXT' },
-    { table: 'layer4', column: 'passive_health_max_fails', def: 'TEXT' }
+    { table: 'layer4', column: 'passive_health_max_fails', def: 'TEXT' },
+    { table: 'layer4', column: 'invert_matchers', def: 'INTEGER DEFAULT 0' }
   ];
 
   for (const m of migrations) {
