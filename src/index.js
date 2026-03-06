@@ -36,10 +36,19 @@ if (process.argv.includes('-h') || process.argv.includes('--help')) {
 const app = express();
 const port = process.env.PORT || 8090;
 
+app.disable('x-powered-by'); // 🛡️ Sentinel: Prevent leaking Express version
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors());
+
+// 🛡️ Sentinel: Add security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
+});
 
 // Authentication Routes (unprotected)
 app.post('/login', async (req, res) => {
@@ -98,6 +107,7 @@ app.post('/login', async (req, res) => {
     res.cookie('session', sessionToken, {
       path: '/',
       httpOnly: true,
+      sameSite: 'strict', // 🛡️ Sentinel: Prevent CSRF by not sending cookie cross-site
       maxAge: 86400000 // 24 hours in milliseconds
     });
 
