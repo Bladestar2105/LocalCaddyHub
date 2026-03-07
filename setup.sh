@@ -21,30 +21,7 @@ apt install -y golang git libcap2-bin curl
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt install -y nodejs
 
-# 2. Build Custom Caddy
-echo "--> Building custom Caddy binary..."
-# Create a temporary directory for building and ensure the user has access
-BUILD_DIR=$(mktemp -d)
-chown "${SUDO_USER:-root}" "$BUILD_DIR"
-
-# Run as the original user to build
-sudo -u "${SUDO_USER:-root}" -H bash -c '
-  cd "$1"
-  export PATH=$PATH:/usr/local/go/bin:$(go env GOPATH)/bin
-  go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-  $(go env GOPATH)/bin/xcaddy build \
-    --with github.com/caddyserver/ntlm-transport \
-    --with github.com/mholt/caddy-l4 \
-    --with github.com/corazawaf/coraza-caddy/v2 \
-    --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
-' _ "$BUILD_DIR"
-
-echo "--> Moving Caddy to /usr/local/bin and setting capabilities..."
-mv "$BUILD_DIR/caddy" /usr/local/bin/
-rm -rf "$BUILD_DIR"
-setcap cap_net_bind_service=+ep /usr/local/bin/caddy
-
-# 3. Setup LocalCaddyHub
+# 2. Setup LocalCaddyHub
 INSTALL_DIR="/opt/localcaddyhub"
 echo "--> Setting up LocalCaddyHub in $INSTALL_DIR..."
 
@@ -59,6 +36,29 @@ fi
 cd "$INSTALL_DIR"
 echo "--> Installing npm dependencies..."
 npm install
+
+# 3. Build Custom Caddy
+echo "--> Building custom Caddy binary..."
+# Create a temporary directory for building and ensure the user has access
+BUILD_DIR=$(mktemp -d)
+chown "${SUDO_USER:-root}" "$BUILD_DIR"
+
+# Run as the original user to build
+sudo -u "${SUDO_USER:-root}" -H bash -c '
+  cd "$1"
+  export PATH=$PATH:/usr/local/go/bin:$(go env GOPATH)/bin
+  go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+  $(go env GOPATH)/bin/xcaddy build \
+    --with github.com/caddyserver/ntlm-transport \
+    --with github.com/mholt/caddy-l4 \
+    --with github.com/corazawaf/coraza-caddy/v2 \
+    --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls="$2/src/modules/caddystarttls"
+' _ "$BUILD_DIR" "$INSTALL_DIR"
+
+echo "--> Moving Caddy to /usr/local/bin and setting capabilities..."
+mv "$BUILD_DIR/caddy" /usr/local/bin/
+rm -rf "$BUILD_DIR"
+setcap cap_net_bind_service=+ep /usr/local/bin/caddy
 
 # 4. Create Systemd Service
 SERVICE_FILE="/etc/systemd/system/localcaddyhub.service"
