@@ -42,6 +42,8 @@ router.post('/config', express.json(), async (req, res) => {
 // Helper to safely parse JSON or return default
 function parseJSON(str, def = []) {
   if (!str) return def;
+  if (str === '[]') return [];
+  if (str === '{}') return {};
   try { return JSON.parse(str); } catch { return def; }
 }
 
