@@ -130,8 +130,21 @@ function generateCaddyfile(config, certsDir = './certs') {
       // Upstreams
       if (l4.toDomain && l4.toDomain.length > 0) {
         let hasTlsClient = (l4.originate_tls === 'tls' || l4.originate_tls === 'tls_insecure_skip_verify');
+        let isStartTlsUpstream = (l4.originate_tls === 'starttls' || l4.originate_tls === 'starttls_insecure_skip_verify');
 
-        if (hasTlsClient) {
+        if (isStartTlsUpstream) {
+          sb += `${indent}upstream_starttls {\n`;
+          sb += `${indent}\tupstream`;
+          for (const to of l4.toDomain) {
+            sb += ` ${protocol}/${to}:${l4.toPort}`;
+          }
+          sb += `\n`;
+          if (l4.originate_tls === 'starttls_insecure_skip_verify') {
+            sb += `${indent}\tinsecure_skip_verify\n`;
+          }
+          sb += `${indent}}\n`;
+          // The proxy handler is no longer needed since upstream_starttls does the proxying and internal load balancing.
+        } else if (hasTlsClient) {
           sb += `${indent}proxy {\n`;
           sb += `${indent}\tupstream`;
           for (const to of l4.toDomain) {
@@ -143,27 +156,41 @@ function generateCaddyfile(config, certsDir = './certs') {
             sb += `${indent}\t\ttls_insecure_skip_verify\n`;
           }
           sb += `${indent}\t}\n`;
+
+          if (l4.lb_policy) {
+            sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+          }
+          if (l4.passive_health_fail_duration) {
+            sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
+          }
+          if (l4.passive_health_max_fails) {
+            sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
+          }
+          if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
+            sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
+          }
+          sb += `${indent}}\n`;
         } else {
           sb += `${indent}proxy`;
           for (const to of l4.toDomain) {
             sb += ` ${protocol}/${to}:${l4.toPort}`;
           }
           sb += ' {\n';
-        }
 
-        if (l4.lb_policy) {
-          sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+          if (l4.lb_policy) {
+            sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+          }
+          if (l4.passive_health_fail_duration) {
+            sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
+          }
+          if (l4.passive_health_max_fails) {
+            sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
+          }
+          if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
+            sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
+          }
+          sb += `${indent}}\n`;
         }
-        if (l4.passive_health_fail_duration) {
-          sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
-        }
-        if (l4.passive_health_max_fails) {
-          sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
-        }
-        if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
-          sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
-        }
-        sb += `${indent}}\n`;
       }
 
 
