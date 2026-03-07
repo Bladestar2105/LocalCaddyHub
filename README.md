@@ -22,7 +22,7 @@ To use the NTLM transport and layer4 proxying in your `Caddyfile`, you need a cu
 
 2.  **Build Caddy:**
 
-    Run the following command anywhere you want the binary to be:
+    Run the following command from the root of the cloned `localcaddyhub` repository:
 
     ```bash
     xcaddy build \
@@ -124,9 +124,22 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
-### 2. Build Custom Caddy
+### 2. Setup LocalCaddyHub
 
-Build the custom Caddy binary with NTLM and Layer4 support, and move it to your system PATH:
+Clone the repository and install the application dependencies:
+
+```bash
+# Clone the repository to /opt
+sudo git clone https://github.com/bladestar2105/localcaddyhub.git /opt/localcaddyhub
+cd /opt/localcaddyhub
+
+# Install npm dependencies
+sudo npm install
+```
+
+### 3. Build Custom Caddy
+
+Build the custom Caddy binary with NTLM and Layer4 support from the repository root, and move it to your system PATH:
 
 ```bash
 # Install xcaddy
@@ -142,19 +155,6 @@ go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 # Move to a system-wide location and grant privileges to bind to low ports (80/443)
 sudo mv caddy /usr/local/bin/
 sudo setcap cap_net_bind_service=+ep /usr/local/bin/caddy
-```
-
-### 3. Setup LocalCaddyHub
-
-Clone the repository and install the application dependencies:
-
-```bash
-# Clone the repository to /opt
-sudo git clone https://github.com/bladestar2105/localcaddyhub.git /opt/localcaddyhub
-cd /opt/localcaddyhub
-
-# Install npm dependencies
-sudo npm install
 ```
 
 ### 4. Create a Systemd Service
