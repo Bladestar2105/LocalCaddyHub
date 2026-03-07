@@ -1,4 +1,4 @@
-package customtls
+package caddystarttls
 
 import (
 	"crypto/tls"
@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	caddy.RegisterModule(CustomTLS{})
+	caddy.RegisterModule(&CustomTLS{})
 }
 
 // CustomTLS is a layer4 handler that terminates TLS using a specific
@@ -31,7 +31,7 @@ type CustomTLS struct {
     Next layer4.Handler `json:"-"`
 }
 
-func (CustomTLS) CaddyModule() caddy.ModuleInfo {
+func (*CustomTLS) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "layer4.handlers.custom_tls",
 		New: func() caddy.Module { return new(CustomTLS) },

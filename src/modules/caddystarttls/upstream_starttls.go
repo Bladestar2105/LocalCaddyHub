@@ -1,4 +1,4 @@
-package upstream_starttls
+package caddystarttls
 
 import (
 	"bufio"
@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	caddy.RegisterModule(UpstreamSTARTTLS{})
+	caddy.RegisterModule(&UpstreamSTARTTLS{})
 }
 
 // UpstreamSTARTTLS implements a layer4 handler that upgrades
@@ -40,7 +40,7 @@ type UpstreamSTARTTLS struct {
 	next   uint32 // Atomic counter for round-robin selection
 }
 
-func (UpstreamSTARTTLS) CaddyModule() caddy.ModuleInfo {
+func (*UpstreamSTARTTLS) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "layer4.handlers.upstream_starttls",
 		New: func() caddy.Module { return new(UpstreamSTARTTLS) },
@@ -192,8 +192,8 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 	if buffered > 0 {
 		buf, _ := reader.Peek(buffered)
 		rawConn = &bufferedConn{
-			Conn:   conn,
-			reader: io.MultiReader(bytes.NewReader(buf), conn),
+			Conn: conn,
+			r:    io.MultiReader(bytes.NewReader(buf), conn),
 		}
 	}
 
@@ -247,12 +247,3 @@ var (
 )
 
 
-// bufferedConn wraps a net.Conn with a custom io.Reader.
-type bufferedConn struct {
-	net.Conn
-	reader io.Reader
-}
-
-func (b *bufferedConn) Read(p []byte) (int, error) {
-	return b.reader.Read(p)
-}
