@@ -33,6 +33,17 @@ if (process.argv.includes('-h') || process.argv.includes('--help')) {
   process.exit(0);
 }
 
+// ⚡ Bolt: Cache prepared SQL statements at module level to eliminate parsing overhead on every request
+const getUserStmt = db.prepare('SELECT * FROM users WHERE id = 1');
+const insertSessionStmt = db.prepare('INSERT INTO sessions (token, expires_at) VALUES (?, ?)');
+const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token = ?');
+const updateUserAuthStmt = db.prepare('UPDATE users SET username=?, password_hash=? WHERE id=1');
+const insertUserAuthStmt = db.prepare('INSERT INTO users (id, username, password_hash) VALUES (1, ?, ?)');
+const getUsernameStmt = db.prepare('SELECT username FROM users WHERE id = 1');
+const updateTotpSecretStmt = db.prepare('UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=1');
+const disableTotpStmt = db.prepare('UPDATE users SET totp_secret=NULL, totp_enabled=0 WHERE id=1');
+const getTotpEnabledStmt = db.prepare('SELECT totp_enabled FROM users WHERE id = 1');
+
 const app = express();
 const port = process.env.PORT || 8090;
 
@@ -63,7 +74,7 @@ app.post('/login', async (req, res) => {
   const expectedUserEnv = process.env.ADMIN_USER;
   const expectedPassEnv = process.env.ADMIN_PASS;
 
-  const userRow = db.prepare('SELECT * FROM users WHERE id = 1').get();
+  const userRow = getUserStmt.get();
 
   let validLogin = false;
   let needsSetup = false;
@@ -102,7 +113,7 @@ app.post('/login', async (req, res) => {
     const sessionToken = generateSessionToken();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
-    db.prepare('INSERT INTO sessions (token, expires_at) VALUES (?, ?)').run(sessionToken, expiresAt);
+    insertSessionStmt.run(sessionToken, expiresAt);
 
     res.cookie('session', sessionToken, {
       path: '/',
@@ -120,7 +131,7 @@ app.post('/login', async (req, res) => {
 app.get('/logout', (req, res) => {
   const token = req.cookies.session;
   if (token) {
-    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    deleteSessionStmt.run(token);
   }
 
   res.clearCookie('session', { path: '/' });
@@ -137,20 +148,20 @@ app.post('/api/setup', async (req, res) => {
   if (!newUsername || !newPassword) return res.status(400).send('Missing fields');
   if (typeof newUsername !== 'string' || typeof newPassword !== 'string') return res.status(400).send('Invalid fields');
 
-  const userRow = db.prepare('SELECT * FROM users WHERE id = 1').get();
+  const userRow = getUserStmt.get();
   if (userRow) {
     const hash = await bcrypt.hash(newPassword, 10);
-    db.prepare('UPDATE users SET username=?, password_hash=? WHERE id=1').run(newUsername, hash);
+    updateUserAuthStmt.run(newUsername, hash);
   } else {
     const hash = await bcrypt.hash(newPassword, 10);
-    db.prepare('INSERT INTO users (id, username, password_hash) VALUES (1, ?, ?)').run(newUsername, hash);
+    insertUserAuthStmt.run(newUsername, hash);
   }
   res.json({ success: true });
 });
 
 app.post('/api/2fa/generate', async (req, res) => {
   const secret = generateSecret();
-  const userRow = db.prepare('SELECT username FROM users WHERE id = 1').get();
+  const userRow = getUsernameStmt.get();
   const username = userRow ? userRow.username : process.env.ADMIN_USER;
 
   const otpauth = generateURI({ label: username, issuer: 'LocalCaddyHub', secret });
@@ -169,7 +180,7 @@ app.post('/api/2fa/verify', (req, res) => {
   }
 
   if (isValid) {
-    db.prepare('UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=1').run(secret);
+    updateTotpSecretStmt.run(secret);
     res.json({ success: true });
   } else {
     res.status(400).json({ error: 'Invalid token' });
@@ -177,12 +188,12 @@ app.post('/api/2fa/verify', (req, res) => {
 });
 
 app.post('/api/2fa/disable', (req, res) => {
-  db.prepare('UPDATE users SET totp_secret=NULL, totp_enabled=0 WHERE id=1').run();
+  disableTotpStmt.run();
   res.json({ success: true });
 });
 
 app.get('/api/2fa/status', (req, res) => {
-  const userRow = db.prepare('SELECT totp_enabled FROM users WHERE id = 1').get();
+  const userRow = getTotpEnabledStmt.get();
   res.json({ enabled: userRow ? Boolean(userRow.totp_enabled) : false });
 });
 
