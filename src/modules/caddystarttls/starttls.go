@@ -2,6 +2,9 @@ package caddystarttls
 
 import (
 	"bufio"
+	"bytes"
+	"io"
+	"net"
 	"strings"
 
 	"github.com/caddyserver/caddy/v2"
@@ -51,8 +54,20 @@ func (h *StartTLS) Handle(cx *layer4.Connection, next layer4.Handler) error {
 			cx.Write([]byte("250 STARTTLS\r\n"))
 		case "STARTTLS":
 			cx.Write([]byte("220 Ready to start TLS\r\n"))
+			// We have likely buffered bytes intended for the TLS handler (e.g. ClientHello).
+			// We must pass them along by wrapping the connection's reader.
+			bufferedBytes, _ := reader.Peek(reader.Buffered())
+
+			bc := &bufferedConn{
+				Conn: cx.Conn,
+				r:    io.MultiReader(bytes.NewReader(bufferedBytes), cx.Conn),
+			}
+
+			newCx := layer4.WrapConnection(bc, nil, cx.Logger)
+			newCx.Context = cx.Context
+
 			// Hand over to the next handler (the TLS handler)
-			return next.Handle(cx)
+			return next.Handle(newCx)
 		case "QUIT":
 			cx.Write([]byte("221 Bye\r\n"))
 			cx.Close()
@@ -123,6 +138,15 @@ func (c *wrappedWriteConn) Write(b []byte) (n int, err error) {
 
 func (h *Drop220) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	return nil
+}
+
+type bufferedConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (b *bufferedConn) Read(p []byte) (n int, err error) {
+	return b.r.Read(p)
 }
 
 // Interface guards
