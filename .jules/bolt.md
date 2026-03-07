@@ -21,3 +21,7 @@
 ## 2024-03-05 - Optimize log filtering by avoiding redundant JSON serialization and parsing
 **Learning:** In `static/app.js`, the log filter function `applyLogFiltersToDOM` iterated through up to 1000 DOM elements and performed synchronous `JSON.parse` on the `data-json` string attribute of each element whenever the filter input changed. This causes significant main thread blocking and lag when filtering high-volume logs.
 **Action:** Used jQuery's `data()` API to attach the already parsed JSON object directly to the DOM element in memory (`div.data('json', lineData)`) instead of serializing it to a string attribute. This eliminates `O(n)` JSON parsing operations when filtering logs, dramatically improving UI responsiveness.
+
+## 2025-03-05 - Pre-compile SQL Statements for DB Performance
+**Learning:** Re-preparing SQL statements using `db.prepare(sql)` inside frequently called routing functions (such as `/login`, `/logout`, and API handlers) introduces measurable parsing overhead in synchronous SQLite adapters like `better-sqlite3`.
+**Action:** Always declare pre-compiled statement variables at the module level when defining your database operations, and reuse these cached statements inside route handlers with `.run()` and `.get()`.
