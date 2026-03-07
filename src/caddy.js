@@ -110,7 +110,15 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       if (l4.terminateTls || l4.starttls) {
-        sb += `${indent}tls\n`;
+        if (l4.default_sni) {
+          sb += `${indent}tls {\n`;
+          sb += `${indent}\tconnection_policies {\n`;
+          sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
+          sb += `${indent}\t}\n`;
+          sb += `${indent}}\n`;
+        } else {
+          sb += `${indent}tls\n`;
+        }
       }
 
       if (l4.starttls) {
