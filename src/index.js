@@ -9,15 +9,14 @@ const bcrypt = require('bcrypt');
 // Helper for timing-safe comparison to prevent timing attacks on fallback login
 function safeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufferA = Buffer.from(a, 'utf8');
-  const bufferB = Buffer.from(b, 'utf8');
 
-  if (bufferA.length !== bufferB.length) {
-    // Dummy comparison to prevent leaking length difference early
-    crypto.timingSafeEqual(bufferA, bufferA);
-    return false;
-  }
-  return crypto.timingSafeEqual(bufferA, bufferB);
+  // 🛡️ Sentinel: Use HMAC to ensure both buffers have the same length (32 bytes for SHA256)
+  // regardless of input length, preventing length-based timing attacks.
+  const key = crypto.randomBytes(32);
+  const hmacA = crypto.createHmac('sha256', key).update(a).digest();
+  const hmacB = crypto.createHmac('sha256', key).update(b).digest();
+
+  return crypto.timingSafeEqual(hmacA, hmacB);
 }
 const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
