@@ -7,6 +7,7 @@ COPY src/modules/caddystarttls /build/src/modules/caddystarttls
 RUN xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4 \
+    --with github.com/corazawaf/coraza-caddy/v2 \
     --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=/build/src/modules/caddystarttls \
     --output /caddy
 
