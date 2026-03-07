@@ -1,0 +1,35 @@
+{
+    "apps": {
+        "layer4": {
+            "servers": {
+                "l4_test": {
+                    "listen": [":10587"],
+                    "routes": [
+                        {
+                            "handle": [
+                                {
+                                    "handler": "tls",
+                                    "connection_policies": [
+                                        {
+                                            "default_sni": "owa.lab.bw.tech"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "tls": {
+            "certificates": {
+                "load_files": [
+                    {
+                        "certificate": "data/certs/lab.bw.tech_crt.pem",
+                        "key": "data/certs/lab.bw.tech_crt.key"
+                    }
+                ]
+            }
+        }
+    }
+}
