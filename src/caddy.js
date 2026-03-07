@@ -110,8 +110,15 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       if (l4.terminateTls || l4.starttls) {
+        let tlsString = 'tls';
+        if (l4.customCert) {
+          const certPath = path.join(certsDir, l4.customCert).replace(/\\/g, '/');
+          const keyPath = path.join(certsDir, l4.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
+          tlsString = `tls ${certPath} ${keyPath}`;
+        }
+
         if (l4.default_sni) {
-          sb += `${indent}tls {\n`;
+          sb += `${indent}${tlsString} {\n`;
           sb += `${indent}\tconnection_policy {\n`;
           sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
           // Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
@@ -119,7 +126,7 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `${indent}\t}\n`;
           sb += `${indent}}\n`;
         } else {
-          sb += `${indent}tls\n`;
+          sb += `${indent}${tlsString}\n`;
         }
       }
 
