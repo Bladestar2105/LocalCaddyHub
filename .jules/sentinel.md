@@ -6,3 +6,7 @@
 **Vulnerability:** The session cookie generated during login was lacking the `SameSite` attribute. While API endpoints are protected by checking for `X-Requested-With` header (which naturally prevents CSRF in AJAX requests), `GET` endpoints, like `/logout`, are unprotected by this check. An attacker could potentially log a user out via CSRF.
 **Learning:** Relying solely on custom headers like `X-Requested-With` for CSRF protection is inadequate for `GET` endpoints or simple form submissions.
 **Prevention:** Always configure session cookies with `SameSite=Strict` or `SameSite=Lax` to instruct the browser not to send cookies on cross-site requests, providing a robust defense-in-depth layer against CSRF.
+## 2024-05-20 - Add Rate Limiting to Login Endpoint
+**Vulnerability:** The `/login` POST endpoint was vulnerable to brute force attacks because it lacked rate limiting. Attackers could repeatedly attempt to guess passwords without restriction.
+**Learning:** Even internal or local-first administration panels must implement brute-force protections because they may be exposed to wider networks or attacked via SSRF.
+**Prevention:** Implement an IP-based rate limiter on authentication endpoints that temporarily locks out users after a certain number of failed attempts.
