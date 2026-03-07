@@ -1,3 +1,7 @@
 ## 2024-05-14 - Loading States for Primary Actions
 **Learning:** This application involves multiple user actions that trigger backend API calls (saving config, validating config, logging in, setup). Since there was no visual feedback indicating that a request was in progress, users might be tempted to click the buttons multiple times, potentially leading to redundant API calls or confusion. Adding a visual loading indicator (like a spinner) and disabling the button prevents multiple submissions and significantly improves the perceived responsiveness of the application.
 **Action:** Always verify if async UI actions, especially ones triggering backend configuration changes or authentication requests, provide clear loading states and temporarily disable their triggers to prevent duplicate submissions.
+
+## 2025-02-12 - Add Loading State to Caddy Control Buttons
+**Learning:** Async operations like starting, stopping, or reloading the Caddy process lacked visual feedback, which could lead to duplicate clicks and confusion.
+**Action:** When implementing async actions that take time (e.g., process control via API calls), always provide a visual indicator (like a loading spinner) and temporarily disable the trigger button to prevent duplicate submissions and improve user confidence. This can be easily achieved by modifying the function to accept the button element (`this`) and updating its state before and after the `fetch` request.

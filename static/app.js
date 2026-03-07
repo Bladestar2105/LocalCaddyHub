@@ -122,7 +122,13 @@ const app = {
         setTimeout(() => box.fadeOut(), 5000);
     },
 
-    control: async function(action) {
+    control: async function(action, btnElement) {
+        let btn = btnElement ? $(btnElement) : null;
+        let originalText = '';
+        if (btn) {
+            originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
+        }
         try {
             const res = await fetch('/api/' + action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
@@ -131,6 +137,10 @@ const app = {
             $('#controlStatus').text(msg).show();
         } catch (e) {
             $('#controlStatus').text("Error: " + e.message).show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
         }
     },
 
