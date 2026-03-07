@@ -276,9 +276,9 @@
         <div class="tab-pane fade" id="control" role="tabpanel">
             <h4>Process Control</h4>
             <div class="mb-4">
-                <button class="btn btn-success" onclick="app.control('start')">Start</button>
-                <button class="btn btn-danger" onclick="app.control('stop')">Stop</button>
-                <button class="btn btn-warning" onclick="app.control('reload')">Reload</button>
+                <button class="btn btn-success" onclick="app.control('start', this)">Start</button>
+                <button class="btn btn-danger" onclick="app.control('stop', this)">Stop</button>
+                <button class="btn btn-warning" onclick="app.control('reload', this)">Reload</button>
             </div>
             <div id="controlStatus" class="status-box mb-4"></div>
 
