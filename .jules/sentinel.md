@@ -10,3 +10,7 @@
 **Vulnerability:** The `/login` POST endpoint was vulnerable to brute force attacks because it lacked rate limiting. Attackers could repeatedly attempt to guess passwords without restriction.
 **Learning:** Even internal or local-first administration panels must implement brute-force protections because they may be exposed to wider networks or attacked via SSRF.
 **Prevention:** Implement an IP-based rate limiter on authentication endpoints that temporarily locks out users after a certain number of failed attempts.
+
+## 2025-03-07 - [Timing Attack in safeCompare]
+**Learning:** Returning early when lengths mismatch in a timing-safe comparison function (like `safeCompare`) can still leak the expected input's length via timing side-channels.
+**Action:** Use HMAC-based comparison for `safeCompare` to ensure both buffers have the same length (e.g., 32 bytes for SHA256) regardless of the original input's length, thus neutralizing length-based timing attacks.
