@@ -1,7 +1,26 @@
+# Build artifacts
+caddy
+node
 localcaddyhub
+localcaddyhub@*
+
+# Logs
 server.log
+
+# Node dependencies
+node_modules/
+
+# Test/verification
 verification/
+caddy-l4-test.json
+
+# Configuration/Data files
 config.json
 Caddyfile
-node_modules/
 data/
+*.db
+*.db-shm
+*.db-wal
+
+# Cookies
+cookies.txt

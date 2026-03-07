@@ -29,8 +29,7 @@ To use the NTLM transport and layer4 proxying in your `Caddyfile`, you need a cu
       --with github.com/caddyserver/ntlm-transport \
       --with github.com/mholt/caddy-l4 \
       --with github.com/corazawaf/coraza-caddy/v2 \
-      --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls \
-      --with github.com/bladestar2105/localcaddyhub/modules/customtls=./src/modules/customtls
+      --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
     ```
 
     This will produce a `caddy` binary in your current directory. Make sure to place it in your system PATH or in the same directory where you run LocalCaddyHub.
@@ -140,7 +139,7 @@ sudo npm install
 
 ### 3. Build Custom Caddy
 
-Build the custom Caddy binary with NTLM and Layer4 support from the repository root, and move it to your system PATH:
+Build the custom Caddy binary with NTLM, Layer4, and WAF support from the repository root, and move it to your system PATH:
 
 ```bash
 # Install xcaddy
@@ -151,17 +150,26 @@ go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
   --with github.com/caddyserver/ntlm-transport \
   --with github.com/mholt/caddy-l4 \
   --with github.com/corazawaf/coraza-caddy/v2 \
-  --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls \
-  --with github.com/bladestar2105/localcaddyhub/modules/customtls=./src/modules/customtls
+  --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
 
 # Move to a system-wide location and grant privileges to bind to low ports (80/443)
 sudo mv caddy /usr/local/bin/
 sudo setcap cap_net_bind_service=+ep /usr/local/bin/caddy
 ```
 
-### 4. Create a Systemd Service
+### 4. Automatic Setup (Recommended)
 
-Create a new service file to manage LocalCaddyHub automatically:
+LocalCaddyHub provides a `setup.sh` script to automate dependencies, building, and service creation:
+
+```bash
+sudo ./setup.sh
+```
+
+During the setup process, you will be prompted to create your secure admin credentials for the initial login.
+
+### 5. Manual Service Creation
+
+If you prefer to set up the systemd service manually instead of using `setup.sh`:
 
 ```bash
 sudo nano /etc/systemd/system/localcaddyhub.service
@@ -188,8 +196,6 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
-
-### 5. Enable and Start the Service
 
 Reload the systemd daemon, enable the service to start on boot, and start it immediately:
 
