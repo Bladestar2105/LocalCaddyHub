@@ -110,18 +110,28 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       if (l4.terminateTls || l4.starttls) {
-        let tlsString = 'tls';
-
-        if (l4.default_sni) {
-          sb += `${indent}${tlsString} {\n`;
-          sb += `${indent}\tconnection_policy {\n`;
-          sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
-          // Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
-          sb += `${indent}\t\tciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA\n`;
-          sb += `${indent}\t}\n`;
+        if (l4.customCert) {
+          const certPath = path.join(certsDir, l4.customCert).replace(/\\/g, '/');
+          const keyPath = path.join(certsDir, l4.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
+          sb += `${indent}custom_tls ${certPath} ${keyPath} {\n`;
+          if (l4.default_sni) {
+            sb += `${indent}\tdefault_sni ${l4.default_sni}\n`;
+          }
           sb += `${indent}}\n`;
         } else {
-          sb += `${indent}${tlsString}\n`;
+          let tlsString = 'tls';
+
+          if (l4.default_sni) {
+            sb += `${indent}${tlsString} {\n`;
+            sb += `${indent}\tconnection_policy {\n`;
+            sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
+            // Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
+            sb += `${indent}\t\tciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA\n`;
+            sb += `${indent}\t}\n`;
+            sb += `${indent}}\n`;
+          } else {
+            sb += `${indent}${tlsString}\n`;
+          }
         }
       }
 
