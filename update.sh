@@ -44,9 +44,7 @@ sudo -u "${SUDO_USER:-root}" -H bash -c '
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4 \
     --with github.com/corazawaf/coraza-caddy/v2 \
-    --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls="$2/src/modules/caddystarttls" \
-    --with github.com/bladestar2105/localcaddyhub/modules/upstream_starttls="$2/src/modules/upstream_starttls" \
-    --with github.com/bladestar2105/localcaddyhub/modules/customtls="$2/src/modules/customtls"
+    --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls="$2/src/modules/caddystarttls"
 ' _ "$BUILD_DIR" "$INSTALL_DIR"
 
 echo "--> Moving Caddy to /usr/local/bin and setting capabilities..."

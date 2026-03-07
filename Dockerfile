@@ -2,16 +2,12 @@
 FROM caddy:builder AS caddy-builder
 
 COPY src/modules/caddystarttls /build/src/modules/caddystarttls
-COPY src/modules/upstream_starttls /build/src/modules/upstream_starttls
-COPY src/modules/customtls /build/src/modules/customtls
 
 # xcaddy is pre-installed in caddy:builder
 RUN xcaddy build \
     --with github.com/caddyserver/ntlm-transport \
     --with github.com/mholt/caddy-l4 \
     --with github.com/bladestar2105/localcaddyhub/modules/caddystarttls=/build/src/modules/caddystarttls \
-    --with github.com/bladestar2105/localcaddyhub/modules/upstream_starttls=/build/src/modules/upstream_starttls \
-    --with github.com/bladestar2105/localcaddyhub/modules/customtls=/build/src/modules/customtls \
     --output /caddy
 
 # Stage 2: Node Application setup
