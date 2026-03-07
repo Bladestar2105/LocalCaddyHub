@@ -111,11 +111,6 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       if (l4.terminateTls || l4.starttls) {
         let tlsString = 'tls';
-        if (l4.customCert) {
-          const certPath = path.join(certsDir, l4.customCert).replace(/\\/g, '/');
-          const keyPath = path.join(certsDir, l4.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
-          tlsString = `tls ${certPath} ${keyPath}`;
-        }
 
         if (l4.default_sni) {
           sb += `${indent}${tlsString} {\n`;
