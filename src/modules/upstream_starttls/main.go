@@ -243,13 +243,8 @@ func readSMTPResponse(reader *bufio.Reader) (string, error) {
 var (
 	_ caddy.Module             = (*UpstreamSTARTTLS)(nil)
 	_ caddy.Provisioner        = (*UpstreamSTARTTLS)(nil)
-	_ layer4.NextUpdatableHandler = (*UpstreamSTARTTLS)(nil)
 	_ caddyfile.Unmarshaler    = (*UpstreamSTARTTLS)(nil)
 )
-
-func (u *UpstreamSTARTTLS) SetNext(next layer4.Handler) {
-	// Not used since we terminal proxy here
-}
 
 
 // bufferedConn wraps a net.Conn with a custom io.Reader.
