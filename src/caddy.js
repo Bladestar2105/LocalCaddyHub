@@ -114,6 +114,8 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `${indent}tls {\n`;
           sb += `${indent}\tconnection_policy {\n`;
           sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
+          // Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
+          sb += `${indent}\t\tciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA\n`;
           sb += `${indent}\t}\n`;
           sb += `${indent}}\n`;
         } else {
