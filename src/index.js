@@ -50,8 +50,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// 🛡️ Sentinel: Simple IP-based rate limiter for login attempts to prevent brute force
+const loginAttempts = new Map();
+
+function loginRateLimiter(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const lockoutTime = 15 * 60 * 1000; // 15 minutes
+  const maxAttempts = 5;
+
+  let attempts = loginAttempts.get(ip);
+  if (attempts && attempts.lockedUntil) {
+    if (now < attempts.lockedUntil) {
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+    } else {
+      loginAttempts.delete(ip);
+      attempts = null;
+    }
+  }
+
+  req.loginAttemptsInfo = { ip, attempts };
+  next();
+}
+
 // Authentication Routes (unprotected)
-app.post('/login', async (req, res) => {
+app.post('/login', loginRateLimiter, async (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
   const tokenInput = req.body.totp;
@@ -111,7 +134,19 @@ app.post('/login', async (req, res) => {
       maxAge: 86400000 // 24 hours in milliseconds
     });
 
+    // Clear failed attempts on successful login
+    if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
+      loginAttempts.delete(req.loginAttemptsInfo.ip);
+    }
     return res.json({ success: true, needsSetup });
+  }
+
+  // Record failed attempt
+  if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
+    const { ip, attempts } = req.loginAttemptsInfo;
+    let newCount = attempts ? attempts.count + 1 : 1;
+    let lockedUntil = newCount >= 5 ? Date.now() + 15 * 60 * 1000 : null; // 15 min lockout after 5 fails
+    loginAttempts.set(ip, { count: newCount, lockedUntil });
   }
 
   res.status(401).json({ error: 'unauthorized' });
