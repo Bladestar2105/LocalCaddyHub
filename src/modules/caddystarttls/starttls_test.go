@@ -33,38 +33,58 @@ func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
 func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
 
 type mockNextHandler struct {
-	called bool
+	called   bool
+	readData string
 }
 
 func (m *mockNextHandler) Handle(cx *layer4.Connection) error {
 	m.called = true
+
+	// Try to read any remaining data
+	buf := make([]byte, 1024)
+	n, _ := cx.Read(buf)
+	if n > 0 {
+		m.readData = string(buf[:n])
+	}
+
 	return nil
 }
 
 func TestStartTLS(t *testing.T) {
 	tests := []struct {
-		name         string
-		clientInput  string
-		expectedOut  string
-		expectNext   bool
+		name             string
+		clientInput      string
+		expectedOut      string
+		expectNext       bool
+		expectedNextData string
 	}{
 		{
-			name:        "EHLO followed by STARTTLS",
-			clientInput: "EHLO mail.example.com\r\nSTARTTLS\r\n",
-			expectedOut: "220 StartTLS ready\r\n250-StartTLS ready\r\n250 STARTTLS\r\n220 Ready to start TLS\r\n",
-			expectNext:  true,
+			name:             "EHLO followed by STARTTLS",
+			clientInput:      "EHLO mail.example.com\r\nSTARTTLS\r\n",
+			expectedOut:      "220 StartTLS ready\r\n250-StartTLS ready\r\n250 STARTTLS\r\n220 Ready to start TLS\r\n",
+			expectNext:       true,
+			expectedNextData: "",
 		},
 		{
-			name:        "QUIT command",
-			clientInput: "QUIT\r\n",
-			expectedOut: "220 StartTLS ready\r\n221 Bye\r\n",
-			expectNext:  false,
+			name:             "EHLO followed by STARTTLS with trailing data (ClientHello)",
+			clientInput:      "EHLO mail.example.com\r\nSTARTTLS\r\nCLIENT_HELLO_DATA",
+			expectedOut:      "220 StartTLS ready\r\n250-StartTLS ready\r\n250 STARTTLS\r\n220 Ready to start TLS\r\n",
+			expectNext:       true,
+			expectedNextData: "CLIENT_HELLO_DATA",
 		},
 		{
-			name:        "Unknown command",
-			clientInput: "BADCMD\r\nQUIT\r\n",
-			expectedOut: "220 StartTLS ready\r\n502 Command not implemented\r\n221 Bye\r\n",
-			expectNext:  false,
+			name:             "QUIT command",
+			clientInput:      "QUIT\r\n",
+			expectedOut:      "220 StartTLS ready\r\n221 Bye\r\n",
+			expectNext:       false,
+			expectedNextData: "",
+		},
+		{
+			name:             "Unknown command",
+			clientInput:      "BADCMD\r\nQUIT\r\n",
+			expectedOut:      "220 StartTLS ready\r\n502 Command not implemented\r\n221 Bye\r\n",
+			expectNext:       false,
+			expectedNextData: "",
 		},
 	}
 
@@ -86,6 +106,10 @@ func TestStartTLS(t *testing.T) {
 
 			if next.called != tt.expectNext {
 				t.Errorf("expected next handler called: %v, got: %v", tt.expectNext, next.called)
+			}
+
+			if next.readData != tt.expectedNextData {
+				t.Errorf("expected next handler data %q, got %q", tt.expectedNextData, next.readData)
 			}
 
 			if mConn.writeBuf.String() != tt.expectedOut {
