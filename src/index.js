@@ -63,6 +63,20 @@ app.use((req, res, next) => {
 // 🛡️ Sentinel: Simple IP-based rate limiter for login attempts to prevent brute force
 const loginAttempts = new Map();
 
+// 🛡️ Sentinel: Active eviction strategy to prevent memory leaks from IP addresses
+// that fail fewer times than the lockout threshold and are never locked out.
+setInterval(() => {
+  const now = Date.now();
+  const evictionTime = 15 * 60 * 1000; // 15 minutes
+  for (const [ip, attempts] of loginAttempts.entries()) {
+    if (attempts.lockedUntil && now >= attempts.lockedUntil) {
+      loginAttempts.delete(ip);
+    } else if (attempts.lastAttempt && now - attempts.lastAttempt > evictionTime) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 15 * 60 * 1000); // Run every 15 minutes
+
 function loginRateLimiter(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
@@ -156,7 +170,7 @@ app.post('/login', loginRateLimiter, async (req, res) => {
     const { ip, attempts } = req.loginAttemptsInfo;
     let newCount = attempts ? attempts.count + 1 : 1;
     let lockedUntil = newCount >= 5 ? Date.now() + 15 * 60 * 1000 : null; // 15 min lockout after 5 fails
-    loginAttempts.set(ip, { count: newCount, lockedUntil });
+    loginAttempts.set(ip, { count: newCount, lockedUntil, lastAttempt: Date.now() });
   }
 
   res.status(401).json({ error: 'unauthorized' });
