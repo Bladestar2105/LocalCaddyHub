@@ -14,3 +14,7 @@
 ## 2025-03-07 - [Timing Attack in safeCompare]
 **Learning:** Returning early when lengths mismatch in a timing-safe comparison function (like `safeCompare`) can still leak the expected input's length via timing side-channels.
 **Action:** Use HMAC-based comparison for `safeCompare` to ensure both buffers have the same length (e.g., 32 bytes for SHA256) regardless of the original input's length, thus neutralizing length-based timing attacks.
+## 2026-03-08 - Fix Rate Limiter Memory Leak (DoS Vulnerability)
+**Vulnerability:** In-memory rate limiter using Map `loginAttempts` did not evict entries for IP addresses that failed fewer times than the threshold.
+**Learning:** In-memory rate limiters must implement active eviction strategies to periodically remove stale entries and prevent memory leaks and out-of-memory errors over a long period.
+**Prevention:** Always implement an active eviction strategy when using an in-memory Map structure for a rate limiter by using `setInterval` or equivalent methods, and store timestamps like `lastAttempt`.
