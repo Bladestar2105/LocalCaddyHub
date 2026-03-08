@@ -18,3 +18,7 @@
 ## 2026-03-04 - Accessible Close Buttons
 **Learning:** Bootstrap 5 `.btn-close` elements used across the application's modals (both static and dynamically generated) lacked visible text or an `aria-label`, making them inaccessible to screen readers.
 **Action:** Always explicitly add `aria-label="Close"` to `<button class="btn-close">` elements in both static HTML and JavaScript template literals to ensure screen reader accessibility.
+
+## 2025-02-13 - Add Loading State and Fading Status to File Upload
+**Learning:** File uploads are asynchronous operations that can take time, especially for larger files or slow connections. Without visual feedback during the upload (`uploadCert`), users might repeatedly click the upload button, causing redundant requests. Furthermore, status messages (like "File uploaded successfully!") shouldn't persist indefinitely as they become stale UI context if left unaddressed.
+**Action:** Always provide a visual indicator (e.g., loading spinner) and disable the submit trigger on async actions like file uploads. Ensure success/error status messages fade out automatically after a short duration (e.g., 5 seconds via `setTimeout` and `.fadeOut()`) to maintain a clean UI.

@@ -170,11 +170,18 @@ const app = {
         }
     },
 
-    uploadCert: async function() {
+    uploadCert: async function(btnElement) {
         const fileInput = document.getElementById('certUploadInput');
         if (!fileInput.files.length) return;
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
+
+        let btn = btnElement ? $(btnElement) : null;
+        let originalText = '';
+        if (btn) {
+            originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...');
+        }
 
         try {
             const res = await fetch('/api/certs', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
@@ -187,6 +194,12 @@ const app = {
             }
         } catch (e) {
              $('#certUploadStatus').text("Error: " + e.message).show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
+            if (this.uploadCertTimeout) clearTimeout(this.uploadCertTimeout);
+            this.uploadCertTimeout = setTimeout(() => $('#certUploadStatus').fadeOut(), 5000);
         }
     },
 
