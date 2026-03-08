@@ -265,7 +265,7 @@
             <p>Upload your <code>.pem</code> and <code>.key</code> files here. They will be available for selection in Domains.</p>
             <div class="mb-3">
                 <input class="form-control" type="file" id="certUploadInput">
-                <button class="btn btn-primary mt-2" onclick="app.uploadCert()">Upload File</button>
+                <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
             </div>
             <div id="certUploadStatus" class="status-box mb-3"></div>
             <h5>Available Files in ./certs/</h5>
