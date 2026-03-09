@@ -264,7 +264,7 @@
             <h4>Custom Certificates</h4>
             <p>Upload your <code>.pem</code> and <code>.key</code> files here. They will be available for selection in Domains.</p>
             <div class="mb-3">
-                <input class="form-control" type="file" id="certUploadInput">
+                <input class="form-control" type="file" id="certUploadInput" aria-label="Certificate File Upload">
                 <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
             </div>
             <div id="certUploadStatus" class="status-box mb-3"></div>
@@ -283,7 +283,7 @@
             <div id="controlStatus" class="status-box mb-4"></div>
 
             <h4>Raw Caddyfile</h4>
-            <textarea id="rawCaddyfile" readonly class="form-control bg-dark text-light mb-2"></textarea>
+            <textarea id="rawCaddyfile" readonly class="form-control bg-dark text-light mb-2" aria-label="Raw Caddyfile Content"></textarea>
 
             <h4 class="mt-4">Stats</h4>
             <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
@@ -373,7 +373,7 @@
             <p>Scan this QR code with your authenticator app:</p>
             <img id="2faQrCode" src="" alt="QR Code" class="img-fluid mb-3">
             <div class="mb-3">
-                <label>Verification Code</label>
+                <label for="2faVerifyToken">Verification Code</label>
                 <input type="text" id="2faVerifyToken" class="form-control" placeholder="123456">
                 <input type="hidden" id="2faVerifySecret">
             </div>
