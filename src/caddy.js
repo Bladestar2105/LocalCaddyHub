@@ -327,6 +327,8 @@ function generateCaddyfile(config, certsDir = './certs') {
       sb += siteAddrs.join(', ') + ' {\n';
 
       // Domain TLS settings
+      const anySubdomainAcme = domainSubdomains.some(s => s.acme);
+
       if (domain.disableTls) {
         // Handled by http:// prefix
       } else if (domain.customCert) {
@@ -343,6 +345,17 @@ function generateCaddyfile(config, certsDir = './certs') {
            sb += `\t\t}\n`;
         }
         sb += `\t}\n`;
+      } else if (domain.acme || anySubdomainAcme) {
+        if (domain.client_auth_mode) {
+           sb += `\ttls {\n`;
+           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
+           if (domain.client_auth_trust_pool) {
+             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
+             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
+           }
+           sb += `\t\t}\n`;
+           sb += `\t}\n`;
+        }
       } else {
         sb += '\ttls internal {\n'; // Auto HTTPS disabled by default in our app without ACME
         if (domain.client_auth_mode) {
