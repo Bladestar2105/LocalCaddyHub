@@ -23,6 +23,8 @@ const app = {
     },
     certs: [],
     logStreamSource: null,
+    logFiltersCache: { level: '', status: '', method: '', ip: '', path: '', text: '' },
+    logFilterTimeout: null,
 
     init: async function() {
         await this.loadCerts();
@@ -32,13 +34,30 @@ const app = {
         this.fetchStats();
         this.fetchLogFiles();
 
-        // Add event listeners for dynamic log filtering
+        // Initialize log filters cache
+        this.updateLogFiltersCache();
+
+        // Add event listeners for dynamic log filtering with debouncing
         $('#logFilterLevel, #logFilterStatus, #logFilterMethod, #logFilterIp, #logFilterPath, #logFilterText').on('input change', () => {
-             // Since it's a stream we only filter incoming, but let's re-filter what's in the DOM if possible,
-             // but that is hard for plain text. We will just filter new lines.
-             // Actually, a better UX is to hide/show existing lines if they don't match.
-             app.applyLogFiltersToDOM();
+             // ⚡ Bolt: Debounce the input events and cache DOM values to prevent thousands of
+             // redundant DOM queries when filtering a large number of log lines.
+             if (this.logFilterTimeout) clearTimeout(this.logFilterTimeout);
+             this.logFilterTimeout = setTimeout(() => {
+                 app.updateLogFiltersCache();
+                 app.applyLogFiltersToDOM();
+             }, 150); // 150ms debounce
         });
+    },
+
+    updateLogFiltersCache: function() {
+        this.logFiltersCache = {
+            level: $('#logFilterLevel').val().toLowerCase(),
+            status: $('#logFilterStatus').val().toLowerCase(),
+            method: $('#logFilterMethod').val().toUpperCase(),
+            ip: $('#logFilterIp').val().toLowerCase(),
+            path: $('#logFilterPath').val().toLowerCase(),
+            text: $('#logFilterText').val().toLowerCase()
+        };
     },
 
     loadConfig: async function() {
@@ -332,12 +351,9 @@ const app = {
     },
 
     passesLogFilters: function(lineStr, lineData) {
-        const fLevel = $('#logFilterLevel').val().toLowerCase();
-        const fStatus = $('#logFilterStatus').val().toLowerCase();
-        const fMethod = $('#logFilterMethod').val().toUpperCase();
-        const fIp = $('#logFilterIp').val().toLowerCase();
-        const fPath = $('#logFilterPath').val().toLowerCase();
-        const fText = $('#logFilterText').val().toLowerCase();
+        // ⚡ Bolt: Read from the cached filter object instead of querying the DOM
+        // repeatedly for every single log line during filtering.
+        const { level: fLevel, status: fStatus, method: fMethod, ip: fIp, path: fPath, text: fText } = this.logFiltersCache;
 
         if (fText && !lineStr.toLowerCase().includes(fText)) return false;
 
