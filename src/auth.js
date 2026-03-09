@@ -32,7 +32,7 @@ function authMiddleware(req, res, next) {
   }
 
   if (!valid) {
-    if (req.path.startsWith('/api/')) {
+    if (req.path.toLowerCase().startsWith('/api/')) {
       return res.status(401).send('Unauthorized');
     } else {
       return res.redirect('/login.html');
@@ -52,7 +52,7 @@ function authMiddleware(req, res, next) {
 
 function csrfMiddleware(req, res, next) {
   const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
-  if (!safeMethods.includes(req.method) && req.path.startsWith('/api/')) {
+  if (!safeMethods.includes(req.method) && req.path.toLowerCase().startsWith('/api/')) {
     if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
       return res.status(403).send('CSRF check failed: missing X-Requested-With header');
     }
