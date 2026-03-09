@@ -268,6 +268,11 @@
                 <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
             </div>
             <div id="certUploadStatus" class="status-box mb-3"></div>
+
+            <h4 class="mt-4">Let's Encrypt Certificates</h4>
+            <p>Download all Let's Encrypt certificates managed automatically by Caddy.</p>
+            <a href="/api/certs/acme/download" class="btn btn-secondary mt-2 mb-4">Download .tar.gz</a>
+
             <h5>Available Files in ./certs/</h5>
             <ul id="certsList" class="list-group"></ul>
         </div>
