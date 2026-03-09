@@ -749,6 +749,7 @@ const app = {
                         <div class="mb-2"><label for="d_desc">Description</label><input type="text" id="d_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="accessLog" id="d_al"> <label for="d_al">Enable Access Log</label></div>
                         <div class="mb-2"><input type="checkbox" name="disableTls" id="d_dtls"> <label for="d_dtls">Disable TLS (HTTP only)</label></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="d_acme"> <label for="d_acme">Enable Let's Encrypt / ZeroSSL (Auto HTTPS)</label> <small class="text-muted d-block">Check this to automatically obtain a certificate. Overrides Custom Certificate if checked.</small></div>
                         <div class="mb-2"><label for="d_cc">Custom Certificate</label><select id="d_cc" name="customCert" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="d_cam">Client Auth Mode</label><select id="d_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="d_catp">Client Auth Trust Pool (CA Cert)</label><select id="d_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
@@ -768,6 +769,7 @@ const app = {
                         <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
                         <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
                         <div class="mb-2"><label for="sd_desc">Description</label><input type="text" id="sd_desc" name="description" class="form-control"></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Enable Let's Encrypt / ZeroSSL (Auto HTTPS)</label> <small class="text-muted d-block">Overrides base Domain TLS settings for this subdomain.</small></div>
                         <div class="mb-2"><label for="sd_cam">Client Auth Mode</label><select id="sd_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="sd_catp">Client Auth Trust Pool (CA Cert)</label><select id="sd_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="sd_ac">Access Lists</label><select id="sd_ac" name="accesslist" class="form-select al-select" multiple></select></div>
