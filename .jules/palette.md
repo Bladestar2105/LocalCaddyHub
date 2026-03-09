@@ -22,3 +22,7 @@
 ## 2025-02-13 - Add Loading State and Fading Status to File Upload
 **Learning:** File uploads are asynchronous operations that can take time, especially for larger files or slow connections. Without visual feedback during the upload (`uploadCert`), users might repeatedly click the upload button, causing redundant requests. Furthermore, status messages (like "File uploaded successfully!") shouldn't persist indefinitely as they become stale UI context if left unaddressed.
 **Action:** Always provide a visual indicator (e.g., loading spinner) and disable the submit trigger on async actions like file uploads. Ensure success/error status messages fade out automatically after a short duration (e.g., 5 seconds via `setTimeout` and `.fadeOut()`) to maintain a clean UI.
+
+## 2025-02-13 - Explicit Accessibility Labels for Standalone Inputs
+**Learning:** Many standalone inputs (like file uploads) and textareas (like raw configuration viewers) in this application lack explicit `<label>` elements or `aria-label` attributes. This makes them difficult or impossible for screen reader users to identify and interact with properly.
+**Action:** Always ensure that every `<input>`, `<textarea>`, and interactive element has either a clearly associated `<label for="...">` or a descriptive `aria-label="..."` attribute, particularly when the element's purpose is implied visually but not semantically.
