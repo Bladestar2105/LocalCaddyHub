@@ -39,7 +39,8 @@ const SCHEMA_SQL = `
       disableTls INTEGER DEFAULT 0,
       customCert TEXT,
       client_auth_mode TEXT,
-      client_auth_trust_pool TEXT
+      client_auth_trust_pool TEXT,
+      acme INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS subdomains (
@@ -51,7 +52,8 @@ const SCHEMA_SQL = `
       basicauth TEXT, -- JSON array
       description TEXT,
       client_auth_mode TEXT,
-      client_auth_trust_pool TEXT
+      client_auth_trust_pool TEXT,
+      acme INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS handlers (
@@ -198,6 +200,8 @@ function runMigrations() {
     { table: 'domains', column: 'client_auth_trust_pool', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_mode', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_trust_pool', def: 'TEXT' },
+    { table: 'domains', column: 'acme', def: 'INTEGER DEFAULT 0' },
+    { table: 'subdomains', column: 'acme', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'to_path', def: 'TEXT' },
     { table: 'handlers', column: 'http_version', def: 'TEXT' },
     { table: 'handlers', column: 'http_keepalive', def: 'TEXT' },
