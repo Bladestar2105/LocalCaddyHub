@@ -93,12 +93,14 @@ router.get('/config/structured', (req, res) => {
         enabled: Boolean(d.enabled),
         accessLog: Boolean(d.accessLog),
         disableTls: Boolean(d.disableTls),
+        acme: Boolean(d.acme),
         accesslist: parseJSON(d.accesslist),
         basicauth: parseJSON(d.basicauth)
       })),
       subdomains: subdomainsRows.map(s => ({
         ...s,
         enabled: Boolean(s.enabled),
+        acme: Boolean(s.acme),
         accesslist: parseJSON(s.accesslist),
         basicauth: parseJSON(s.basicauth)
       })),
@@ -160,10 +162,10 @@ router.get('/config/structured', (req, res) => {
 const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
 
 const deleteDomainsStmt = db.prepare('DELETE FROM domains');
-const insertDomainStmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const insertDomainStmt = db.prepare('INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool, acme) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
 const deleteSubdomainsStmt = db.prepare('DELETE FROM subdomains');
-const insertSubdomainStmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const insertSubdomainStmt = db.prepare('INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool, acme) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
 const deleteHandlersStmt = db.prepare('DELETE FROM handlers');
 const insertHandlerStmt = db.prepare(`INSERT INTO handlers (
@@ -200,7 +202,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       deleteDomainsStmt.run();
       if (config.domains) {
         for (const d of config.domains) {
-          insertDomainStmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert, d.client_auth_mode, d.client_auth_trust_pool);
+          insertDomainStmt.run(d.id, d.enabled ? 1 : 0, d.fromDomain, d.fromPort, JSON.stringify(d.accesslist || []), JSON.stringify(d.basicauth || []), d.description, d.accessLog ? 1 : 0, d.disableTls ? 1 : 0, d.customCert, d.client_auth_mode, d.client_auth_trust_pool, d.acme ? 1 : 0);
         }
       }
 
@@ -208,7 +210,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       deleteSubdomainsStmt.run();
       if (config.subdomains) {
         for (const s of config.subdomains) {
-          insertSubdomainStmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description, s.client_auth_mode, s.client_auth_trust_pool);
+          insertSubdomainStmt.run(s.id, s.enabled ? 1 : 0, s.reverse, s.fromDomain, JSON.stringify(s.accesslist || []), JSON.stringify(s.basicauth || []), s.description, s.client_auth_mode, s.client_auth_trust_pool, s.acme ? 1 : 0);
         }
       }
 
