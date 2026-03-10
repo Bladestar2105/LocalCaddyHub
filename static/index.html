@@ -287,7 +287,10 @@
             </div>
             <div id="controlStatus" class="status-box mb-4"></div>
 
-            <h4>Raw Caddyfile</h4>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h4 class="mb-0">Raw Caddyfile</h4>
+                <button class="btn btn-sm btn-outline-secondary" onclick="app.copyRawCaddyfile(this)">Copy to Clipboard</button>
+            </div>
             <textarea id="rawCaddyfile" readonly class="form-control bg-dark text-light mb-2" aria-label="Raw Caddyfile Content"></textarea>
 
             <h4 class="mt-4">Stats</h4>

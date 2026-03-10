@@ -177,6 +177,31 @@ const app = {
         }
     },
 
+    copyRawCaddyfile: function(btn) {
+        const textArea = document.getElementById("rawCaddyfile");
+        if (!textArea || !textArea.value) return;
+
+        // Use fallback method to ensure it works in non-secure contexts (e.g. direct IP access)
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // For mobile devices
+
+        try {
+            document.execCommand('copy');
+            const $btn = $(btn);
+            const originalText = $btn.text();
+            $btn.text('Copied!').removeClass('btn-outline-secondary').addClass('btn-success');
+            setTimeout(() => {
+                $btn.text(originalText).removeClass('btn-success').addClass('btn-outline-secondary');
+            }, 2000);
+        } catch (err) {
+            console.error('Copy failed', err);
+            alert('Failed to copy text.');
+        }
+
+        // Deselect
+        window.getSelection().removeAllRanges();
+    },
+
     loadCerts: async function() {
         try {
             const res = await fetch('/api/certs');
