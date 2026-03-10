@@ -26,3 +26,7 @@
 ## 2025-02-13 - Explicit Accessibility Labels for Standalone Inputs
 **Learning:** Many standalone inputs (like file uploads) and textareas (like raw configuration viewers) in this application lack explicit `<label>` elements or `aria-label` attributes. This makes them difficult or impossible for screen reader users to identify and interact with properly.
 **Action:** Always ensure that every `<input>`, `<textarea>`, and interactive element has either a clearly associated `<label for="...">` or a descriptive `aria-label="..."` attribute, particularly when the element's purpose is implied visually but not semantically.
+
+## 2025-02-13 - Reliable Clipboard Copy in Non-Secure Contexts
+**Learning:** Adding a "Copy to Clipboard" button next to raw configuration outputs (like the Raw Caddyfile) is a highly desired UX enhancement. However, the modern `navigator.clipboard` API requires a secure context (HTTPS or localhost). Since LocalCaddyHub is often accessed over a local network using a direct IP address and HTTP, relying solely on `navigator.clipboard` causes the copy function to silently fail.
+**Action:** When implementing copy-to-clipboard functionality, especially in tools deployed in local or mixed environments, use `document.execCommand('copy')` as a robust fallback to ensure the feature remains functional for users accessing the app over non-secure connections. Always provide visual feedback (e.g., temporarily changing the button text to "Copied!") upon successful copy.
