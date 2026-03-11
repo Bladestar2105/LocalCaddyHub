@@ -416,14 +416,19 @@ const app = {
     },
 
     appendLogLine: function(lineStr, lineData, isJson) {
-        const area = $('#logOutputArea');
-        const div = $('<div>').addClass('log-line').css('border-bottom', '1px solid #444').css('padding', '2px 0');
+        const area = document.getElementById('logOutputArea');
+
+        // ⚡ Bolt: Use native DOM API to create elements and manage DOM to avoid jQuery overhead.
+        // This is much faster for continuous stream appending operations.
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        div.style.cssText = 'border-bottom: 1px solid #444; padding: 2px 0;';
 
         // Store data on the element so we can re-filter the DOM later if needed
         // ⚡ Bolt: Store parsed JSON and raw text directly using jQuery data() instead of serializing to DOM attributes
-        div.data('raw', lineStr);
+        $.data(div, 'raw', lineStr);
         if (isJson) {
-             div.data('json', lineData);
+             $.data(div, 'json', lineData);
 
              // Format JSON nicely
              const levelColor = lineData.level === 'error' ? '#ff4444' : lineData.level === 'warn' ? '#ffbb33' : '#00C851';
@@ -446,19 +451,19 @@ const app = {
                  extraStr += ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status_code)}</span>`;
              }
 
-             div.html(`<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}${extraStr}`);
+             div.innerHTML = `<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}${extraStr}`;
         } else {
-             div.text(lineStr);
+             div.textContent = lineStr;
         }
 
-        area.append(div);
+        area.appendChild(div);
 
         // Auto-scroll to bottom
-        area.scrollTop(area[0].scrollHeight);
+        area.scrollTop = area.scrollHeight;
 
-        // Keep DOM from getting too large
-        if (area.children().length > 1000) {
-            area.children().first().remove();
+        // Keep DOM from getting too large using native childElementCount to avoid creating arrays/objects
+        if (area.childElementCount > 1000) {
+            area.firstElementChild.remove();
         }
     },
 
