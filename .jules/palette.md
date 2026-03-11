@@ -30,3 +30,7 @@
 ## 2025-02-13 - Reliable Clipboard Copy in Non-Secure Contexts
 **Learning:** Adding a "Copy to Clipboard" button next to raw configuration outputs (like the Raw Caddyfile) is a highly desired UX enhancement. However, the modern `navigator.clipboard` API requires a secure context (HTTPS or localhost). Since LocalCaddyHub is often accessed over a local network using a direct IP address and HTTP, relying solely on `navigator.clipboard` causes the copy function to silently fail.
 **Action:** When implementing copy-to-clipboard functionality, especially in tools deployed in local or mixed environments, use `document.execCommand('copy')` as a robust fallback to ensure the feature remains functional for users accessing the app over non-secure connections. Always provide visual feedback (e.g., temporarily changing the button text to "Copied!") upon successful copy.
+
+## 2024-03-11 - Loading feedback for authentication flows
+**Learning:** During asynchronous operations like 2FA verification, users need immediate visual feedback (e.g., a loading spinner) and the action button must be temporarily disabled to prevent duplicate submissions or confusion about the system's state.
+**Action:** When implementing or modifying authentication or critical action buttons, always ensure a loading state is present and the button is disabled during processing, using a `finally` block to reliably restore the original state.
