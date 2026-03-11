@@ -287,7 +287,13 @@ const app = {
             $('#2faSetupArea').show();
         } catch(e) { console.error(e); }
     },
-    verify2fa: async function() {
+    verify2fa: async function(btnElement) {
+        let btn = btnElement ? $(btnElement) : null;
+        let originalText = '';
+        if (btn) {
+            originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Verifying...');
+        }
         const token = $('#2faVerifyToken').val();
         const secret = $('#2faVerifySecret').val();
         try {
@@ -302,7 +308,11 @@ const app = {
             } else {
                 alert('Invalid Code.');
             }
-        } catch(e) { console.error(e); }
+        } catch(e) { console.error(e); } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
+        }
     },
     disable2fa: async function() {
         if (!confirm('Are you sure you want to disable 2FA?')) return;
