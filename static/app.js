@@ -361,8 +361,9 @@ const app = {
                 // Not JSON, just plain text line
             }
 
-            if (this.passesLogFilters(lineStr, lineData)) {
-                this.appendLogLine(lineStr, lineData, isJson);
+            const rawLower = lineStr.toLowerCase();
+            if (this.passesLogFilters(lineStr, rawLower, lineData)) {
+                this.appendLogLine(lineStr, rawLower, lineData, isJson);
             }
         };
 
@@ -385,12 +386,12 @@ const app = {
         $('#logOutputArea').empty();
     },
 
-    passesLogFilters: function(lineStr, lineData) {
+    passesLogFilters: function(lineStr, rawLower, lineData) {
         // ⚡ Bolt: Read from the cached filter object instead of querying the DOM
         // repeatedly for every single log line during filtering.
         const { level: fLevel, status: fStatus, method: fMethod, ip: fIp, path: fPath, text: fText } = this.logFiltersCache;
 
-        if (fText && !lineStr.toLowerCase().includes(fText)) return false;
+        if (fText && !rawLower.includes(fText)) return false;
 
         if (lineData) {
             if (fLevel && lineData.level && lineData.level.toLowerCase() !== fLevel) return false;
@@ -425,7 +426,7 @@ const app = {
              .replace(/'/g, "&#039;");
     },
 
-    appendLogLine: function(lineStr, lineData, isJson) {
+    appendLogLine: function(lineStr, rawLower, lineData, isJson) {
         const area = document.getElementById('logOutputArea');
 
         // ⚡ Bolt: Use native DOM API to create elements and manage DOM to avoid jQuery overhead.
@@ -436,7 +437,9 @@ const app = {
 
         // Store data on the element so we can re-filter the DOM later if needed
         // ⚡ Bolt: Store parsed JSON and raw text directly using jQuery data() instead of serializing to DOM attributes
+        // ⚡ Bolt: Cache rawLower to eliminate O(N) string allocations and toLowerCase() calls during live filtering
         $.data(div, 'raw', lineStr);
+        $.data(div, 'rawLower', rawLower);
         if (isJson) {
              $.data(div, 'json', lineData);
 
@@ -485,9 +488,10 @@ const app = {
              const el = els[i];
              // Retrieve parsed JSON object directly from memory, eliminating O(n) JSON.parse overhead
              const raw = $.data(el, 'raw');
+             const rawLower = $.data(el, 'rawLower');
              const data = $.data(el, 'json');
 
-             if (app.passesLogFilters(raw, data)) {
+             if (app.passesLogFilters(raw, rawLower, data)) {
                  el.style.display = '';
              } else {
                  el.style.display = 'none';
