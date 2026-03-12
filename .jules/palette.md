@@ -34,3 +34,7 @@
 ## 2024-03-11 - Loading feedback for authentication flows
 **Learning:** During asynchronous operations like 2FA verification, users need immediate visual feedback (e.g., a loading spinner) and the action button must be temporarily disabled to prevent duplicate submissions or confusion about the system's state.
 **Action:** When implementing or modifying authentication or critical action buttons, always ensure a loading state is present and the button is disabled during processing, using a `finally` block to reliably restore the original state.
+
+## 2024-05-15 - [Dynamic Status ARIA Labels]
+**Learning:** Many dynamic status and error messages in the application, specifically those updated via Javascript textContent/innerText but present in the DOM (like validation success, upload status, save success, or login failures), are entirely missed by screen readers because they lack ARIA live regions.
+**Action:** Always add `role="status" aria-live="polite"` to dynamically updating informational elements and `role="alert" aria-live="assertive"` to error message containers so that screen reader users are notified when these background operations complete or fail.
