@@ -37,7 +37,7 @@
             <button id="validateConfigBtn" class="btn btn-secondary" onclick="app.validateConfig()">Validate Configuration</button>
         </div>
         <div>
-            <div id="globalStatus" class="status-box" style="margin-top:0; padding: 8px 15px; display:inline-block; font-weight: bold; margin-right: 15px;"></div>
+            <div id="globalStatus" class="status-box" style="margin-top:0; padding: 8px 15px; display:inline-block; font-weight: bold; margin-right: 15px;" role="status" aria-live="polite"></div>
             <button class="btn btn-outline-info" onclick="app.ui.openModal('2faModal')">2FA Settings</button>
             <a href="/logout" class="btn btn-outline-danger">Logout</a>
         </div>
@@ -267,7 +267,7 @@
                 <input class="form-control" type="file" id="certUploadInput" aria-label="Certificate File Upload">
                 <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
             </div>
-            <div id="certUploadStatus" class="status-box mb-3"></div>
+            <div id="certUploadStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
 
             <h4 class="mt-4">Let's Encrypt Certificates</h4>
             <p>Download all Let's Encrypt certificates managed automatically by Caddy.</p>
@@ -285,7 +285,7 @@
                 <button class="btn btn-danger" onclick="app.control('stop', this)">Stop</button>
                 <button class="btn btn-warning" onclick="app.control('reload', this)">Reload</button>
             </div>
-            <div id="controlStatus" class="status-box mb-4"></div>
+            <div id="controlStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h4 class="mb-0">Raw Caddyfile</h4>
@@ -376,7 +376,7 @@
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header"><h5 class="modal-title">2FA Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
     <div class="modal-body">
-        <div id="2faStatus" class="mb-3">Status: <span id="2faStatusBadge" class="badge bg-secondary">Loading...</span></div>
+        <div id="2faStatus" class="mb-3" aria-live="polite">Status: <span id="2faStatusBadge" class="badge bg-secondary">Loading...</span></div>
         <div id="2faSetupArea" style="display: none;">
             <p>Scan this QR code with your authenticator app:</p>
             <img id="2faQrCode" src="" alt="QR Code" class="img-fluid mb-3">
