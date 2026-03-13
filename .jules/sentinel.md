@@ -26,3 +26,8 @@
 **Vulnerability:** The application reads `req.query.file` without validating that it is a string. If an attacker sends multiple query parameters with the same name (e.g., `?file=a&file=b`) or an object (e.g., `?file[includes]=..`), Express parses `req.query.file` as an array or object. Passing this to methods like `.includes()` or `path.join()` causes unhandled exceptions that crash the server, leading to a DoS.
 **Learning:** Always validate the type of query parameters before performing string-specific operations on them, as frameworks like Express can parse them into objects or arrays unexpectedly.
 **Prevention:** Ensure that `req.query` parameters used in string operations or file paths are strictly validated as strings (e.g., `if (typeof filename !== 'string') return ...`).
+
+## $(date +%Y-%m-%d) - Fix username enumeration timing attack in login endpoint
+**Vulnerability:** The login logic allowed an attacker to determine if a username was correct by measuring response times. When a username was incorrect, the expensive `bcrypt.compare` call was short-circuited, resulting in a much faster response compared to a correct username guess.
+**Learning:** Conditional execution of expensive cryptographic operations based on user input (like matching a username first) creates an observable timing side-channel that leaks valid system accounts.
+**Prevention:** Always perform the expensive cryptographic comparison (like `bcrypt.compare` or `safeCompare`) irrespective of the success or failure of previous validation checks (like matching a username). This ensures that login endpoint responses take a consistent amount of time for both valid and invalid usernames.
