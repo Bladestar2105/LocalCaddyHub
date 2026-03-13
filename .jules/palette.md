@@ -38,3 +38,7 @@
 ## 2024-05-15 - [Dynamic Status ARIA Labels]
 **Learning:** Many dynamic status and error messages in the application, specifically those updated via Javascript textContent/innerText but present in the DOM (like validation success, upload status, save success, or login failures), are entirely missed by screen readers because they lack ARIA live regions.
 **Action:** Always add `role="status" aria-live="polite"` to dynamically updating informational elements and `role="alert" aria-live="assertive"` to error message containers so that screen reader users are notified when these background operations complete or fail.
+
+## 2025-02-13 - Password Manager Accessibility
+**Learning:** Auth forms (login and setup) lacking the `autocomplete` attribute prevent browser password managers and external extensions (1Password, Bitwarden) from reliably auto-filling user credentials and one-time 2FA codes (`one-time-code`). This forces users to manually type or copy-paste credentials, which degrades the login flow's UX and accessibility.
+**Action:** Always include appropriate `autocomplete` attributes (`username`, `current-password`, `new-password`, `one-time-code`) on all authentication-related input fields to seamlessly support password managers and improve accessibility for users relying on assistive auto-fill tools.
