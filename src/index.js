@@ -117,29 +117,33 @@ app.post('/login', loginRateLimiter, async (req, res) => {
 
   if (userRow) {
     // Database user exists
-    if (username === userRow.username) {
-      const match = await bcrypt.compare(password, userRow.password_hash);
-      if (match) {
-        if (userRow.totp_enabled) {
-          if (!tokenInput) {
-             return res.status(401).json({ error: 'invalid_totp' });
-          }
-          let isValid = false;
-          try {
-            isValid = verifySync({ token: tokenInput, secret: userRow.totp_secret }).valid;
-          } catch (err) {
-            // Ignore format errors etc and treat as invalid
-          }
-          if (!isValid) {
-            return res.status(401).json({ error: 'invalid_totp' });
-          }
+    const userMatch = username === userRow.username;
+    // 🛡️ Sentinel: Always perform the bcrypt comparison to prevent username enumeration timing attacks.
+    const passMatch = await bcrypt.compare(password, userRow.password_hash);
+
+    if (userMatch && passMatch) {
+      if (userRow.totp_enabled) {
+        if (!tokenInput) {
+           return res.status(401).json({ error: 'invalid_totp' });
         }
-        validLogin = true;
+        let isValid = false;
+        try {
+          isValid = verifySync({ token: tokenInput, secret: userRow.totp_secret }).valid;
+        } catch (err) {
+          // Ignore format errors etc and treat as invalid
+        }
+        if (!isValid) {
+          return res.status(401).json({ error: 'invalid_totp' });
+        }
       }
+      validLogin = true;
     }
   } else if (expectedUserEnv && expectedPassEnv) {
     // Fallback to env vars if no DB user is set up yet, and env vars are explicitly defined
-    if (safeCompare(username, expectedUserEnv) && safeCompare(password, expectedPassEnv)) {
+    // 🛡️ Sentinel: Avoid logical short-circuiting to prevent timing leaks
+    const envUserMatch = safeCompare(username, expectedUserEnv);
+    const envPassMatch = safeCompare(password, expectedPassEnv);
+    if (envUserMatch && envPassMatch) {
       validLogin = true;
       needsSetup = true; // Must change password
     }
