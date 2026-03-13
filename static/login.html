@@ -20,15 +20,15 @@
     <form id="loginForm">
         <div class="mb-3">
             <label for="username" class="form-label">Username</label>
-            <input type="text" class="form-control" id="username" name="username" required>
+            <input type="text" class="form-control" id="username" name="username" autocomplete="username" required>
         </div>
         <div class="mb-3">
             <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required>
+            <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
         </div>
         <div class="mb-3" id="totpGroup" style="display: none;">
             <label for="totp" class="form-label">2FA Code</label>
-            <input type="text" class="form-control" id="totp" name="totp" placeholder="123456" autocomplete="off">
+            <input type="text" class="form-control" id="totp" name="totp" placeholder="123456" autocomplete="one-time-code">
         </div>
         <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn">Login</button>
     </form>
