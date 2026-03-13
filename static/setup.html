@@ -21,15 +21,15 @@
     <form id="setupForm">
         <div class="mb-3">
             <label for="newUsername" class="form-label">New Username</label>
-            <input type="text" class="form-control" id="newUsername" name="newUsername" required value="admin">
+            <input type="text" class="form-control" id="newUsername" name="newUsername" autocomplete="username" required value="admin">
         </div>
         <div class="mb-3">
             <label for="newPassword" class="form-label">New Password</label>
-            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+            <input type="password" class="form-control" id="newPassword" name="newPassword" autocomplete="new-password" required>
         </div>
         <div class="mb-3">
             <label for="confirmPassword" class="form-label">Confirm Password</label>
-            <input type="password" class="form-control" id="confirmPassword" required>
+            <input type="password" class="form-control" id="confirmPassword" autocomplete="new-password" required>
         </div>
         <button type="submit" class="btn btn-primary w-100" id="setupSubmitBtn">Save & Continue</button>
     </form>
