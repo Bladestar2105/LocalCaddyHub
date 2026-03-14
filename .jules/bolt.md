@@ -41,3 +41,7 @@
 ## 2026-03-12 - Optimize log text filtering by caching lowercased strings
 **Learning:** During continuous UI operations like live log streaming and filtering, calling `toLowerCase()` on every log line per filter tick causes significant `O(n)` string allocations and overhead that blocks the main thread, especially when repeatedly filtering thousands of cached DOM elements.
 **Action:** Always pre-compute and cache expensive string transformations (like `toLowerCase()`) in memory (e.g., using `jQuery.data()`) upon initial element creation to bypass redundant conversions in tight iteration loops.
+
+## 2026-03-14 - Batch Insertion using json_each
+**Learning:** SQLite's `json_each` function allows for extremely efficient batch insertions in `better-sqlite3` by processing a single stringified JSON array. This eliminates the "JS-to-database bridge" overhead associated with looping individual `.run()` calls for each row.
+**Action:** When faced with an N+1 query issue for bulk data saving, prefer preparing a single `INSERT ... SELECT ... FROM json_each(?)` statement and passing the entire dataset as a single JSON string.
