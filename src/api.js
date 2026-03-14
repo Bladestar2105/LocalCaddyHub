@@ -343,6 +343,7 @@ function execCaddy(cmdArgs, res) {
   execFile('caddy', cmdArgs, (error, stdout, stderr) => {
     res.json({
       output: stdout,
+      stderr: stderr,
       error: error ? error.message : undefined
     });
   });
