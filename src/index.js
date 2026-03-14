@@ -265,7 +265,7 @@ app.listen(port, () => {
     // 🛡️ Sentinel: Fix command injection vulnerability by using execFile instead of exec
     execFile('caddy', ['start', '--config', appPaths.caddyfile], (error, stdout, stderr) => {
       if (error) {
-        console.error('Failed to start Caddy on boot:', error.message);
+        console.error('Failed to start Caddy on boot:', error.message, stderr);
       } else {
         console.log('Caddy started successfully.');
       }
