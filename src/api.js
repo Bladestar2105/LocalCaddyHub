@@ -186,7 +186,33 @@ const deleteHeadersStmt = db.prepare('DELETE FROM headers');
 const insertHeaderStmt = db.prepare('INSERT INTO headers (id, headerUpDown, headerType, headerValue, headerReplace, description) VALUES (?, ?, ?, ?, ?, ?)');
 
 const deleteLayer4Stmt = db.prepare('DELETE FROM layer4');
-const insertLayer4Stmt = db.prepare('INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, invert_matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails, starttls, default_sni, customCert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const insertLayer4Stmt = db.prepare(`
+  INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, invert_matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails, starttls, default_sni, customCert)
+  SELECT
+    json_extract(value, '$.id'),
+    json_extract(value, '$.enabled'),
+    json_extract(value, '$.sequence'),
+    json_extract(value, '$.type'),
+    json_extract(value, '$.protocol'),
+    json_extract(value, '$.fromDomain'),
+    json_extract(value, '$.fromPort'),
+    json_extract(value, '$.matchers'),
+    json_extract(value, '$.invert_matchers'),
+    json_extract(value, '$.toDomain'),
+    json_extract(value, '$.toPort'),
+    json_extract(value, '$.terminateTls'),
+    json_extract(value, '$.proxyProtocol'),
+    json_extract(value, '$.description'),
+    json_extract(value, '$.originate_tls'),
+    json_extract(value, '$.remote_ip'),
+    json_extract(value, '$.lb_policy'),
+    json_extract(value, '$.passive_health_fail_duration'),
+    json_extract(value, '$.passive_health_max_fails'),
+    json_extract(value, '$.starttls'),
+    json_extract(value, '$.default_sni'),
+    json_extract(value, '$.customCert')
+  FROM json_each(?)
+`);
 
 router.post('/config/structured', express.json(), async (req, res) => {
   try {
@@ -254,10 +280,18 @@ router.post('/config/structured', express.json(), async (req, res) => {
 
       // Layer 4
       deleteLayer4Stmt.run();
-      if (config.layer4) {
-        for (const l of config.layer4) {
-          insertLayer4Stmt.run(l.id, l.enabled ? 1 : 0, l.sequence, l.type, l.protocol, JSON.stringify(l.fromDomain || []), l.fromPort, l.matchers, l.invert_matchers ? 1 : 0, JSON.stringify(l.toDomain || []), l.toPort, l.terminateTls ? 1 : 0, l.proxyProtocol, l.description, l.originate_tls, JSON.stringify(l.remote_ip || []), l.lb_policy, l.passive_health_fail_duration, l.passive_health_max_fails, l.starttls ? 1 : 0, l.default_sni, l.customCert);
-        }
+      if (config.layer4 && config.layer4.length > 0) {
+        const processed = config.layer4.map(l => ({
+          ...l,
+          enabled: l.enabled ? 1 : 0,
+          fromDomain: JSON.stringify(l.fromDomain || []),
+          invert_matchers: l.invert_matchers ? 1 : 0,
+          toDomain: JSON.stringify(l.toDomain || []),
+          terminateTls: l.terminateTls ? 1 : 0,
+          remote_ip: JSON.stringify(l.remote_ip || []),
+          starttls: l.starttls ? 1 : 0
+        }));
+        insertLayer4Stmt.run(JSON.stringify(processed));
       }
     });
 
