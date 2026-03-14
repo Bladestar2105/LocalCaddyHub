@@ -6,21 +6,10 @@ const path = require('path');
 const db = require('./db');
 const bcrypt = require('bcrypt');
 
-// Helper for timing-safe comparison to prevent timing attacks on fallback login
-function safeCompare(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-
-  // 🛡️ Sentinel: Use HMAC to ensure both buffers have the same length (32 bytes for SHA256)
-  // regardless of input length, preventing length-based timing attacks.
-  const key = crypto.randomBytes(32);
-  const hmacA = crypto.createHmac('sha256', key).update(a).digest();
-  const hmacB = crypto.createHmac('sha256', key).update(b).digest();
-
-  return crypto.timingSafeEqual(hmacA, hmacB);
-}
 const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
+const { safeCompare } = require('./utils');
 const apiRoutes = require('./api');
 const { execFile } = require('child_process');
 const appPaths = require('./paths');
