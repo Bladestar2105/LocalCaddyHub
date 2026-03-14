@@ -1,8 +1,8 @@
 const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
 const appPaths = require('./paths');
 
+// ⚡ Bolt: Use synchronous connection string retrieval and PRAGMA execution on startup
+// as these are blocking by design in better-sqlite3 and need to be ready before app runs
 const db = new Database(appPaths.db);
 
 db.pragma('journal_mode = WAL');
