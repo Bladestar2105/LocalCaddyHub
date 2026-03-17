@@ -652,7 +652,13 @@ const app = {
             app.config.basicAuths.forEach(ba => baSelects.append(new Option(ba.basicauthuser, ba.id)));
 
             const headerSelects = $('.header-select').empty();
-            app.config.headers.forEach(h => headerSelects.append(new Option(h.headerType + " (" + h.headerUpDown + ")", h.id)));
+            app.config.headers.forEach(h => {
+                let label = h.headerType;
+                if (h.headerValue) label += `: ${h.headerValue}`;
+                label += ` (${h.headerUpDown})`;
+                if (h.description) label += ` - ${h.description}`;
+                headerSelects.append(new Option(label, h.id));
+            });
 
             const certSelects = $('.cert-select').empty().append(new Option("Auto HTTPS / Internal", ""));
             (app.certs || []).filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
