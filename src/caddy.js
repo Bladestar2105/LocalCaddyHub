@@ -506,32 +506,6 @@ function generateCaddyfile(config, certsDir = './certs') {
             }
           }
 
-          // Handler Headers (pre-proxy setup)
-          if (handler.header) {
-            for (const hID of handler.header) {
-              const h = headersMap[hID];
-              if (h) {
-                const dir = h.headerUpDown || 'header_up';
-                if (directive !== 'reverse_proxy') {
-                  const action = h.headerValue ? 'set' : '-';
-                  if (dir === 'header_down') {
-                    if (action === '-') {
-                      sb += `\t\theader -${h.headerType}\n`;
-                    } else {
-                      sb += `\t\theader ${h.headerType} ${h.headerValue}\n`;
-                    }
-                  } else {
-                    if (action === '-') {
-                      sb += `\t\trequest_header -${h.headerType}\n`;
-                    } else {
-                      sb += `\t\trequest_header ${h.headerType} ${h.headerValue}\n`;
-                    }
-                  }
-                }
-              }
-            }
-          }
-
           // Upstreams
           if (directive === 'reverse_proxy') {
             sb += '\t\treverse_proxy';
