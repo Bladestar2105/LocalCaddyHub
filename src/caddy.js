@@ -514,10 +514,18 @@ function generateCaddyfile(config, certsDir = './certs') {
                 const dir = h.headerUpDown || 'header_up';
                 if (directive !== 'reverse_proxy') {
                   const action = h.headerValue ? 'set' : '-';
-                  if (action === '-') {
-                    sb += `\t\theader -${h.headerType}\n`;
+                  if (dir === 'header_down') {
+                    if (action === '-') {
+                      sb += `\t\theader -${h.headerType}\n`;
+                    } else {
+                      sb += `\t\theader ${h.headerType} ${h.headerValue}\n`;
+                    }
                   } else {
-                    sb += `\t\theader ${h.headerType} ${h.headerValue}\n`;
+                    if (action === '-') {
+                      sb += `\t\trequest_header -${h.headerType}\n`;
+                    } else {
+                      sb += `\t\trequest_header ${h.headerType} ${h.headerValue}\n`;
+                    }
                   }
                 }
               }
