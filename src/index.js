@@ -251,12 +251,20 @@ app.listen(port, () => {
   // Auto-start Caddy if a Caddyfile exists
   if (fs.existsSync(appPaths.caddyfile)) {
     console.log('Found Caddyfile, starting Caddy...');
-    // 🛡️ Sentinel: Fix command injection vulnerability by using execFile instead of exec
-    execFile('caddy', ['start', '--config', appPaths.caddyfile], (error, stdout, stderr) => {
-      if (error) {
-        console.error('Failed to start Caddy on boot:', error.message, stderr);
+    const { spawn } = require('child_process');
+    const cp = spawn('caddy', ['start', '--config', appPaths.caddyfile], {
+      detached: true,
+      stdio: 'ignore'
+    });
+    cp.unref();
+    cp.on('error', (err) => {
+      console.error('Failed to start Caddy on boot:', err.message);
+    });
+    cp.on('exit', (code) => {
+      if (code === 0 || code === null) {
+        console.log('Caddy started successfully on boot.');
       } else {
-        console.log('Caddy started successfully.');
+        console.error('Caddy exited with code', code);
       }
     });
   }

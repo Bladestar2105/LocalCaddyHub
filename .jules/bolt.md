@@ -45,3 +45,6 @@
 ## 2026-03-14 - Batch Insertion using json_each
 **Learning:** SQLite's `json_each` function allows for extremely efficient batch insertions in `better-sqlite3` by processing a single stringified JSON array. This eliminates the "JS-to-database bridge" overhead associated with looping individual `.run()` calls for each row.
 **Action:** When faced with an N+1 query issue for bulk data saving, prefer preparing a single `INSERT ... SELECT ... FROM json_each(?)` statement and passing the entire dataset as a single JSON string.
+## 2026-03-17 - Asynchronous Caddy execution via API
+**Learning:** `execFile` from `child_process` in Node.js can hang indefinitely if a background daemon (like `caddy start`) keeps stdout/stderr open. Furthermore, invoking a new Go binary introduces process-startup latency (~70-100ms).
+**Action:** When managing Caddy server states (`stop`, `reload`), prioritize direct interaction with its fast HTTP Admin API (`http://localhost:2019/load`) instead of spawning `caddy` CLI commands. To spawn the background daemon initially, use `spawn` with `detached: true` and `stdio: ignore`, then `unref()` it so Node doesn't wait for inherited file descriptors.
