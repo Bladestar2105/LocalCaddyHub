@@ -384,9 +384,90 @@ function execCaddy(cmdArgs, res) {
 }
 
 router.post('/validate', (req, res) => execCaddy(['validate', '--config', appPaths.caddyfile], res));
-router.post('/start', (req, res) => execCaddy(['start', '--config', appPaths.caddyfile], res));
-router.post('/stop', (req, res) => execCaddy(['stop'], res));
-router.post('/reload', (req, res) => execCaddy(['reload', '--config', appPaths.caddyfile], res));
+
+router.post('/start', async (req, res) => {
+  try {
+    // Check if it is already running
+    const checkRes = await fetch('http://localhost:2019/config/', { headers: { 'Origin': 'http://localhost:2019' } }).catch(() => null);
+    if (checkRes && checkRes.ok) {
+      return res.json({ output: 'Caddy is already running.', stderr: '', error: undefined });
+    }
+  } catch (e) {}
+
+  const cp = spawn('caddy', ['start', '--config', appPaths.caddyfile], {
+    detached: true,
+    stdio: 'ignore'
+  });
+
+  cp.unref();
+
+  cp.on('error', (err) => {
+    if (!res.headersSent) {
+      res.json({ output: '', stderr: '', error: err.message });
+    }
+  });
+
+  cp.on('exit', (code) => {
+    if (!res.headersSent) {
+      if (code === 0 || code === null) {
+        res.json({ output: 'Caddy started successfully.', stderr: '', error: undefined });
+      } else {
+        res.json({ output: '', stderr: '', error: `Caddy exited with code ${code}` });
+      }
+    }
+  });
+
+  // Fallback timeout in case Caddy successfully detaches but takes a while to exit the parent process
+  setTimeout(() => {
+    if (!res.headersSent) {
+      res.json({ output: 'Caddy start command executed.', stderr: '', error: undefined });
+    }
+  }, 1000);
+});
+
+router.post('/stop', async (req, res) => {
+  try {
+    const apiRes = await fetch('http://localhost:2019/stop', {
+      method: 'POST',
+      headers: { 'Origin': 'http://localhost:2019' }
+    });
+    if (apiRes.ok) {
+      return res.json({ output: 'Caddy stopped successfully.', stderr: '', error: undefined });
+    } else {
+      return res.json({ output: '', stderr: '', error: `Failed to stop: ${apiRes.statusText}` });
+    }
+  } catch (e) {
+    // If we cannot connect to API, fallback to CLI
+    execCaddy(['stop'], res);
+  }
+});
+
+router.post('/reload', async (req, res) => {
+  try {
+    let caddyfileContent = '';
+    if (fs.existsSync(appPaths.caddyfile)) {
+      caddyfileContent = await fs.promises.readFile(appPaths.caddyfile, 'utf-8');
+    }
+    const apiRes = await fetch('http://localhost:2019/load', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/caddyfile',
+        'Cache-Control': 'no-cache',
+        'Origin': 'http://localhost:2019'
+      },
+      body: caddyfileContent
+    });
+    if (apiRes.ok) {
+      return res.json({ output: 'Caddy reloaded successfully.', stderr: '', error: undefined });
+    } else {
+      const errText = await apiRes.text();
+      return res.json({ output: '', stderr: errText, error: `Failed to reload: ${apiRes.statusText}` });
+    }
+  } catch (e) {
+    // If we cannot connect to API, fallback to CLI
+    execCaddy(['reload', '--config', appPaths.caddyfile], res);
+  }
+});
 
 // Stats
 router.get('/stats', (req, res) => {
