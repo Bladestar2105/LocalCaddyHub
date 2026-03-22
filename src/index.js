@@ -1,6 +1,5 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
-const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
 const db = require('./db');
@@ -40,7 +39,6 @@ app.disable('x-powered-by'); // 🛡️ Sentinel: Prevent leaking Express versio
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors());
 
 // 🛡️ Sentinel: Add security headers
 app.use((req, res, next) => {
