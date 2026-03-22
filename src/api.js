@@ -445,8 +445,10 @@ router.post('/stop', async (req, res) => {
 router.post('/reload', async (req, res) => {
   try {
     let caddyfileContent = '';
-    if (fs.existsSync(appPaths.caddyfile)) {
+    try {
       caddyfileContent = await fs.promises.readFile(appPaths.caddyfile, 'utf-8');
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
     }
     const apiRes = await fetch('http://localhost:2019/load', {
       method: 'POST',
