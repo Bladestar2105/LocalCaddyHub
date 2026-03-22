@@ -27,7 +27,12 @@
 **Learning:** Always validate the type of query parameters before performing string-specific operations on them, as frameworks like Express can parse them into objects or arrays unexpectedly.
 **Prevention:** Ensure that `req.query` parameters used in string operations or file paths are strictly validated as strings (e.g., `if (typeof filename !== 'string') return ...`).
 
-## $(date +%Y-%m-%d) - Fix username enumeration timing attack in login endpoint
+## 2026-03-21 - Remove Overly Permissive CORS Policy
+**Vulnerability:** The application used `cors()` without options in `src/index.js`, which enabled Cross-Origin Resource Sharing (CORS) for all origins. This allowed any website to make cross-origin requests to the application's API.
+**Learning:** Enabling CORS by default or with overly permissive settings (`Access-Control-Allow-Origin: *`) in an application intended for same-origin use unnecessarily expands the attack surface. It could potentially lead to sensitive data exposure if other security controls (like CSRF protection or authentication) are bypassed or misconfigured.
+**Prevention:** Avoid using CORS in same-origin applications. If cross-origin access is required, restrict it to specific, trusted origins using the `origin` option in the `cors` middleware.
+
+## 2026-03-12 - Fix username enumeration timing attack in login endpoint
 **Vulnerability:** The login logic allowed an attacker to determine if a username was correct by measuring response times. When a username was incorrect, the expensive `bcrypt.compare` call was short-circuited, resulting in a much faster response compared to a correct username guess.
 **Learning:** Conditional execution of expensive cryptographic operations based on user input (like matching a username first) creates an observable timing side-channel that leaks valid system accounts.
 **Prevention:** Always perform the expensive cryptographic comparison (like `bcrypt.compare` or `safeCompare`) irrespective of the success or failure of previous validation checks (like matching a username). This ensures that login endpoint responses take a consistent amount of time for both valid and invalid usernames.
