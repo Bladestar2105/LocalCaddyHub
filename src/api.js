@@ -394,7 +394,7 @@ router.post('/start', async (req, res) => {
     }
   } catch (e) {}
 
-  const cp = spawn('caddy', ['start', '--config', appPaths.caddyfile], {
+  const cp = spawn('caddy', ['run', '--config', appPaths.caddyfile], {
     detached: true,
     stdio: 'ignore'
   });
@@ -422,15 +422,22 @@ router.post('/start', async (req, res) => {
     if (!res.headersSent) {
       res.json({ output: 'Caddy start command executed.', stderr: '', error: undefined });
     }
-  }, 1000);
+  }, 100);
 });
 
 router.post('/stop', async (req, res) => {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
     const apiRes = await fetch('http://localhost:2019/stop', {
       method: 'POST',
-      headers: { 'Origin': 'http://localhost:2019' }
+      headers: { 'Origin': 'http://localhost:2019' },
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
+
     if (apiRes.ok) {
       return res.json({ output: 'Caddy stopped successfully.', stderr: '', error: undefined });
     } else {
