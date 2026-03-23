@@ -533,6 +533,25 @@ const app = {
         }
     },
 
+    moveItem: function(type, id, direction) {
+        const arr = this.config[type];
+        if (!arr) return;
+        const index = arr.findIndex(i => i.id === id);
+        if (index === -1) return;
+
+        if (direction === 'up' && index > 0) {
+            const temp = arr[index - 1];
+            arr[index - 1] = arr[index];
+            arr[index] = temp;
+        } else if (direction === 'down' && index < arr.length - 1) {
+            const temp = arr[index + 1];
+            arr[index + 1] = arr[index];
+            arr[index] = temp;
+        }
+
+        this.ui.renderAll();
+    },
+
     ui: {
         renderAll: function() {
             // General
@@ -587,7 +606,7 @@ const app = {
 
             // Optimization: Batch DOM appends to prevent layout thrashing
             const rows = [];
-            items.forEach(item => {
+            items.forEach((item, index) => {
                 let tr = $('<tr>');
                 cols.forEach(col => {
                     let val = item[col];
@@ -608,6 +627,12 @@ const app = {
                 });
 
                 let actions = $('<td>').addClass('action-btns');
+                let upBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8593;').attr('title', 'Move Up').attr('aria-label', 'Move Up').click(() => app.moveItem(configKey, item.id, 'up'));
+                if (index === 0) upBtn.prop('disabled', true);
+
+                let downBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8595;').attr('title', 'Move Down').attr('aria-label', 'Move Down').click(() => app.moveItem(configKey, item.id, 'down'));
+                if (index === items.length - 1) downBtn.prop('disabled', true);
+
                 let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').attr('title', 'Edit').attr('aria-label', 'Edit').click(() => this.editItem(configKey, item.id));
 
                 let dupBtn = null;
@@ -618,9 +643,9 @@ const app = {
                 let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').attr('title', 'Delete').attr('aria-label', 'Delete').click(() => app.deleteItem(configKey, item.id));
 
                 if (dupBtn) {
-                    tr.append(actions.append(editBtn, dupBtn, delBtn));
+                    tr.append(actions.append(upBtn, downBtn, editBtn, dupBtn, delBtn));
                 } else {
-                    tr.append(actions.append(editBtn, delBtn));
+                    tr.append(actions.append(upBtn, downBtn, editBtn, delBtn));
                 }
 
                 rows.push(tr);
