@@ -1,11 +1,5 @@
 const path = require('path');
-
-function formatDuration(val) {
-  if (!val) return val;
-  const strVal = val.toString().trim();
-  if (/^\d+$/.test(strVal)) return strVal + 's';
-  return strVal;
-}
+const { formatDuration } = require('./utils');
 
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
