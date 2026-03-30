@@ -18,6 +18,20 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(hmacA, hmacB);
 }
 
+/**
+ * Formats a duration value for Caddy. If it's a number, appends 's'.
+ * @param {string|number} val
+ * @returns {string|number}
+ */
+function formatDuration(val) {
+  if (val === null || val === undefined || val === '' || val === false) return val;
+  const strVal = val.toString().trim();
+  if (strVal === '') return val;
+  if (/^\d+$/.test(strVal)) return strVal + 's';
+  return strVal;
+}
+
 module.exports = {
   safeCompare,
+  formatDuration,
 };
