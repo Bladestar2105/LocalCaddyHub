@@ -705,15 +705,17 @@ const app = {
             }
 
             const form = document.getElementById(modalId + 'Form');
-            if (form) form.reset();
+            if (!form) return;
+            const $form = $(form);
+            form.reset();
 
-            $(`#${modalId} input[type="checkbox"]`).prop('checked', false);
+            $form.find('input[type="checkbox"]').prop('checked', false);
 
             if (item) {
                 $(`#${modalId} .modal-title`).text('Edit Item');
                 // Auto-fill form
                 Object.keys(item).forEach(key => {
-                    const el = $(`#${modalId} [name="${key}"]`);
+                    const el = $(form.elements[key]);
                     if (el.length) {
                         if (el.attr('type') === 'checkbox') {
                             el.prop('checked', item[key]);
@@ -763,16 +765,18 @@ const app = {
 
         saveModal: function(modalId, configKey) {
             const form = document.getElementById(modalId + 'Form');
+            if (!form) return;
+            const $form = $(form);
             const data = new FormData(form);
             const obj = {};
 
             // Handle checkboxes manually as FormData doesn't include unchecked boxes
-            $(`#${modalId}Form input[type="checkbox"]`).each(function() {
-                obj[this.name] = $(this).is(':checked');
+            $form.find('input[type="checkbox"]').each(function() {
+                obj[this.name] = this.checked;
             });
 
             for (let [key, value] of data.entries()) {
-                 const el = $(`#${modalId}Form [name="${key}"]`);
+                 const el = $(form.elements[key]);
                  if (el.prop('multiple')) {
                       // FormData only gives the last or first item sometimes for multiple, better to re-query the DOM
                  } else if (el.hasClass('array-input')) {
@@ -788,7 +792,7 @@ const app = {
             }
 
             // Re-evaluating select[multiple] manually to guarantee array structure
-            $(`#${modalId}Form select[multiple]`).each(function() {
+            $form.find('select[multiple]').each(function() {
                  let val = $(this).val() || [];
                  if (this.name === 'http_version' || this.name === 'matchers') {
                      obj[this.name] = val.join(' ');
