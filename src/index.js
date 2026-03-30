@@ -10,7 +10,6 @@ const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const { safeCompare } = require('./utils');
 const apiRoutes = require('./api');
-const { execFile } = require('child_process');
 const appPaths = require('./paths');
 const fs = require('fs');
 
