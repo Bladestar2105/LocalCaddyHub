@@ -496,7 +496,14 @@ router.get('/stats', (req, res) => {
 });
 
 // Certs
+let cachedAppDataDir = null;
+
 router.get('/certs/acme/download', (req, res) => {
+  if (cachedAppDataDir) {
+    const certificatesDir = path.join(cachedAppDataDir, 'certificates');
+    return serveCertificates(certificatesDir, res);
+  }
+
   execFile('caddy', ['environ'], (error, stdout) => {
     if (error) {
       console.error('Failed to query Caddy environment:', error);
@@ -506,34 +513,39 @@ router.get('/certs/acme/download', (req, res) => {
     if (!match) {
       return res.status(500).send('Could not find Caddy AppDataDir');
     }
-    const appDataDir = match[1].trim();
-    const certificatesDir = path.join(appDataDir, 'certificates');
-
-    if (!fs.existsSync(certificatesDir)) {
-      return res.status(404).send('No Let\'s Encrypt certificates found.');
-    }
-
-    res.setHeader('Content-Type', 'application/gzip');
-    res.setHeader('Content-Disposition', 'attachment; filename="letsencrypt-certificates.tar.gz"');
-
-    const tarProcess = spawn('tar', ['-czf', '-', '-C', certificatesDir, '.']);
-
-    tarProcess.stdout.pipe(res);
-
-    tarProcess.stderr.on('data', (data) => {
-      console.error(`tar stderr: ${data}`);
-    });
-
-    tarProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`tar process exited with code ${code}`);
-        if (!res.headersSent) {
-          res.status(500).end();
-        }
-      }
-    });
+    cachedAppDataDir = match[1].trim();
+    const certificatesDir = path.join(cachedAppDataDir, 'certificates');
+    return serveCertificates(certificatesDir, res);
   });
 });
+
+function serveCertificates(certificatesDir, res) {
+  if (!fs.existsSync(certificatesDir)) {
+    return res.status(404).send('No Let\'s Encrypt certificates found.');
+  }
+
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', 'attachment; filename="letsencrypt-certificates.tar.gz"');
+
+  const tarProcess = spawn('tar', ['-czf', '-', '-C', certificatesDir, '.']);
+
+  tarProcess.stdout.pipe(res);
+
+  tarProcess.stderr.on('data', (data) => {
+    console.error(`tar stderr: ${data}`);
+  });
+
+  tarProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`tar process exited with code ${code}`);
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
+    }
+  });
+}
+
+
 
 router.get('/certs', async (req, res) => {
   try {
