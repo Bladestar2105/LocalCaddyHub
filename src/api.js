@@ -392,7 +392,9 @@ router.post('/start', async (req, res) => {
     if (checkRes && checkRes.ok) {
       return res.json({ output: 'Caddy is already running.', stderr: '', error: undefined });
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('Failed to check if Caddy is running:', e.message || e);
+  }
 
   const cp = spawn('caddy', ['run', '--config', appPaths.caddyfile], {
     detached: true,
