@@ -13,6 +13,11 @@ const apiRoutes = require('./api');
 const appPaths = require('./paths');
 const fs = require('fs');
 
+// 🛡️ Sentinel: Login rate limiting and eviction constants
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
+const LOGIN_EVICTION_TIME = 15 * 60 * 1000; // 15 minutes
+
 // Handle --help or -h flags for CI compatibility
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
   console.log('Usage: node src/index.js [options]');
@@ -53,21 +58,18 @@ const loginAttempts = new Map();
 // that fail fewer times than the lockout threshold and are never locked out.
 setInterval(() => {
   const now = Date.now();
-  const evictionTime = 15 * 60 * 1000; // 15 minutes
   for (const [ip, attempts] of loginAttempts.entries()) {
     if (attempts.lockedUntil && now >= attempts.lockedUntil) {
       loginAttempts.delete(ip);
-    } else if (attempts.lastAttempt && now - attempts.lastAttempt > evictionTime) {
+    } else if (attempts.lastAttempt && now - attempts.lastAttempt > LOGIN_EVICTION_TIME) {
       loginAttempts.delete(ip);
     }
   }
-}, 15 * 60 * 1000); // Run every 15 minutes
+}, LOGIN_EVICTION_TIME);
 
 function loginRateLimiter(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
-  const lockoutTime = 15 * 60 * 1000; // 15 minutes
-  const maxAttempts = 5;
 
   let attempts = loginAttempts.get(ip);
   if (attempts && attempts.lockedUntil) {
@@ -159,7 +161,7 @@ app.post('/login', loginRateLimiter, async (req, res) => {
   if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
     const { ip, attempts } = req.loginAttemptsInfo;
     let newCount = attempts ? attempts.count + 1 : 1;
-    let lockedUntil = newCount >= 5 ? Date.now() + 15 * 60 * 1000 : null; // 15 min lockout after 5 fails
+    let lockedUntil = newCount >= LOGIN_MAX_ATTEMPTS ? Date.now() + LOGIN_LOCKOUT_TIME : null;
     loginAttempts.set(ip, { count: newCount, lockedUntil, lastAttempt: Date.now() });
   }
 
