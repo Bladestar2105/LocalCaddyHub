@@ -440,7 +440,7 @@ router.get('/logs/files', async (req, res) => {
 router.get('/logs/stream', (req, res) => {
   const filename = req.query.file;
   if (typeof filename !== 'string') return res.status(400).send('Invalid filename');
-  if (!filename || filename.includes('..') || filename.includes('/') || !filename.endsWith('.log')) {
+  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.log')) {
     return res.status(400).send('Invalid filename');
   }
 
@@ -690,7 +690,7 @@ router.post('/certs', upload.single('file'), async (req, res) => {
 router.delete('/certs', async (req, res) => {
   const filename = req.query.file;
   if (typeof filename !== 'string') return res.status(400).send('Invalid filename');
-  if (!filename || filename.includes('..') || filename.includes('/')) {
+  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
     return res.status(400).send('Invalid filename');
   }
   const filePath = path.join(certDir, filename);
