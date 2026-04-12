@@ -245,11 +245,8 @@ app.use(express.static(path.join(__dirname, '..', 'static')));
 
 // Start server
 app.listen(port, () => {
-  console.log(`LocalCaddyHub running on port ${port}`);
-
   // Auto-start Caddy if a Caddyfile exists
   if (fs.existsSync(appPaths.caddyfile)) {
-    console.log('Found Caddyfile, starting Caddy...');
     const { spawn } = require('child_process');
     const cp = spawn('caddy', ['start', '--config', appPaths.caddyfile], {
       detached: true,
@@ -260,9 +257,7 @@ app.listen(port, () => {
       console.error('Failed to start Caddy on boot:', err.message);
     });
     cp.on('exit', (code) => {
-      if (code === 0 || code === null) {
-        console.log('Caddy started successfully on boot.');
-      } else {
+      if (code !== 0 && code !== null) {
         console.error('Caddy exited with code', code);
       }
     });
