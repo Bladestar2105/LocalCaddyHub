@@ -168,22 +168,22 @@ const SCHEMA_SQL = `
 `;
 
 // Initialize database schema
-function initDb() {
-  db.exec(SCHEMA_SQL);
-  initGeneralConfig();
-  runMigrations();
+function initDb(targetDb = db) {
+  targetDb.exec(SCHEMA_SQL);
+  initGeneralConfig(targetDb);
+  runMigrations(targetDb);
 }
 
-function initGeneralConfig() {
+function initGeneralConfig(targetDb = db) {
   // Initialize general_config if empty
-  const stmt = db.prepare('SELECT COUNT(*) AS count FROM general_config');
+  const stmt = targetDb.prepare('SELECT COUNT(*) AS count FROM general_config');
   const result = stmt.get();
   if (result.count === 0) {
-    db.prepare("INSERT INTO general_config (id, enabled, enable_layer4, http_port, https_port, log_level) VALUES (1, 0, 0, '80', '443', 'INFO')").run();
+    targetDb.prepare("INSERT INTO general_config (id, enabled, enable_layer4, http_port, https_port, log_level) VALUES (1, 0, 0, '80', '443', 'INFO')").run();
   }
 }
 
-function runMigrations() {
+function runMigrations(targetDb = db) {
   // Perform schema migrations for existing databases
   const migrations = [
     { table: 'general_config', column: 'tls_email', def: 'TEXT' },
@@ -235,11 +235,12 @@ function runMigrations() {
 
   for (const m of migrations) {
     try {
-      // Check if column exists, if not, this will throw or we can just catch the error
-      const info = db.pragma(`table_info(${m.table})`);
+      // Check if column exists. Use PRAGMA table_info directly via prepare().all()
+      // for better compatibility with different SQLite implementations (like node:sqlite)
+      const info = targetDb.prepare(`PRAGMA table_info(${m.table})`).all();
       const exists = info.some(col => col.name === m.column);
       if (!exists) {
-        db.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.def}`).run();
+        targetDb.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.def}`).run();
       }
     } catch (e) {
       console.warn(`Failed to migrate ${m.table}.${m.column}: ${e.message}`);
@@ -247,6 +248,13 @@ function runMigrations() {
   }
 }
 
+// Initialize database schema on startup
 initDb();
 
-module.exports = db;
+module.exports = {
+  db,
+  initDb,
+  initGeneralConfig,
+  runMigrations,
+  SCHEMA_SQL
+};

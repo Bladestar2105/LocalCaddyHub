@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
-const db = require('./db');
+const { db } = require('./db');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
 

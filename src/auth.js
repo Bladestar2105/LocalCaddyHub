@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const db = require('./db');
+const { db } = require('./db');
 
 // ⚡ Bolt: Pre-compile frequently used statements to eliminate parsing overhead on every request
 const getSessionStmt = db.prepare('SELECT expires_at FROM sessions WHERE token = ?');
