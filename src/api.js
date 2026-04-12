@@ -460,7 +460,8 @@ router.get('/logs/stream', (req, res) => {
   }
 
   // Use child_process tail to read the file
-  const tail = spawn('tail', ['-f', '-n', '100', filePath]);
+  // 🛡️ Sentinel: Use '--' to ensure filePath is not treated as an option if it starts with a hyphen.
+  const tail = spawn('tail', ['-f', '-n', '100', '--', filePath]);
 
   let buffer = '';
 
