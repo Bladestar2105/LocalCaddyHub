@@ -233,13 +233,27 @@ function runMigrations() {
     { table: 'layer4', column: 'customCert', def: 'TEXT' }
   ];
 
+  // ⚡ Optimization: Pre-fetch table schemas to avoid N+1 query in migrations
+  const uniqueTables = [...new Set(migrations.map(m => m.table))];
+  const schemaCache = new Map();
+
+  for (const table of uniqueTables) {
+    try {
+      const info = db.pragma(`table_info(${table})`);
+      schemaCache.set(table, new Set(info.map(col => col.name)));
+    } catch (e) {
+      console.warn(`Failed to fetch schema for ${table}: ${e.message}`);
+    }
+  }
+
   for (const m of migrations) {
     try {
-      // Check if column exists, if not, this will throw or we can just catch the error
-      const info = db.pragma(`table_info(${m.table})`);
-      const exists = info.some(col => col.name === m.column);
-      if (!exists) {
+      const tableSchema = schemaCache.get(m.table);
+      if (!tableSchema) continue;
+
+      if (!tableSchema.has(m.column)) {
         db.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.def}`).run();
+        tableSchema.add(m.column);
       }
     } catch (e) {
       console.warn(`Failed to migrate ${m.table}.${m.column}: ${e.message}`);
