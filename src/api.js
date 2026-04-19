@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
 const db = require('./db');
+const { parseJSON } = require('./utils');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
 
@@ -38,14 +39,6 @@ router.post('/config', express.json(), async (req, res) => {
     res.status(500).send('Failed to write Caddyfile');
   }
 });
-
-// Helper to safely parse JSON or return default
-function parseJSON(str, def = []) {
-  if (!str) return def;
-  if (str === '[]') return [];
-  if (str === '{}') return {};
-  try { return JSON.parse(str); } catch { return def; }
-}
 
 // ⚡ Bolt: Cache prepared SQL statements at module level to eliminate parsing overhead on every request
 const getGeneralStmt = db.prepare('SELECT * FROM general_config WHERE id = 1');
