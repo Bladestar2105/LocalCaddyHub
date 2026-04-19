@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { safeCompare, formatDuration } = require('../src/utils');
+const { safeCompare, formatDuration, parseJSON } = require('../src/utils');
 
 describe('formatDuration', () => {
   test('appends "s" to numeric values', () => {
@@ -66,5 +66,45 @@ describe('safeCompare', () => {
     assert.strictEqual(safeCompare({}, {}), false);
     assert.strictEqual(safeCompare([], []), false);
     assert.strictEqual(safeCompare(true, true), false);
+  });
+});
+
+describe('parseJSON', () => {
+  test('returns parsed object for valid JSON object string', () => {
+    const json = '{"a":1,"b":"test"}';
+    assert.deepStrictEqual(parseJSON(json), { a: 1, b: 'test' });
+  });
+
+  test('returns parsed array for valid JSON array string', () => {
+    const json = '[1, 2, "three"]';
+    assert.deepStrictEqual(parseJSON(json), [1, 2, 'three']);
+  });
+
+  test('returns empty array for "[]"', () => {
+    assert.deepStrictEqual(parseJSON('[]'), []);
+  });
+
+  test('returns empty object for "{}"', () => {
+    assert.deepStrictEqual(parseJSON('{}'), {});
+  });
+
+  test('returns default value for empty string', () => {
+    assert.deepStrictEqual(parseJSON(''), []);
+    assert.deepStrictEqual(parseJSON('', {}), {});
+  });
+
+  test('returns default value for null or undefined', () => {
+    assert.deepStrictEqual(parseJSON(null), []);
+    assert.deepStrictEqual(parseJSON(undefined, {}), {});
+  });
+
+  test('returns default value for invalid JSON string (error path)', () => {
+    assert.deepStrictEqual(parseJSON('invalid-json'), []);
+    assert.deepStrictEqual(parseJSON('{invalid}', { error: true }), { error: true });
+  });
+
+  test('handles default value as anything', () => {
+    assert.strictEqual(parseJSON('invalid', 'default'), 'default');
+    assert.strictEqual(parseJSON(null, 123), 123);
   });
 });

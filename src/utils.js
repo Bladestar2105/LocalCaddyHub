@@ -31,7 +31,21 @@ function formatDuration(val) {
   return strVal;
 }
 
+/**
+ * Helper to safely parse JSON or return default.
+ * @param {string} str
+ * @param {any} def
+ * @returns {any}
+ */
+function parseJSON(str, def = []) {
+  if (!str) return def;
+  if (str === '[]') return [];
+  if (str === '{}') return {};
+  try { return JSON.parse(str); } catch { return def; }
+}
+
 module.exports = {
   safeCompare,
   formatDuration,
+  parseJSON,
 };
