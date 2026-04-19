@@ -40,6 +40,40 @@ nodeModule.prototype.require = function(name) {
       generateCaddyfile: () => 'mock caddyfile'
     };
   }
+  if (name === 'express') {
+    const mockRouter = () => ({
+      get: () => {},
+      post: () => {},
+      delete: () => {},
+      use: () => {},
+      stack: []
+    });
+    const express = () => ({
+      use: () => {},
+      get: () => {},
+      post: () => {},
+      listen: () => {}
+    });
+    express.Router = () => {
+        const r = {
+            stack: [],
+            get: (path, ...handlers) => r.stack.push({ route: { path, methods: { get: true }, stack: handlers.map(h => ({ handle: h })) } }),
+            post: (path, ...handlers) => r.stack.push({ route: { path, methods: { post: true }, stack: handlers.map(h => ({ handle: h })) } }),
+            delete: (path, ...handlers) => r.stack.push({ route: { path, methods: { delete: true }, stack: handlers.map(h => ({ handle: h })) } }),
+            use: () => {}
+        };
+        return r;
+    };
+    express.json = () => (req, res, next) => next();
+    return express;
+  }
+  if (name === 'multer') {
+    return () => ({
+      single: () => (req, res, next) => next(),
+      array: () => (req, res, next) => next(),
+      fields: () => (req, res, next) => next()
+    });
+  }
   return originalRequire.apply(this, arguments);
 };
 

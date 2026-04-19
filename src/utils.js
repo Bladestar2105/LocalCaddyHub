@@ -31,7 +31,18 @@ function formatDuration(val) {
   return strVal;
 }
 
+/**
+ * Checks if a filename is safe from path traversal.
+ * @param {string} filename
+ * @returns {boolean}
+ */
+function isSafeFilename(filename) {
+  if (typeof filename !== 'string' || !filename) return false;
+  return !filename.includes('..') && !filename.includes('/') && !filename.includes('\\');
+}
+
 module.exports = {
   safeCompare,
   formatDuration,
+  isSafeFilename,
 };

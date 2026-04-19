@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { safeCompare, formatDuration } = require('../src/utils');
+const { safeCompare, formatDuration, isSafeFilename } = require('../src/utils');
 
 describe('formatDuration', () => {
   test('appends "s" to numeric values', () => {
@@ -37,6 +37,37 @@ describe('formatDuration', () => {
 
   test('handles large numbers', () => {
     assert.strictEqual(formatDuration(86400), '86400s');
+  });
+});
+
+describe('isSafeFilename', () => {
+  test('returns true for safe filenames', () => {
+    assert.strictEqual(isSafeFilename('test.log'), true);
+    assert.strictEqual(isSafeFilename('access.log'), true);
+    assert.strictEqual(isSafeFilename('my-cert.crt'), true);
+    assert.strictEqual(isSafeFilename('config_file'), true);
+  });
+
+  test('returns false for filenames with path traversal', () => {
+    assert.strictEqual(isSafeFilename('..'), false);
+    assert.strictEqual(isSafeFilename('../etc/passwd'), false);
+    assert.strictEqual(isSafeFilename('logs/../../etc/passwd'), false);
+    assert.strictEqual(isSafeFilename('..\\windows\\system32'), false);
+  });
+
+  test('returns false for filenames with slashes', () => {
+    assert.strictEqual(isSafeFilename('folder/file.txt'), false);
+    assert.strictEqual(isSafeFilename('folder\\file.txt'), false);
+    assert.strictEqual(isSafeFilename('/abs/path'), false);
+    assert.strictEqual(isSafeFilename('C:\\abs\\path'), false);
+  });
+
+  test('returns false for empty or non-string inputs', () => {
+    assert.strictEqual(isSafeFilename(''), false);
+    assert.strictEqual(isSafeFilename(null), false);
+    assert.strictEqual(isSafeFilename(undefined), false);
+    assert.strictEqual(isSafeFilename(123), false);
+    assert.strictEqual(isSafeFilename({}), false);
   });
 });
 

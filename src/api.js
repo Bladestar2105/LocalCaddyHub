@@ -5,6 +5,7 @@ const fs = require('fs');
 const { execFile, spawn } = require('child_process');
 const db = require('./db');
 const { generateCaddyfile } = require('./caddy');
+const { isSafeFilename } = require('./utils');
 const appPaths = require('./paths');
 
 const router = express.Router();
@@ -439,8 +440,7 @@ router.get('/logs/files', async (req, res) => {
 
 router.get('/logs/stream', (req, res) => {
   const filename = req.query.file;
-  if (typeof filename !== 'string') return res.status(400).send('Invalid filename');
-  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.log')) {
+  if (!isSafeFilename(filename) || !filename.endsWith('.log')) {
     return res.status(400).send('Invalid filename');
   }
 
@@ -690,8 +690,7 @@ router.post('/certs', upload.single('file'), async (req, res) => {
 
 router.delete('/certs', async (req, res) => {
   const filename = req.query.file;
-  if (typeof filename !== 'string') return res.status(400).send('Invalid filename');
-  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+  if (!isSafeFilename(filename)) {
     return res.status(400).send('Invalid filename');
   }
   const filePath = path.join(certDir, filename);
