@@ -430,7 +430,7 @@ router.get('/logs/files', async (req, res) => {
   }
 });
 
-router.get('/logs/stream', (req, res) => {
+router.get('/logs/stream', async (req, res) => {
   const filename = req.query.file;
   if (typeof filename !== 'string') return res.status(400).send('Invalid filename');
   if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.log')) {
@@ -446,7 +446,9 @@ router.get('/logs/stream', (req, res) => {
     'Connection': 'keep-alive'
   });
 
-  if (!fs.existsSync(filePath)) {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+  } catch (err) {
     res.write(`data: ${JSON.stringify({ error: 'Log file not found' })}\n\n`);
     res.end();
     return;
