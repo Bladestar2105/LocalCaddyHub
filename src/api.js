@@ -608,13 +608,13 @@ router.get('/stats', (req, res) => {
 // Certs
 let cachedAppDataDir = null;
 
-router.get('/certs/acme/download', (req, res) => {
+router.get('/certs/acme/download', async (req, res) => {
   if (cachedAppDataDir) {
     const certificatesDir = path.join(cachedAppDataDir, 'certificates');
-    return serveCertificates(certificatesDir, res);
+    return await serveCertificates(certificatesDir, res);
   }
 
-  execFile('caddy', ['environ'], (error, stdout) => {
+  execFile('caddy', ['environ'], async (error, stdout) => {
     if (error) {
       console.error('Failed to query Caddy environment:', error);
       return res.status(500).send('Failed to query Caddy environment');
@@ -625,12 +625,14 @@ router.get('/certs/acme/download', (req, res) => {
     }
     cachedAppDataDir = match[1].trim();
     const certificatesDir = path.join(cachedAppDataDir, 'certificates');
-    return serveCertificates(certificatesDir, res);
+    return await serveCertificates(certificatesDir, res);
   });
 });
 
-function serveCertificates(certificatesDir, res) {
-  if (!fs.existsSync(certificatesDir)) {
+async function serveCertificates(certificatesDir, res) {
+  try {
+    await fs.promises.access(certificatesDir, fs.constants.F_OK);
+  } catch (err) {
     return res.status(404).send('No Let\'s Encrypt certificates found.');
   }
 
