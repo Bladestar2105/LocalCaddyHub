@@ -9,14 +9,10 @@ const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const { safeCompare } = require('./utils');
+const { loginRateLimiter, recordFailedAttempt, clearAttempts } = require('./rateLimiter');
 const apiRoutes = require('./api');
 const appPaths = require('./paths');
 const fs = require('fs');
-
-// 🛡️ Sentinel: Login rate limiting and eviction constants
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
-const LOGIN_EVICTION_TIME = 15 * 60 * 1000; // 15 minutes
 
 // Handle --help or -h flags for CI compatibility
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
@@ -50,40 +46,6 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   next();
 });
-
-// 🛡️ Sentinel: Simple IP-based rate limiter for login attempts to prevent brute force
-const loginAttempts = new Map();
-
-// 🛡️ Sentinel: Active eviction strategy to prevent memory leaks from IP addresses
-// that fail fewer times than the lockout threshold and are never locked out.
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, attempts] of loginAttempts.entries()) {
-    if (attempts.lockedUntil && now >= attempts.lockedUntil) {
-      loginAttempts.delete(ip);
-    } else if (attempts.lastAttempt && now - attempts.lastAttempt > LOGIN_EVICTION_TIME) {
-      loginAttempts.delete(ip);
-    }
-  }
-}, LOGIN_EVICTION_TIME);
-
-function loginRateLimiter(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress;
-  const now = Date.now();
-
-  let attempts = loginAttempts.get(ip);
-  if (attempts && attempts.lockedUntil) {
-    if (now < attempts.lockedUntil) {
-      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
-    } else {
-      loginAttempts.delete(ip);
-      attempts = null;
-    }
-  }
-
-  req.loginAttemptsInfo = { ip, attempts };
-  next();
-}
 
 // Authentication Routes (unprotected)
 app.post('/login', loginRateLimiter, async (req, res) => {
@@ -152,17 +114,14 @@ app.post('/login', loginRateLimiter, async (req, res) => {
 
     // Clear failed attempts on successful login
     if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
-      loginAttempts.delete(req.loginAttemptsInfo.ip);
+      clearAttempts(req.loginAttemptsInfo.ip);
     }
     return res.json({ success: true, needsSetup });
   }
 
   // Record failed attempt
   if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
-    const { ip, attempts } = req.loginAttemptsInfo;
-    let newCount = attempts ? attempts.count + 1 : 1;
-    let lockedUntil = newCount >= LOGIN_MAX_ATTEMPTS ? Date.now() + LOGIN_LOCKOUT_TIME : null;
-    loginAttempts.set(ip, { count: newCount, lockedUntil, lastAttempt: Date.now() });
+    recordFailedAttempt(req.loginAttemptsInfo.ip);
   }
 
   res.status(401).json({ error: 'unauthorized' });
