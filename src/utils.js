@@ -44,8 +44,26 @@ function parseJSON(str, def = []) {
   try { return JSON.parse(str); } catch { return def; }
 }
 
+/**
+ * Validates if a filename is safe to use in filesystem operations.
+ * Rejects path traversal and dangerous characters.
+ * @param {string} filename
+ * @returns {boolean}
+ */
+function isSafeFilename(filename) {
+  if (typeof filename !== 'string' || !filename) return false;
+  // Basic path traversal protection
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) return false;
+  // Null byte protection
+  if (filename.includes('\0')) return false;
+  // Strict whitelist of allowed characters (alphanumeric, dot, underscore, hyphen)
+  // This prevents command injection and other shell-related attacks.
+  return /^[a-zA-Z0-9._-]+$/.test(filename);
+}
+
 module.exports = {
   safeCompare,
   formatDuration,
   parseJSON,
+  isSafeFilename,
 };
