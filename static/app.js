@@ -917,6 +917,9 @@ const app = {
             });
 
             const editId = $(`#${modalId}`).data('edit-id');
+            if (modalId === 'layer4Modal' && (!obj.matchers || obj.matchers === 'any') && Array.isArray(obj.fromDomain) && obj.fromDomain.length > 0 && !obj.starttls) {
+                obj.matchers = String(obj.fromPort || '') === '80' ? 'http' : 'tlssni';
+            }
             if (modalId === 'layer4Modal' && String(obj.originate_tls || '').startsWith('starttls')) {
                 obj.lb_policy = '';
                 obj.passive_health_fail_duration = '';

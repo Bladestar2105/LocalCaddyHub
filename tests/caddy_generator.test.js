@@ -259,4 +259,31 @@ describe('generateCaddyfile UI parity', () => {
     const httpBlock = blockFor(config, 'tcp/:80');
     assert.match(httpBlock, /@l4_http_route http host app\.example\.com/);
   });
+
+  test('infers host matcher when layer4 host values are present', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'imap_auto',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'any',
+        fromDomain: ['imap.example.com'],
+        toDomain: ['192.168.225.204'],
+        toPort: '993'
+      }, {
+        id: 'web_auto',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '80',
+        fromDomain: ['app.example.com'],
+        toDomain: ['127.0.0.1'],
+        toPort: '8080'
+      }]
+    });
+
+    assert.match(blockFor(config, 'tcp/:993'), /@l4_imap_auto tls sni imap\.example\.com/);
+    assert.match(blockFor(config, 'tcp/:80'), /@l4_web_auto http host app\.example\.com/);
+  });
 });
