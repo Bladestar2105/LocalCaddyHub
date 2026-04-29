@@ -309,6 +309,7 @@ describe('generateCaddyfile UI parity', () => {
         toDomain: ['10.0.0.1', '10.0.0.2'],
         toPort: '995',
         originate_tls: 'tls_insecure_skip_verify',
+        upstream_tls_server_name: 'imap.example.com',
         lb_policy: 'round_robin',
         proxyProtocol: 'v2'
       }]
@@ -318,9 +319,62 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(imapsBlock, /proxy \{/);
     assert.match(imapsBlock, /lb_policy round_robin/);
     assert.match(imapsBlock, /proxy_protocol v2/);
-    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.1:995 \{\n\t+\ttls\n\t+\ttls_insecure_skip_verify/);
-    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.2:995 \{\n\t+\ttls\n\t+\ttls_insecure_skip_verify/);
+    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.1:995 \{\n\t+\ttls\n\t+\ttls_server_name imap\.example\.com\n\t+\ttls_insecure_skip_verify/);
+    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.2:995 \{\n\t+\ttls\n\t+\ttls_server_name imap\.example\.com\n\t+\ttls_insecure_skip_verify/);
     assert.doesNotMatch(imapsBlock, /upstream tcp\/10\.0\.0\.1:995 tcp\/10\.0\.0\.2:995 \{/);
+  });
+
+  test('emits managed certificate site blocks for layer4 ACME domains', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true, tls_email: 'admin@example.com' },
+      layer4: [{
+        id: 'imap_acme',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'tlssni',
+        fromDomain: ['imap.example.com', 'imap2.example.com'],
+        toDomain: ['10.0.0.1'],
+        toPort: '993',
+        terminateTls: true,
+        acme: true,
+        customCert: 'ignored.pem',
+        originate_tls: 'tls',
+        upstream_tls_server_name: 'exchange.internal'
+      }]
+    }, '/certs');
+
+    const imapsBlock = blockFor(config, 'tcp/:993');
+    assert.match(imapsBlock, /@l4_imap_acme tls sni imap\.example\.com imap2\.example\.com/);
+    assert.match(imapsBlock, /\n\t+\ttls\n/);
+    assert.doesNotMatch(imapsBlock, /custom_tls/);
+    assert.match(imapsBlock, /tls_server_name exchange\.internal/);
+    assert.match(blockFor(config, 'imap.example.com'), /respond "OK" 200/);
+    assert.match(blockFor(config, 'imap2.example.com'), /respond "OK" 200/);
+  });
+
+  test('emits upstream server_name for layer4 starttls upstreams', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'smtp_starttls',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '587',
+        toDomain: ['10.0.0.1', '10.0.0.2'],
+        toPort: '587',
+        starttls: true,
+        customCert: 'smtp.pem',
+        originate_tls: 'starttls_insecure_skip_verify',
+        upstream_tls_server_name: 'smtp.example.com'
+      }]
+    }, '/certs');
+
+    const smtpBlock = blockFor(config, 'tcp/:587');
+    assert.match(smtpBlock, /upstream_starttls \{/);
+    assert.match(smtpBlock, /upstream tcp\/10\.0\.0\.1:587 tcp\/10\.0\.0\.2:587/);
+    assert.match(smtpBlock, /insecure_skip_verify/);
+    assert.match(smtpBlock, /server_name smtp\.example\.com/);
   });
 
   test('omits layer4 max_fails when set to zero', () => {

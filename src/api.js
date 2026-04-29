@@ -33,7 +33,8 @@ function normalizeAcmeConfig(input) {
     ...input,
     general: input.general || {},
     domains: (input.domains || []).map(d => ({ ...d })),
-    subdomains: (input.subdomains || []).map(s => ({ ...s }))
+    subdomains: (input.subdomains || []).map(s => ({ ...s })),
+    layer4: (input.layer4 || []).map(l => ({ ...l }))
   };
   const acmeDisabled = autoHttpsDisablesAcme(config.general);
   const domainsById = new Map();
@@ -49,6 +50,15 @@ function normalizeAcmeConfig(input) {
     const parent = domainsById.get(subdomain.reverse);
     if (acmeDisabled || (parent && parent.disableTls)) {
       subdomain.acme = false;
+    }
+  });
+
+  config.layer4.forEach(route => {
+    if (acmeDisabled || (!route.terminateTls && !route.starttls)) {
+      route.acme = false;
+    }
+    if (route.acme) {
+      route.customCert = '';
     }
   });
 
@@ -180,6 +190,7 @@ router.get('/config/structured', (req, res) => {
         invert_matchers: Boolean(l.invert_matchers),
         terminateTls: Boolean(l.terminateTls),
         starttls: Boolean(l.starttls),
+        acme: Boolean(l.acme),
         fromDomain: toStringArray(parseJSON(l.fromDomain)),
         toDomain: toStringArray(parseJSON(l.toDomain)),
         remote_ip: toStringArray(parseJSON(l.remote_ip))
@@ -328,7 +339,7 @@ const insertHeaderStmt = db.prepare(`
 
 const deleteLayer4Stmt = db.prepare('DELETE FROM layer4');
 const insertLayer4Stmt = db.prepare(`
-  INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, invert_matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails, starttls, default_sni, customCert)
+  INSERT INTO layer4 (id, enabled, sequence, type, protocol, fromDomain, fromPort, matchers, invert_matchers, toDomain, toPort, terminateTls, proxyProtocol, description, originate_tls, remote_ip, lb_policy, passive_health_fail_duration, passive_health_max_fails, starttls, default_sni, upstream_tls_server_name, acme, customCert)
   SELECT
     json_extract(value, '$.id'),
     json_extract(value, '$.enabled'),
@@ -351,6 +362,8 @@ const insertLayer4Stmt = db.prepare(`
     json_extract(value, '$.passive_health_max_fails'),
     json_extract(value, '$.starttls'),
     json_extract(value, '$.default_sni'),
+    json_extract(value, '$.upstream_tls_server_name'),
+    json_extract(value, '$.acme'),
     json_extract(value, '$.customCert')
   FROM json_each(?)
 `);
@@ -409,7 +422,8 @@ router.post('/config/structured', express.json(), async (req, res) => {
       toDomain: JSON.stringify(toStringArray(l.toDomain)),
       terminateTls: l.terminateTls ? 1 : 0,
       remote_ip: JSON.stringify(toStringArray(l.remote_ip)),
-      starttls: l.starttls ? 1 : 0
+      starttls: l.starttls ? 1 : 0,
+      acme: l.acme ? 1 : 0
     }));
 
     // ⚡ Bolt: Perform all database operations within a single transaction for atomicity and I/O efficiency.
