@@ -15,6 +15,10 @@
 <body>
 
 <div class="login-container">
+    <select id="languageSelect" class="form-select form-select-sm mb-3" aria-label="Language">
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+    </select>
     <h2 class="text-center mb-4">LocalCaddyHub</h2>
     <div id="errorMsg" class="error-msg text-center" role="alert" aria-live="assertive">Invalid username or password</div>
     <form id="loginForm">
@@ -34,7 +38,11 @@
     </form>
 </div>
 
+<script src="/i18n.js"></script>
 <script>
+    const i18n = window.LocalCaddyHubI18n;
+    i18n.init();
+
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
@@ -42,7 +50,7 @@
         const btn = document.getElementById('loginSubmitBtn');
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + i18n.t('Logging in...');
 
         try {
             const res = await fetch('/login', {
@@ -64,16 +72,16 @@
                 const data = await res.json();
                 if (data.error === 'invalid_totp') {
                     document.getElementById('totpGroup').style.display = 'block';
-                    document.getElementById('errorMsg').textContent = 'Invalid 2FA code.';
+                    document.getElementById('errorMsg').textContent = i18n.t('Invalid 2FA code.');
                     document.getElementById('errorMsg').style.display = 'block';
                 } else {
-                    document.getElementById('errorMsg').textContent = 'Invalid username or password';
+                    document.getElementById('errorMsg').textContent = i18n.t('Invalid username or password');
                     document.getElementById('errorMsg').style.display = 'block';
                 }
             }
         } catch (error) {
             console.error('Login error:', error);
-            document.getElementById('errorMsg').textContent = 'Error occurred during login.';
+            document.getElementById('errorMsg').textContent = i18n.t('Error occurred during login.');
             document.getElementById('errorMsg').style.display = 'block';
         } finally {
             btn.disabled = false;

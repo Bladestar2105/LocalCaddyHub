@@ -15,6 +15,10 @@
 <body>
 
 <div class="setup-container">
+    <select id="languageSelect" class="form-select form-select-sm mb-3" aria-label="Language">
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+    </select>
     <h2 class="text-center mb-4">First Time Setup</h2>
     <p class="text-muted text-center">Please change your admin credentials.</p>
     <div id="errorMsg" class="error-msg text-center" role="alert" aria-live="assertive">Passwords do not match.</div>
@@ -35,7 +39,11 @@
     </form>
 </div>
 
+<script src="/i18n.js"></script>
 <script>
+    const i18n = window.LocalCaddyHubI18n;
+    i18n.init();
+
     document.getElementById('setupForm').addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -51,7 +59,7 @@
 
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + i18n.t('Saving...');
 
         try {
             const res = await fetch('/api/setup', {
@@ -66,12 +74,12 @@
             if (res.ok) {
                 window.location.href = '/';
             } else {
-                document.getElementById('errorMsg').textContent = 'Failed to save.';
+                document.getElementById('errorMsg').textContent = i18n.t('Failed to save.');
                 document.getElementById('errorMsg').style.display = 'block';
             }
         } catch (error) {
             console.error('Setup error:', error);
-            document.getElementById('errorMsg').textContent = 'Error: ' + error.message;
+            document.getElementById('errorMsg').textContent = i18n.t('Error: ') + error.message;
             document.getElementById('errorMsg').style.display = 'block';
         } finally {
             btn.disabled = false;
