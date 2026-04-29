@@ -105,8 +105,13 @@ function generateCaddyfile(config, certsDir = './certs') {
       return matcher || 'any';
     }
 
+    function layer4MaxFails(l4) {
+      const maxFails = parseInt(l4.passive_health_max_fails, 10);
+      return Number.isFinite(maxFails) && maxFails > 0 ? maxFails : null;
+    }
+
     function hasLayer4ProxyOptions(l4) {
-      return Boolean(l4.lb_policy || l4.passive_health_fail_duration || l4.passive_health_max_fails || l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2');
+      return Boolean(l4.lb_policy || l4.passive_health_fail_duration || layer4MaxFails(l4) !== null || l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2');
     }
 
     function writeLayer4ProxyOptions(l4, indent) {
@@ -116,8 +121,9 @@ function generateCaddyfile(config, certsDir = './certs') {
       if (l4.passive_health_fail_duration) {
         sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
       }
-      if (l4.passive_health_max_fails) {
-        sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
+      const maxFails = layer4MaxFails(l4);
+      if (maxFails !== null) {
+        sb += `${indent}\tmax_fails ${maxFails}\n`;
       }
       if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
         sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
@@ -239,15 +245,18 @@ function generateCaddyfile(config, certsDir = './certs') {
           writeLayer4ProxyOptions(l4, indent);
           sb += `${indent}}\n`;
         } else {
-          sb += `${indent}proxy`;
-          for (const to of l4.toDomain) {
-            sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
-          }
           if (hasLayer4ProxyOptions(l4)) {
-            sb += ' {\n';
+            sb += `${indent}proxy {\n`;
+            for (const to of l4.toDomain) {
+              sb += `${indent}\tupstream ${l4._protocol}/${to}:${l4.toPort}\n`;
+            }
             writeLayer4ProxyOptions(l4, indent);
             sb += `${indent}}\n`;
           } else {
+            sb += `${indent}proxy`;
+            for (const to of l4.toDomain) {
+              sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
+            }
             sb += '\n';
           }
         }
