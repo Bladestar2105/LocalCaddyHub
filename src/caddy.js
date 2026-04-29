@@ -105,6 +105,25 @@ function generateCaddyfile(config, certsDir = './certs') {
       return matcher || 'any';
     }
 
+    function hasLayer4ProxyOptions(l4) {
+      return Boolean(l4.lb_policy || l4.passive_health_fail_duration || l4.passive_health_max_fails || l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2');
+    }
+
+    function writeLayer4ProxyOptions(l4, indent) {
+      if (l4.lb_policy) {
+        sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+      }
+      if (l4.passive_health_fail_duration) {
+        sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
+      }
+      if (l4.passive_health_max_fails) {
+        sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
+      }
+      if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
+        sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
+      }
+    }
+
     function layer4MatcherExpression(l4) {
       const values = layer4Values(l4.fromDomain);
       let matcher = layer4MatcherValue(l4.matchers);
@@ -217,40 +236,20 @@ function generateCaddyfile(config, certsDir = './certs') {
             sb += `${indent}\t\ttls_insecure_skip_verify\n`;
           }
           sb += `${indent}\t}\n`;
-
-          if (l4.lb_policy) {
-            sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
-          }
-          if (l4.passive_health_fail_duration) {
-            sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
-          }
-          if (l4.passive_health_max_fails) {
-            sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
-          }
-          if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
-            sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
-          }
+          writeLayer4ProxyOptions(l4, indent);
           sb += `${indent}}\n`;
         } else {
           sb += `${indent}proxy`;
           for (const to of l4.toDomain) {
             sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
           }
-          sb += ' {\n';
-
-          if (l4.lb_policy) {
-            sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+          if (hasLayer4ProxyOptions(l4)) {
+            sb += ' {\n';
+            writeLayer4ProxyOptions(l4, indent);
+            sb += `${indent}}\n`;
+          } else {
+            sb += '\n';
           }
-          if (l4.passive_health_fail_duration) {
-            sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
-          }
-          if (l4.passive_health_max_fails) {
-            sb += `${indent}\tmax_fails ${parseInt(l4.passive_health_max_fails, 10)}\n`;
-          }
-          if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
-            sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
-          }
-          sb += `${indent}}\n`;
         }
       }
 
