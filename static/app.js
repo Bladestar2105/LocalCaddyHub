@@ -90,6 +90,7 @@ const app = {
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
         this.config.general.auto_https = $('#genAutoHttps').val();
+        this.ui.normalizeAcmeSettings();
         let httpVer = $('#genHttpVersions').val();
         this.config.general.http_versions = Array.isArray(httpVer) ? httpVer.join(' ') : (httpVer || '');
         this.config.general.timeout_read_body = $('#genTOutReadBody').val();
@@ -553,6 +554,90 @@ const app = {
     },
 
     ui: {
+        acmeBlockedByAutoHttps: function() {
+            const autoHttps = $('#genAutoHttps').val() || app.config.general.auto_https || '';
+            return ['off', 'disable_certs'].includes(autoHttps);
+        },
+
+        normalizeAcmeSettings: function() {
+            const acmeBlocked = this.acmeBlockedByAutoHttps();
+            const domainsById = {};
+
+            (app.config.domains || []).forEach(domain => {
+                if (acmeBlocked || domain.disableTls) {
+                    domain.acme = false;
+                }
+                domainsById[domain.id] = domain;
+            });
+
+            (app.config.subdomains || []).forEach(subdomain => {
+                const parent = domainsById[subdomain.reverse];
+                if (acmeBlocked || (parent && parent.disableTls)) {
+                    subdomain.acme = false;
+                }
+            });
+        },
+
+        syncAcmeControls: function() {
+            this.syncDomainTlsControls();
+            this.syncSubdomainTlsControls();
+        },
+
+        syncDomainTlsControls: function() {
+            const $acme = $('#d_acme');
+            if (!$acme.length) return;
+
+            const acmeBlocked = this.acmeBlockedByAutoHttps();
+            const httpOnly = $('#d_dtls').is(':checked');
+            const acmeUnavailable = acmeBlocked || httpOnly;
+
+            $acme.prop('disabled', acmeUnavailable);
+            if (acmeUnavailable) {
+                $acme.prop('checked', false);
+            }
+
+            $('#d_cc').prop('disabled', httpOnly || $acme.is(':checked'));
+
+            let note = 'Uses Caddy Automatic HTTPS with a public ACME issuer such as Let\'s Encrypt or ZeroSSL. Overrides custom certificate when enabled.';
+            if (acmeBlocked) {
+                note = 'Unavailable because global Auto HTTPS is set to Off or Disable Certs.';
+            } else if (httpOnly) {
+                note = 'Unavailable for HTTP-only domains.';
+            }
+            $('#d_acme_note')
+                .text(note)
+                .toggleClass('text-warning', acmeUnavailable)
+                .toggleClass('text-muted', !acmeUnavailable);
+        },
+
+        syncSubdomainTlsControls: function() {
+            const $acme = $('#sd_acme');
+            if (!$acme.length) return;
+
+            const acmeBlocked = this.acmeBlockedByAutoHttps();
+            const parent = (app.config.domains || []).find(domain => domain.id === $('#sd_rev').val());
+            const parentHttpOnly = Boolean(parent && parent.disableTls);
+            const acmeUnavailable = acmeBlocked || parentHttpOnly;
+
+            $acme.prop('disabled', acmeUnavailable);
+            if (acmeUnavailable) {
+                $acme.prop('checked', false);
+            }
+
+            let note = 'Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.';
+            if (acmeBlocked) {
+                note = 'Unavailable because global Auto HTTPS is set to Off or Disable Certs.';
+            } else if (parentHttpOnly) {
+                note = 'Unavailable because the parent domain is HTTP-only.';
+            } else if (parent && parent.acme) {
+                note = 'Parent domain ACME is enabled, so this subdomain already uses a Caddy-managed public certificate.';
+            }
+            $('#sd_acme_note')
+                .text(note)
+                .toggleClass('text-warning', acmeUnavailable)
+                .toggleClass('text-muted', !acmeUnavailable);
+        },
+
         renderAll: function() {
             // General
             $('#genEnabled').prop('checked', app.config.general.enabled);
@@ -581,6 +666,7 @@ const app = {
             this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'protocol', 'fromPort', 'toDomain', 'description']);
 
             this.populateSelects();
+            this.syncAcmeControls();
         },
 
         renderTable: function(configKey, tableId, cols) {
@@ -689,7 +775,7 @@ const app = {
                 headerSelects.append(new Option(label, h.id));
             });
 
-            const certSelects = $('.cert-select').empty().append(new Option("Auto HTTPS / Internal", ""));
+            const certSelects = $('.cert-select').empty().append(new Option("Caddy-managed / Internal", ""));
             (app.certs || []).filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
 
             // Handlers and Subdomains need Domain selects
@@ -753,6 +839,10 @@ const app = {
                 $('#h_hd').trigger('change');
             } else if (modalId === 'layer4Modal') {
                 this.toggleLayer4UpstreamOptions();
+            } else if (modalId === 'domainModal') {
+                this.syncDomainTlsControls();
+            } else if (modalId === 'subdomainModal') {
+                this.syncSubdomainTlsControls();
             }
         },
 
@@ -820,6 +910,20 @@ const app = {
                 obj.passive_health_max_fails = 0;
                 obj.proxyProtocol = '';
             }
+            if (modalId === 'domainModal') {
+                if (this.acmeBlockedByAutoHttps() || obj.disableTls) {
+                    obj.acme = false;
+                }
+                if (obj.acme || obj.disableTls) {
+                    obj.customCert = '';
+                }
+            }
+            if (modalId === 'subdomainModal') {
+                const parent = (app.config.domains || []).find(domain => domain.id === obj.reverse);
+                if (this.acmeBlockedByAutoHttps() || (parent && parent.disableTls)) {
+                    obj.acme = false;
+                }
+            }
             if (editId) {
                 const idx = app.config[configKey].findIndex(i => i.id === editId);
                 obj.id = editId;
@@ -829,6 +933,7 @@ const app = {
                 app.config[configKey].push(obj);
             }
 
+            this.normalizeAcmeSettings();
             bootstrap.Modal.getInstance(document.getElementById(modalId)).hide();
             this.renderAll();
         },
@@ -855,7 +960,7 @@ const app = {
                         <div class="mb-2"><label for="d_desc">Description</label><input type="text" id="d_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="accessLog" id="d_al"> <label for="d_al">Enable Access Log</label></div>
                         <div class="mb-2"><input type="checkbox" name="disableTls" id="d_dtls"> <label for="d_dtls">Disable TLS (HTTP only)</label></div>
-                        <div class="mb-2"><input type="checkbox" name="acme" id="d_acme"> <label for="d_acme">Enable Let's Encrypt / ZeroSSL (Auto HTTPS)</label> <small class="text-muted d-block">Check this to automatically obtain a certificate. Overrides Custom Certificate if checked.</small></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="d_acme"> <label for="d_acme">Use Caddy-managed public ACME certificate</label> <small id="d_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS with a public ACME issuer such as Let's Encrypt or ZeroSSL. Overrides custom certificate when enabled.</small></div>
                         <div class="mb-2"><label for="d_cc">Custom Certificate</label><select id="d_cc" name="customCert" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="d_cam">Client Auth Mode</label><select id="d_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="d_catp">Client Auth Trust Pool (CA Cert)</label><select id="d_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
@@ -875,7 +980,7 @@ const app = {
                         <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
                         <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
                         <div class="mb-2"><label for="sd_desc">Description</label><input type="text" id="sd_desc" name="description" class="form-control"></div>
-                        <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Enable Let's Encrypt / ZeroSSL (Auto HTTPS)</label> <small class="text-muted d-block">Overrides base Domain TLS settings for this subdomain.</small></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Use Caddy-managed public ACME certificate</label> <small id="sd_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.</small></div>
                         <div class="mb-2"><label for="sd_cam">Client Auth Mode</label><select id="sd_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="sd_catp">Client Auth Trust Pool (CA Cert)</label><select id="sd_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="sd_ac">Access Lists</label><select id="sd_ac" name="accesslist" class="form-select al-select" multiple></select></div>
@@ -1068,6 +1173,9 @@ const app = {
                 </div>
             `;
             $('#modalsContainer').html(modalHTML);
+            $('#genAutoHttps').on('change', () => app.ui.syncAcmeControls());
+            $('#d_dtls, #d_acme').on('change', () => app.ui.syncDomainTlsControls());
+            $('#sd_rev, #sd_acme').on('change', () => app.ui.syncSubdomainTlsControls());
             $('#l4_otls').on('change', () => app.ui.toggleLayer4UpstreamOptions());
         }
     }

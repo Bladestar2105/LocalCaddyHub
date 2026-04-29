@@ -23,6 +23,37 @@ function toStringArray(value) {
   return [];
 }
 
+function autoHttpsDisablesAcme(general = {}) {
+  return ['off', 'disable_certs'].includes(general.auto_https || '');
+}
+
+function normalizeAcmeConfig(input) {
+  const config = {
+    ...input,
+    general: input.general || {},
+    domains: (input.domains || []).map(d => ({ ...d })),
+    subdomains: (input.subdomains || []).map(s => ({ ...s }))
+  };
+  const acmeDisabled = autoHttpsDisablesAcme(config.general);
+  const domainsById = new Map();
+
+  config.domains.forEach(domain => {
+    if (acmeDisabled || domain.disableTls) {
+      domain.acme = false;
+    }
+    domainsById.set(domain.id, domain);
+  });
+
+  config.subdomains.forEach(subdomain => {
+    const parent = domainsById.get(subdomain.reverse);
+    if (acmeDisabled || (parent && parent.disableTls)) {
+      subdomain.acme = false;
+    }
+  });
+
+  return config;
+}
+
 // /api/config
 router.get('/config', async (req, res) => {
   try {
@@ -325,7 +356,7 @@ const insertLayer4Stmt = db.prepare(`
 
 router.post('/config/structured', express.json(), async (req, res) => {
   try {
-    const config = req.body;
+    const config = normalizeAcmeConfig(req.body || {});
 
     // ⚡ Bolt: Pre-process data outside transaction to minimize write-lock duration.
     const processedDomains = (config.domains || []).map(d => ({
@@ -642,11 +673,11 @@ async function serveCertificates(certificatesDir, res) {
   try {
     await fs.promises.access(certificatesDir, fs.constants.F_OK);
   } catch (err) {
-    return res.status(404).send('No Let\'s Encrypt certificates found.');
+    return res.status(404).send('No Caddy-managed ACME certificates found.');
   }
 
   res.setHeader('Content-Type', 'application/gzip');
-  res.setHeader('Content-Disposition', 'attachment; filename="letsencrypt-certificates.tar.gz"');
+  res.setHeader('Content-Disposition', 'attachment; filename="caddy-acme-certificates.tar.gz"');
 
   const tarProcess = spawn('tar', ['-czf', '-', '-C', certificatesDir, '.']);
 

@@ -108,7 +108,7 @@
                     <input type="email" class="form-control" id="genTlsEmail" placeholder="admin@example.com">
                 </div>
                 <div class="mb-3">
-                    <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures automatic HTTPS settings.</i></label>
+                    <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures Caddy Automatic HTTPS. Off and Disable Certs prevent public ACME certificate issuance.</i></label>
                     <select class="form-select" id="genAutoHttps">
                         <option value="">On (Default)</option>
                         <option value="off">Off</option>
@@ -269,8 +269,8 @@
             </div>
             <div id="certUploadStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
 
-            <h4 class="mt-4">Let's Encrypt Certificates</h4>
-            <p>Download all Let's Encrypt certificates managed automatically by Caddy.</p>
+            <h4 class="mt-4">Caddy-managed ACME Certificates</h4>
+            <p>Download Caddy-managed ACME certificate storage, including private keys. Handle this archive securely.</p>
             <a href="/api/certs/acme/download" class="btn btn-secondary mt-2 mb-4">Download .tar.gz</a>
 
             <h5>Available Files in ./certs/</h5>
