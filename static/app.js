@@ -673,7 +673,7 @@ const app = {
             this.renderTable('accessLists', 'accessListsTable', ['accesslistName', 'clientIps', 'invert', 'description']);
             this.renderTable('basicAuths', 'basicAuthsTable', ['basicauthuser', 'description']);
             this.renderTable('headers', 'headersTable', ['headerUpDown', 'headerType', 'headerValue', 'headerReplace', 'description']);
-            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'protocol', 'fromPort', 'toDomain', 'description']);
+            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'protocol', 'fromPort', 'matchers', 'fromDomain', 'toDomain', 'description']);
 
             this.populateSelects();
             this.syncAcmeControls();
@@ -1157,8 +1157,8 @@ const app = {
                         <div class="mb-3"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
 
                         <h6 class="mt-3 border-bottom pb-2">Layer 7</h6>
-                        <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select"><option value="any" selected>ANY</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
-                        <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
+                        <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select"><option value="any" selected>ANY</option><option value="http">HTTP Host</option><option value="tlssni">TLS SNI</option></select></div>
+                        <div class="mb-2"><label for="l4_fd">Matcher Values (SNI/Host/IPs, comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
                         <div class="mb-3"><input type="checkbox" name="invert_matchers" id="l4_inv_match"> <label for="l4_inv_match">Invert matcher</label></div>
 
                         <h6 class="mt-3 border-bottom pb-2">Upstream</h6>

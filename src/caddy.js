@@ -60,6 +60,7 @@ function generateCaddyfile(config, certsDir = './certs') {
     sb += '\tlayer4 {\n';
     const layer4Routes = config.layer4
       .map((route, index) => ({ route, index }))
+      .filter(item => item.route.enabled)
       .sort((a, b) => {
         const aSeq = Number.parseFloat(a.route.sequence);
         const bSeq = Number.parseFloat(b.route.sequence);
@@ -70,31 +71,51 @@ function generateCaddyfile(config, certsDir = './certs') {
         if (bHasSeq) return 1;
         return a.index - b.index;
       })
-      .map(item => item.route);
+      .map(item => ({
+        ...item.route,
+        _index: item.index,
+        _protocol: item.route.protocol || 'tcp',
+        _listenPort: item.route.fromPort || '443'
+      }));
 
-    for (const l4 of layer4Routes) {
-      if (!l4.enabled) continue;
+    const listeners = new Map();
+    for (const route of layer4Routes) {
+      const key = `${route._protocol}/:${route._listenPort}`;
+      if (!listeners.has(key)) listeners.set(key, []);
+      listeners.get(key).push(route);
+    }
 
-      let listenPort = l4.fromPort;
-      if (!listenPort) listenPort = '443';
+    function layer4MatcherExpression(l4) {
+      const matcher = l4.matchers || 'any';
+      if (matcher === 'any') return '';
+      const values = Array.isArray(l4.fromDomain) ? l4.fromDomain.filter(Boolean) : [];
 
-      let protocol = l4.protocol || 'tcp';
+      if (matcher === 'tlssni' || matcher === 'tls_sni') {
+        return values.length ? `tls sni ${values.join(' ')}` : 'tls';
+      }
+      if (matcher === 'http') {
+        return values.length ? `http host ${values.join(' ')}` : 'http';
+      }
 
-      sb += `\t\t${protocol}/:${listenPort} {\n`;
+      return [matcher, ...values].join(' ');
+    }
 
-      let hasMatcher = l4.matchers && l4.matchers !== 'any';
+    function layer4MatcherName(l4) {
+      const raw = String(l4.id || `route_${l4._index}`);
+      return `@l4_${raw.replace(/[^A-Za-z0-9_]/g, '_')}`;
+    }
+
+    function writeLayer4Route(l4) {
+      const matcherExpr = layer4MatcherExpression(l4);
+      const hasMatcher = Boolean(matcherExpr);
       let matcherName = '';
       if (hasMatcher) {
-        matcherName = `@${l4.id}`;
+        matcherName = layer4MatcherName(l4);
         sb += `\t\t\t${matcherName}`;
         if (l4.invert_matchers) {
           sb += ` not`;
         }
-        sb += ` ${l4.matchers}`;
-        if (l4.fromDomain && l4.fromDomain.length > 0) {
-          sb += ' ' + l4.fromDomain.join(' ');
-        }
-        sb += `\n\n`;
+        sb += ` ${matcherExpr}\n\n`;
 
         sb += `\t\t\troute ${matcherName} {\n`;
         sb += `\t\t\t\tsubroute {\n`;
@@ -111,9 +132,7 @@ function generateCaddyfile(config, certsDir = './certs') {
         indent += '\t';
       }
 
-      // Handlers are executed in order but defined here. In caddy layer4,
-      // order matters depending on matcher, but in a simple route the handlers
-      // run in the order they are defined.
+      // Handlers run in definition order inside the selected layer4 route.
       if (l4.starttls) {
         sb += `${indent}starttls\n`;
       }
@@ -157,7 +176,7 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `${indent}upstream_starttls {\n`;
           sb += `${indent}\tupstream`;
           for (const to of l4.toDomain) {
-            sb += ` ${protocol}/${to}:${l4.toPort}`;
+            sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
           }
           sb += `\n`;
           if (l4.originate_tls === 'starttls_insecure_skip_verify') {
@@ -169,7 +188,7 @@ function generateCaddyfile(config, certsDir = './certs') {
           sb += `${indent}proxy {\n`;
           sb += `${indent}\tupstream`;
           for (const to of l4.toDomain) {
-            sb += ` ${protocol}/${to}:${l4.toPort}`;
+            sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
           }
           sb += ' {\n';
           sb += `${indent}\t\ttls\n`;
@@ -194,7 +213,7 @@ function generateCaddyfile(config, certsDir = './certs') {
         } else {
           sb += `${indent}proxy`;
           for (const to of l4.toDomain) {
-            sb += ` ${protocol}/${to}:${l4.toPort}`;
+            sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
           }
           sb += ' {\n';
 
@@ -214,7 +233,6 @@ function generateCaddyfile(config, certsDir = './certs') {
         }
       }
 
-
       if (hasRemoteIp) {
         // close route @allowed_ips
         indent = indent.slice(0, -1);
@@ -227,7 +245,13 @@ function generateCaddyfile(config, certsDir = './certs') {
       } else {
         sb += `\t\t\t}\n`;
       }
+    }
 
+    for (const [listener, routes] of listeners.entries()) {
+      sb += `\t\t${listener} {\n`;
+      for (const route of routes) {
+        writeLayer4Route(route);
+      }
       sb += '\t\t}\n';
     }
     sb += '\t}\n';
