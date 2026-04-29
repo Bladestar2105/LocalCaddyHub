@@ -577,8 +577,8 @@ const app = {
             this.renderTable('handlers', 'handlersTable', ['enabled', 'reverse', 'handlePath', 'toDomain', 'description']);
             this.renderTable('accessLists', 'accessListsTable', ['accesslistName', 'clientIps', 'invert', 'description']);
             this.renderTable('basicAuths', 'basicAuthsTable', ['basicauthuser', 'description']);
-            this.renderTable('headers', 'headersTable', ['headerUpDown', 'headerType', 'headerValue', 'description']);
-            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'type', 'protocol', 'fromPort', 'toDomain', 'description']);
+            this.renderTable('headers', 'headersTable', ['headerUpDown', 'headerType', 'headerValue', 'headerReplace', 'description']);
+            this.renderTable('layer4', 'layer4Table', ['enabled', 'sequence', 'protocol', 'fromPort', 'toDomain', 'description']);
 
             this.populateSelects();
         },
@@ -679,7 +679,11 @@ const app = {
             const headerSelects = $('.header-select').empty();
             app.config.headers.forEach(h => {
                 let label = h.headerType;
-                if (h.headerValue) label += `: ${h.headerValue}`;
+                if (h.headerValue && h.headerReplace) {
+                    label += `: ${h.headerValue} -> ${h.headerReplace}`;
+                } else if (h.headerValue) {
+                    label += `: ${h.headerValue}`;
+                }
                 label += ` (${h.headerUpDown})`;
                 if (h.description) label += ` - ${h.description}`;
                 headerSelects.append(new Option(label, h.id));
@@ -720,7 +724,10 @@ const app = {
                         if (el.attr('type') === 'checkbox') {
                             el.prop('checked', item[key]);
                         } else if (el.prop('multiple')) {
-                            if ((key === 'http_version' || key === 'matchers') && typeof item[key] === 'string') {
+                            if (key === 'http_version' && typeof item[key] === 'string') {
+                                const versionMap = { h1: '1.1', h2: '2', h3: '3', h2c: 'h2c' };
+                                el.val(item[key].split(' ').filter(v => v).map(v => versionMap[v] || v));
+                            } else if (key === 'matchers' && typeof item[key] === 'string') {
                                 el.val(item[key].split(' ').filter(v => v));
                             } else {
                                 el.val(item[key]);
@@ -744,6 +751,8 @@ const app = {
             // Trigger change events to update dynamic UI fields
             if (modalId === 'handlerModal') {
                 $('#h_hd').trigger('change');
+            } else if (modalId === 'layer4Modal') {
+                this.toggleLayer4UpstreamOptions();
             }
         },
 
@@ -805,6 +814,12 @@ const app = {
             });
 
             const editId = $(`#${modalId}`).data('edit-id');
+            if (modalId === 'layer4Modal' && String(obj.originate_tls || '').startsWith('starttls')) {
+                obj.lb_policy = '';
+                obj.passive_health_fail_duration = '';
+                obj.passive_health_max_fails = 0;
+                obj.proxyProtocol = '';
+            }
             if (editId) {
                 const idx = app.config[configKey].findIndex(i => i.id === editId);
                 obj.id = editId;
@@ -816,6 +831,15 @@ const app = {
 
             bootstrap.Modal.getInstance(document.getElementById(modalId)).hide();
             this.renderAll();
+        },
+
+        toggleLayer4UpstreamOptions: function() {
+            const isStarttls = String($('#l4_otls').val() || '').startsWith('starttls');
+            $('#l4_lb, #l4_hfd, #l4_hmf, #l4_pp').prop('disabled', isStarttls);
+            if (isStarttls) {
+                $('#l4_lb, #l4_pp').val('');
+                $('#l4_hfd, #l4_hmf').val('');
+            }
         },
 
         initModals: function() {
@@ -903,11 +927,12 @@ const app = {
                             <div class="tab-pane fade" id="h-upstream" role="tabpanel">
                                 <div class="mb-2 directive-rp"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
                                 <div class="mb-2"><label for="h_tp">Upstream Port</label><input type="text" id="h_tp" name="toPort" class="form-control"></div>
+                                <div class="mb-2 directive-rp"><label for="h_tpath">Upstream Rewrite Path</label><input type="text" id="h_tpath" name="to_path" class="form-control" placeholder="/new-path"></div>
                                 <div class="mb-2"><input type="checkbox" name="httpTls" id="h_tls"> <label for="h_tls">Upstream TLS (HTTPS)</label></div>
                                 <div class="mb-2"><input type="checkbox" name="http_tls_insecure_skip_verify" id="h_tls_skip"> <label for="h_tls_skip">Insecure Skip TLS Verify</label></div>
                                 <div class="mb-2"><label for="h_tls_sni">Upstream TLS Server Name (SNI)</label><input type="text" id="h_tls_sni" name="http_tls_server_name" class="form-control"></div>
                                 <div class="mb-2"><label for="h_tls_ca">Upstream TLS Trusted CA Cert</label><select id="h_tls_ca" name="http_tls_trusted_ca_certs" class="form-select cert-select"></select></div>
-                                <div class="mb-2"><label for="h_hver">HTTP Versions</label><select id="h_hver" name="http_version" class="form-select" multiple><option value="h1">h1</option><option value="h2">h2</option><option value="h3">h3</option><option value="h2c">h2c</option></select></div>
+                                <div class="mb-2"><label for="h_hver">HTTP Versions</label><select id="h_hver" name="http_version" class="form-select" multiple><option value="1.1">HTTP/1.1</option><option value="2">HTTP/2</option><option value="3">HTTP/3</option><option value="h2c">h2c</option></select></div>
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
                                 <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
@@ -945,6 +970,7 @@ const app = {
                             <!-- Access & Headers Tab -->
                             <div class="tab-pane fade" id="h-access" role="tabpanel">
                                 <div class="mb-2"><label for="h_al">Access Lists</label><select id="h_al" name="accesslist" class="form-select al-select" multiple></select></div>
+                                <div class="mb-2"><label for="h_ba">Basic Auth</label><select id="h_ba" name="basicauth" class="form-select ba-select" multiple></select></div>
                                 <div class="mb-2"><label for="h_head">Headers</label><select id="h_head" name="header" class="form-select header-select" multiple></select></div>
                             </div>
                         </div>
@@ -991,7 +1017,8 @@ const app = {
                     <div class="modal-body"><form id="headerModalForm">
                         <div class="mb-2"><label for="hd_dir">Direction</label><select id="hd_dir" name="headerUpDown" class="form-select"><option value="header_up">Request (Up)</option><option value="header_down">Response (Down)</option></select></div>
                         <div class="mb-2"><label for="hd_name">Header Name</label><input type="text" id="hd_name" name="headerType" class="form-control" required placeholder="X-Forwarded-For"></div>
-                        <div class="mb-2"><label for="hd_val">Value (Leave empty to delete)</label><input type="text" id="hd_val" name="headerValue" class="form-control"></div>
+                        <div class="mb-2"><label for="hd_val">Value / Match Regex (Leave empty to delete)</label><input type="text" id="hd_val" name="headerValue" class="form-control"></div>
+                        <div class="mb-2"><label for="hd_rep">Replacement (optional)</label><input type="text" id="hd_rep" name="headerReplace" class="form-control"></div>
                         <div class="mb-2"><label for="hd_desc">Description</label><input type="text" id="hd_desc" name="description" class="form-control"></div>
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('headerModal', 'headers')">Save</button></div>
@@ -1008,12 +1035,11 @@ const app = {
                         <div class="mb-3"><label for="l4_seq">Sequenz (Sequence)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
 
                         <h6 class="mt-3 border-bottom pb-2">Schicht 4 (Layer 4)</h6>
-                        <div class="mb-2"><label for="l4_type">Routing-Typ (Routing Type)</label><select id="l4_type" name="type" class="form-select"><option value="global" selected>Global</option><option value="listener_wrappers">Listener Wrappers</option></select></div>
                         <div class="mb-2"><label for="l4_proto">Protokoll (Protocol)</label><select id="l4_proto" name="protocol" class="form-select"><option value="tcp" selected>TCP</option><option value="udp">UDP</option></select></div>
                         <div class="mb-3"><label for="l4_fp">Lokaler Port (Listen Port)</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
 
                         <h6 class="mt-3 border-bottom pb-2">Schicht 7 (Layer 7)</h6>
-                        <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select" multiple><option value="any" selected>ANY</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
+                        <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select"><option value="any" selected>ANY</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
                         <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
                         <div class="mb-3"><input type="checkbox" name="invert_matchers" id="l4_inv_match"> <label for="l4_inv_match">Matcher umkehren (Invert matcher)</label></div>
 
@@ -1024,7 +1050,7 @@ const app = {
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_cc">Custom Certificate (Terminate)</label><select id="l4_cc" name="customCert" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="l4_default_sni">Default SNI <span class="text-muted">(?)</span></label><input type="text" id="l4_default_sni" name="default_sni" class="form-control"><small class="text-muted d-block">Fallback SNI if client (e.g., SMTP) does not provide one during TLS termination.</small></div>
-                        <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option><option value="starttls">STARTTLS (Verify)</option><option value="starttls_insecure_skip_verify">STARTTLS (Skip Verification)</option></select></div>
+                        <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select" onchange="app.ui.toggleLayer4UpstreamOptions()"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option><option value="starttls">STARTTLS (Verify)</option><option value="starttls_insecure_skip_verify">STARTTLS (Skip Verification)</option></select></div>
                         <div class="mb-2"><label for="l4_pp">Proxyprotokoll (Proxy Protocol)</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Aus (Standard)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
                         <div class="mb-3"><label for="l4_desc">Beschreibung (Description)</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
 
@@ -1042,6 +1068,7 @@ const app = {
                 </div>
             `;
             $('#modalsContainer').html(modalHTML);
+            $('#l4_otls').on('change', () => app.ui.toggleLayer4UpstreamOptions());
         }
     }
 };
