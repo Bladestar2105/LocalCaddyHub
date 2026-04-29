@@ -57,7 +57,21 @@ function generateCaddyfile(config, certsDir = './certs') {
   // Layer 4 configuration
   if (config.general.enable_layer4 && config.layer4 && config.layer4.length > 0) {
     sb += '\tlayer4 {\n';
-    for (const l4 of config.layer4) {
+    const layer4Routes = config.layer4
+      .map((route, index) => ({ route, index }))
+      .sort((a, b) => {
+        const aSeq = Number.parseFloat(a.route.sequence);
+        const bSeq = Number.parseFloat(b.route.sequence);
+        const aHasSeq = Number.isFinite(aSeq);
+        const bHasSeq = Number.isFinite(bSeq);
+        if (aHasSeq && bHasSeq) return aSeq - bSeq || a.index - b.index;
+        if (aHasSeq) return -1;
+        if (bHasSeq) return 1;
+        return a.index - b.index;
+      })
+      .map(item => item.route);
+
+    for (const l4 of layer4Routes) {
       if (!l4.enabled) continue;
 
       let listenPort = l4.fromPort;
@@ -245,13 +259,304 @@ function generateCaddyfile(config, certsDir = './certs') {
     }
   }
 
+  function caddyQuote(value) {
+    return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+
+  function certPath(filename) {
+    return path.join(certsDir, filename).replace(/\\/g, '/');
+  }
+
+  function keyPathForCert(filename) {
+    return certPath(filename.replace(/\.pem$/, '') + '.key');
+  }
+
+  function writeClientAuth(settings, indent) {
+    if (!settings.client_auth_mode) return '';
+
+    let out = `${indent}client_auth {\n`;
+    out += `${indent}\tmode ${settings.client_auth_mode}\n`;
+    if (settings.client_auth_trust_pool) {
+      out += `${indent}\ttrust_pool file ${certPath(settings.client_auth_trust_pool)}\n`;
+    }
+    out += `${indent}}\n`;
+    return out;
+  }
+
+  function mergedTlsSettings(site, domain) {
+    const useAcme = Boolean(site.acme || (site !== domain && domain.acme));
+    return {
+      acme: useAcme,
+      customCert: useAcme ? '' : (site.customCert || domain.customCert || ''),
+      client_auth_mode: site.client_auth_mode || domain.client_auth_mode || '',
+      client_auth_trust_pool: site.client_auth_trust_pool || domain.client_auth_trust_pool || ''
+    };
+  }
+
+  function writeTlsForSite(site, domain) {
+    if (domain.disableTls) return;
+
+    const tls = mergedTlsSettings(site, domain);
+    if (tls.acme) {
+      const clientAuth = writeClientAuth(tls, '\t\t');
+      if (clientAuth) {
+        sb += '\ttls {\n';
+        sb += clientAuth;
+        sb += '\t}\n';
+      }
+      return;
+    }
+
+    if (tls.customCert) {
+      sb += `\ttls ${certPath(tls.customCert)} ${keyPathForCert(tls.customCert)} {\n`;
+      sb += writeClientAuth(tls, '\t\t');
+      sb += '\t}\n';
+      return;
+    }
+
+    sb += '\ttls internal {\n';
+    sb += writeClientAuth(tls, '\t\t');
+    sb += '\t}\n';
+  }
+
+  function writeAccessRules(accessIds, indent, prefix) {
+    if (!Array.isArray(accessIds) || accessIds.length === 0) return;
+
+    for (const alID of accessIds) {
+      const al = accessLists[alID];
+      if (!al || !al.clientIps || al.clientIps.length === 0) continue;
+
+      const matcherName = `@${prefix}_${al.id}`;
+      const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
+      const matcherExpr = al.invert
+        ? `${matcherType} ${al.clientIps.join(' ')}`
+        : `not ${matcherType} ${al.clientIps.join(' ')}`;
+
+      sb += `${indent}${matcherName} ${matcherExpr}\n`;
+
+      if (al.http_response_code) {
+        if (al.http_response_message) {
+          sb += `${indent}respond ${matcherName} ${caddyQuote(al.http_response_message)} ${al.http_response_code}\n`;
+        } else {
+          sb += `${indent}respond ${matcherName} ${al.http_response_code}\n`;
+        }
+      } else {
+        sb += `${indent}abort ${matcherName}\n`;
+      }
+    }
+  }
+
+  function writeBasicAuths(authIds, indent) {
+    if (!Array.isArray(authIds) || authIds.length === 0) return;
+
+    for (const baID of authIds) {
+      const ba = basicAuths[baID];
+      if (!ba) continue;
+      sb += `${indent}basic_auth {\n`;
+      sb += `${indent}\t${ba.basicauthuser} ${ba.basicauthpass}\n`;
+      sb += `${indent}}\n`;
+    }
+  }
+
+  function mergeIdLists(baseIds, extraIds) {
+    return [...new Set([...(baseIds || []), ...(extraIds || [])])];
+  }
+
+  function normalizeHandleMatcher(handler) {
+    if (!handler.handlePath) return '';
+    const handlePath = handler.handlePath.trim();
+    if (!handlePath) return '';
+    if (handler.handleType !== 'handle_path') return ` ${handlePath}`;
+    if (handlePath.endsWith('*')) return ` ${handlePath}`;
+    if (handlePath === '/') return ' /*';
+    return ` ${handlePath.replace(/\/$/, '')}/*`;
+  }
+
+  function mapHttpTransportVersions(value) {
+    const versions = Array.isArray(value) ? value : String(value || '').split(/\s+/);
+    const mapped = versions
+      .map(v => ({ h1: '1.1', h2: '2', h3: '3', h2c: 'h2c' }[v] || v))
+      .filter(Boolean);
+    return [...new Set(mapped)].join(' ');
+  }
+
+  function writeProxyHeader(header, indent) {
+    if (!header || !header.headerType) return;
+    const directive = header.headerUpDown === 'header_down' ? 'header_down' : 'header_up';
+    if (header.headerValue && header.headerReplace) {
+      sb += `${indent}${directive} ${header.headerType} ${caddyQuote(header.headerValue)} ${caddyQuote(header.headerReplace)}\n`;
+    } else if (header.headerValue) {
+      sb += `${indent}${directive} ${header.headerType} ${caddyQuote(header.headerValue)}\n`;
+    } else {
+      sb += `${indent}${directive} -${header.headerType}\n`;
+    }
+  }
+
+  function writeProxyTransport(handler) {
+    const transportName = handler.ntlm ? 'http_ntlm' : 'http';
+    const tlsEnabled = Boolean(
+      handler.httpTls ||
+      handler.http_tls_insecure_skip_verify ||
+      handler.http_tls_server_name ||
+      handler.http_tls_trusted_ca_certs
+    );
+    const versions = mapHttpTransportVersions(handler.http_version);
+    const keepalive = handler.http_keepalive ? formatDuration(handler.http_keepalive) : '';
+    const needsTransport = handler.ntlm || tlsEnabled || versions || keepalive;
+
+    if (!needsTransport) return;
+
+    sb += `\t\t\ttransport ${transportName} {\n`;
+    if (tlsEnabled) {
+      sb += '\t\t\t\ttls\n';
+      if (handler.http_tls_insecure_skip_verify) {
+        sb += '\t\t\t\ttls_insecure_skip_verify\n';
+      }
+      if (handler.http_tls_server_name) {
+        sb += `\t\t\t\ttls_server_name ${handler.http_tls_server_name}\n`;
+      }
+      if (handler.http_tls_trusted_ca_certs) {
+        sb += `\t\t\t\ttls_trust_pool file ${certPath(handler.http_tls_trusted_ca_certs)}\n`;
+      }
+    }
+    if (versions) {
+      sb += `\t\t\t\tversions ${versions}\n`;
+    }
+    if (keepalive) {
+      sb += `\t\t\t\tkeepalive ${keepalive}\n`;
+    }
+    sb += '\t\t\t}\n';
+  }
+
+  function writeHandlers(handlers) {
+    if (!handlers || handlers.length === 0) return;
+
+    for (const handler of handlers) {
+      const matcherStr = normalizeHandleMatcher(handler);
+      const directive = handler.handleDirective || 'reverse_proxy';
+
+      if (handler.handleType === 'handle_path') {
+        sb += `\thandle_path${matcherStr} {\n`;
+      } else {
+        sb += `\thandle${matcherStr} {\n`;
+      }
+
+      if (handler.waf_enabled) {
+        sb += '\t\tcoraza_waf {\n';
+        sb += '\t\t\tload_owasp_crs\n';
+        sb += '\t\t\tdirectives `\n';
+        sb += '\t\t\t\tInclude @coraza.conf-recommended\n';
+        sb += '\t\t\t\tInclude @crs-setup.conf.example\n';
+        sb += '\t\t\t\tInclude @owasp_crs/*.conf\n';
+        sb += '\t\t\t\tSecRuleEngine On\n';
+        sb += '\t\t\t`\n';
+        sb += '\t\t}\n';
+      }
+
+      writeAccessRules(handler.accesslist, '\t\t', `al_h_${handler.id}`);
+      writeBasicAuths(handler.basicauth, '\t\t');
+
+      if (directive === 'reverse_proxy') {
+        sb += '\t\treverse_proxy';
+        if (handler.toDomain) {
+          for (const to of handler.toDomain) {
+            sb += ` ${to}:${handler.toPort}`;
+          }
+        }
+        sb += ' {\n';
+
+        if (handler.to_path) {
+          sb += `\t\t\trewrite ${handler.to_path}\n`;
+        }
+
+        if (handler.header) {
+          for (const hID of handler.header) {
+            writeProxyHeader(headersMap[hID], '\t\t\t');
+          }
+        }
+
+        writeProxyTransport(handler);
+
+        if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
+        if (handler.lb_retries) sb += `\t\t\tlb_retries ${parseInt(handler.lb_retries, 10)}\n`;
+        if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
+        if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
+
+        if (handler.health_uri) sb += `\t\t\thealth_uri ${handler.health_uri}\n`;
+        if (handler.health_port) sb += `\t\t\thealth_port ${handler.health_port}\n`;
+        if (handler.health_interval) sb += `\t\t\thealth_interval ${formatDuration(handler.health_interval)}\n`;
+        if (handler.health_timeout) sb += `\t\t\thealth_timeout ${formatDuration(handler.health_timeout)}\n`;
+        if (handler.health_status) sb += `\t\t\thealth_status ${handler.health_status}\n`;
+        if (handler.health_body) sb += `\t\t\thealth_body ${caddyQuote(handler.health_body)}\n`;
+        if (handler.health_passes) sb += `\t\t\thealth_passes ${parseInt(handler.health_passes, 10)}\n`;
+        if (handler.health_fails) sb += `\t\t\thealth_fails ${parseInt(handler.health_fails, 10)}\n`;
+        if (handler.health_follow_redirects) sb += '\t\t\thealth_follow_redirects\n';
+        if (handler.health_headers && handler.health_headers.length > 0) {
+          sb += '\t\t\thealth_headers {\n';
+          for (const hID of handler.health_headers) {
+            const h = headersMap[hID];
+            if (!h || !h.headerType || !h.headerValue) continue;
+            sb += `\t\t\t\t${h.headerType} ${caddyQuote(h.headerValue)}\n`;
+          }
+          sb += '\t\t\t}\n';
+        }
+
+        if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${formatDuration(handler.passive_health_fail_duration)}\n`;
+        if (handler.passive_health_max_fails) sb += `\t\t\tmax_fails ${parseInt(handler.passive_health_max_fails, 10)}\n`;
+        if (handler.passive_health_unhealthy_status) sb += `\t\t\tunhealthy_status ${handler.passive_health_unhealthy_status}\n`;
+        if (handler.passive_health_unhealthy_latency) sb += `\t\t\tunhealthy_latency ${formatDuration(handler.passive_health_unhealthy_latency)}\n`;
+        if (handler.passive_health_unhealthy_request_count) sb += `\t\t\tunhealthy_request_count ${parseInt(handler.passive_health_unhealthy_request_count, 10)}\n`;
+
+        sb += '\t\t}\n';
+      } else if (directive === 'redir') {
+        const to = handler.toDomain && handler.toDomain.length > 0 ? handler.toDomain[0] : '';
+        const status = handler.redir_status || '301';
+        sb += `\t\tredir ${to} ${status}\n`;
+      }
+
+      sb += '\t}\n';
+    }
+  }
+
+  function siteAddress(host, domain) {
+    let port = domain.fromPort;
+    if (!port) {
+      port = domain.disableTls ? '80' : '443';
+    }
+
+    let addr = host;
+    if (!addr.startsWith('http://') && !addr.startsWith('https://')) {
+      addr = domain.disableTls ? `http://${addr}` : `https://${addr}`;
+    }
+    return `${addr}:${port}`;
+  }
+
+  function writeSiteBlock(address, site, domain, handlers) {
+    sb += `${address} {\n`;
+    writeTlsForSite(site, domain);
+
+    if (site === domain && domain.accessLog) {
+      sb += '\tlog {\n';
+      sb += `\t\toutput file ${logsDir}/${domain.fromDomain}.log {\n`;
+      sb += `\t\t\troll_size ${rollSize}MiB\n`;
+      sb += `\t\t\troll_keep ${rollKeep}\n`;
+      sb += '\t\t}\n';
+      sb += '\t}\n';
+    }
+
+    const accessIds = site === domain ? site.accesslist : mergeIdLists(domain.accesslist, site.accesslist);
+    const authIds = site === domain ? site.basicauth : mergeIdLists(domain.basicauth, site.basicauth);
+    writeAccessRules(accessIds, '\t', site === domain ? 'al_domain' : `al_sub_${site.id}`);
+    writeBasicAuths(authIds, '\t');
+    writeHandlers(handlers);
+    sb += '}\n\n';
+  }
+
   // Pre-group subdomains
   const subdomainsByDomain = {};
-  const subdomainsById = {};
   if (config.subdomains) {
     for (const sub of config.subdomains) {
       if (sub.enabled) {
-        subdomainsById[sub.id] = sub;
         if (sub.reverse) {
           if (!subdomainsByDomain[sub.reverse]) {
             subdomainsByDomain[sub.reverse] = [];
@@ -262,29 +567,23 @@ function generateCaddyfile(config, certsDir = './certs') {
     }
   }
 
-  // Pre-group handlers by domain.id
+  // Pre-group handlers by their final site.
   const handlersByDomain = {};
+  const handlersBySubdomain = {};
   if (config.handlers) {
     for (const handler of config.handlers) {
-      if (handler.enabled) {
-        // Handlers can be linked to a domain directly via handler.reverse
-        // OR indirectly via handler.subdomain. We map them by the final domain ID.
-        let domainId = null;
-        if (handler.reverse) {
-          domainId = handler.reverse;
-        } else if (handler.subdomain) {
-          const sub = subdomainsById[handler.subdomain];
-          if (sub && sub.reverse) {
-            domainId = sub.reverse;
-          }
-        }
+      if (!handler.enabled) continue;
 
-        if (domainId) {
-          if (!handlersByDomain[domainId]) {
-            handlersByDomain[domainId] = [];
-          }
-          handlersByDomain[domainId].push(handler);
+      if (handler.subdomain) {
+        if (!handlersBySubdomain[handler.subdomain]) {
+          handlersBySubdomain[handler.subdomain] = [];
         }
+        handlersBySubdomain[handler.subdomain].push(handler);
+      } else if (handler.reverse) {
+        if (!handlersByDomain[handler.reverse]) {
+          handlersByDomain[handler.reverse] = [];
+        }
+        handlersByDomain[handler.reverse].push(handler);
       }
     }
   }
@@ -294,336 +593,12 @@ function generateCaddyfile(config, certsDir = './certs') {
     for (const domain of config.domains) {
       if (!domain.enabled) continue;
 
-      // Find subdomains for this domain
-      const domainSubdomains = subdomainsByDomain[domain.id] || [];
+      writeSiteBlock(siteAddress(domain.fromDomain, domain), domain, domain, handlersByDomain[domain.id] || []);
 
-      // Determine site addresses
-      const siteAddrs = [];
-      let port = domain.fromPort;
-      if (!port) {
-        port = domain.disableTls ? '80' : '443';
+      for (const sub of subdomainsByDomain[domain.id] || []) {
+        const subHost = `${sub.fromDomain}.${domain.fromDomain}`;
+        writeSiteBlock(siteAddress(subHost, domain), sub, domain, handlersBySubdomain[sub.id] || []);
       }
-
-      let baseAddr = domain.fromDomain;
-      if (!baseAddr.startsWith('http://') && !baseAddr.startsWith('https://')) {
-        baseAddr = domain.disableTls ? `http://${baseAddr}` : `https://${baseAddr}`;
-      }
-      siteAddrs.push(`${baseAddr}:${port}`);
-
-      for (const sub of domainSubdomains) {
-        let subAddr = `${sub.fromDomain}.${domain.fromDomain}`;
-        if (!subAddr.startsWith('http://') && !subAddr.startsWith('https://')) {
-          subAddr = domain.disableTls ? `http://${subAddr}` : `https://${subAddr}`;
-        }
-        siteAddrs.push(`${subAddr}:${port}`);
-      }
-
-      sb += siteAddrs.join(', ') + ' {\n';
-
-      // Domain TLS settings
-      const anySubdomainAcme = domainSubdomains.some(s => s.acme);
-
-      if (domain.disableTls) {
-        // Handled by http:// prefix
-      } else if (domain.customCert) {
-        // Ensure path formatting uses forward slashes, even on Windows, to make Caddyfile happy
-        const certPath = path.join(certsDir, domain.customCert).replace(/\\/g, '/');
-        const keyPath = path.join(certsDir, domain.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
-        sb += `\ttls ${certPath} ${keyPath} {\n`;
-        if (domain.client_auth_mode) {
-           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
-           if (domain.client_auth_trust_pool) {
-             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
-             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
-           }
-           sb += `\t\t}\n`;
-        }
-        sb += `\t}\n`;
-      } else if (domain.acme || anySubdomainAcme) {
-        if (domain.client_auth_mode) {
-           sb += `\ttls {\n`;
-           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
-           if (domain.client_auth_trust_pool) {
-             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
-             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
-           }
-           sb += `\t\t}\n`;
-           sb += `\t}\n`;
-        }
-      } else {
-        sb += '\ttls internal {\n'; // Auto HTTPS disabled by default in our app without ACME
-        if (domain.client_auth_mode) {
-           sb += `\t\tclient_auth {\n\t\t\tmode ${domain.client_auth_mode}\n`;
-           if (domain.client_auth_trust_pool) {
-             const trustPath = path.join(certsDir, domain.client_auth_trust_pool).replace(/\\/g, '/');
-             sb += `\t\t\ttrusted_ca_cert ${trustPath}\n`;
-           }
-           sb += `\t\t}\n`;
-        }
-        sb += `\t}\n`;
-      }
-
-      // Access Log
-      if (domain.accessLog) {
-        sb += '\tlog {\n';
-        sb += `\t\toutput file ${logsDir}/${domain.fromDomain}.log {\n`;
-        sb += `\t\t\troll_size ${rollSize}MiB\n`;
-        sb += `\t\t\troll_keep ${rollKeep}\n`;
-        sb += '\t\t}\n';
-        sb += '\t}\n';
-      }
-
-      // Domain Access Lists
-      if (domain.accesslist) {
-        for (const alID of domain.accesslist) {
-          const al = accessLists[alID];
-          if (al && al.clientIps && al.clientIps.length > 0) {
-            const matcherName = `@al_${al.id}`;
-            const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
-
-            sb += `\t${matcherName} {\n`;
-            sb += `\t\t${matcherType} ${al.clientIps.join(' ')}\n`;
-            sb += '\t}\n';
-
-            let abortCmd = `abort`;
-            if (al.http_response_code) {
-               abortCmd = `respond ${al.http_response_code}`;
-               if (al.http_response_message) {
-                  abortCmd = `respond "${al.http_response_message}" ${al.http_response_code}`;
-               }
-            }
-
-            if (al.invert) {
-              sb += `\t${abortCmd} ${matcherName}\n`;
-            } else {
-              sb += `\t${abortCmd} not ${matcherName}\n`;
-            }
-          }
-        }
-      }
-
-      // Domain Basic Auth
-      if (domain.basicauth) {
-        for (const baID of domain.basicauth) {
-          const ba = basicAuths[baID];
-          if (ba) {
-            sb += '\tbasicauth {\n';
-            sb += `\t\t${ba.basicauthuser} ${ba.basicauthpass}\n`;
-            sb += '\t}\n';
-          }
-        }
-      }
-
-      // Handlers for this Domain
-      const domainHandlers = handlersByDomain[domain.id];
-      if (domainHandlers) {
-        for (const handler of domainHandlers) {
-          // Subdomain check
-          let isSubdomainMatch = false;
-          if (handler.subdomain) {
-            const sub = subdomainsById[handler.subdomain];
-            if (sub && sub.reverse === domain.id) {
-              isSubdomainMatch = true;
-            }
-            if (!isSubdomainMatch) continue;
-          }
-
-          // Construct handler matchers
-          let matcherStr = '';
-          if (handler.handlePath) {
-            if (handler.handleType === 'handle_path') {
-              matcherStr = ` ${handler.handlePath}/*`;
-            } else {
-              matcherStr = ` ${handler.handlePath}`;
-            }
-          }
-
-          let directive = handler.handleDirective || 'reverse_proxy';
-
-          if (handler.handleType === 'handle_path') {
-            sb += `\thandle_path${matcherStr} {\n`;
-          } else {
-            sb += `\thandle${matcherStr} {\n`;
-          }
-
-          // WAF Integration
-          if (handler.waf_enabled) {
-            sb += '\t\tcoraza_waf {\n';
-            sb += '\t\t\tload_owasp_crs\n';
-            sb += '\t\t\tdirectives `\n';
-            sb += '\t\t\t\tInclude @coraza.conf-recommended\n';
-            sb += '\t\t\t\tInclude @crs-setup.conf.example\n';
-            sb += '\t\t\t\tInclude @owasp_crs/*.conf\n';
-            sb += '\t\t\t\tSecRuleEngine On\n';
-            sb += '\t\t\t`\n';
-            sb += '\t\t}\n';
-          }
-
-          // Handler Access Lists
-          if (handler.accesslist) {
-            for (const alID of handler.accesslist) {
-              const al = accessLists[alID];
-              if (al && al.clientIps && al.clientIps.length > 0) {
-                const matcherName = `@al_h_${al.id}`;
-                const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
-
-                sb += `\t\t${matcherName} {\n`;
-                sb += `\t\t\t${matcherType} ${al.clientIps.join(' ')}\n`;
-                sb += '\t\t}\n';
-
-                let abortCmd = `abort`;
-                if (al.http_response_code) {
-                   abortCmd = `respond ${al.http_response_code}`;
-                   if (al.http_response_message) {
-                      abortCmd = `respond "${al.http_response_message}" ${al.http_response_code}`;
-                   }
-                }
-
-                if (al.invert) {
-                  sb += `\t\t${abortCmd} ${matcherName}\n`;
-                } else {
-                  sb += `\t\t${abortCmd} not ${matcherName}\n`;
-                }
-              }
-            }
-          }
-
-          // Handler Basic Auth
-          if (handler.basicauth) {
-            for (const baID of handler.basicauth) {
-              const ba = basicAuths[baID];
-              if (ba) {
-                sb += '\t\tbasicauth {\n';
-                sb += `\t\t\t${ba.basicauthuser} ${ba.basicauthpass}\n`;
-                sb += '\t\t}\n';
-              }
-            }
-          }
-
-          // Upstreams
-          if (directive === 'reverse_proxy') {
-            sb += '\t\treverse_proxy';
-            if (handler.toDomain) {
-              for (const to of handler.toDomain) {
-                sb += ` ${to}:${handler.toPort}`;
-              }
-            }
-            sb += ' {\n';
-
-            // Headers for proxy
-            if (handler.header) {
-              for (const hID of handler.header) {
-                const h = headersMap[hID];
-                if (h) {
-                  const action = h.headerValue ? 'set' : '-';
-                  const dir = h.headerUpDown;
-                  if (dir === 'header_down') {
-                    if (action === '-') {
-                      sb += `\t\t\theader_down -${h.headerType}\n`;
-                    } else {
-                      sb += `\t\t\theader_down ${h.headerType} ${h.headerValue}\n`;
-                    }
-                  } else {
-                    if (action === '-') {
-                      sb += `\t\t\theader_up -${h.headerType}\n`;
-                    } else {
-                      sb += `\t\t\theader_up ${h.headerType} ${h.headerValue}\n`;
-                    }
-                  }
-                }
-              }
-            }
-
-            // Transport
-            if (handler.ntlm) {
-              sb += '\t\t\ttransport http_ntlm {\n';
-              if (handler.httpTls) {
-                sb += '\t\t\t\ttls\n';
-                if (handler.http_tls_insecure_skip_verify) {
-                  sb += '\t\t\t\ttls_insecure_skip_verify\n';
-                }
-              }
-              sb += '\t\t\t}\n';
-            } else {
-              let needsTransport = false;
-              let transportBlock = '\t\t\ttransport http {\n';
-              if (handler.httpTls) {
-                needsTransport = true;
-                transportBlock += '\t\t\t\ttls\n';
-                if (handler.http_tls_insecure_skip_verify) {
-                  transportBlock += '\t\t\t\ttls_insecure_skip_verify\n';
-                }
-                if (handler.http_tls_server_name) {
-                  transportBlock += `\t\t\t\ttls_server_name ${handler.http_tls_server_name}\n`;
-                }
-                if (handler.http_tls_trusted_ca_certs) {
-                  const caPath = path.join(certsDir, handler.http_tls_trusted_ca_certs).replace(/\\/g, '/');
-                  transportBlock += `\t\t\t\ttls_trusted_ca_certs ${caPath}\n`;
-                }
-              }
-              if (handler.http_version) {
-                 needsTransport = true;
-                 transportBlock += `\t\t\t\tversions ${handler.http_version}\n`;
-              }
-              if (handler.http_keepalive) {
-                 needsTransport = true;
-                 transportBlock += `\t\t\t\tkeepalive ${handler.http_keepalive}\n`;
-              }
-              transportBlock += '\t\t\t}\n';
-              if (needsTransport) sb += transportBlock;
-            }
-
-            // Load Balancing
-            if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
-            if (handler.lb_retries) sb += `\t\t\tlb_retries ${parseInt(handler.lb_retries, 10)}\n`;
-            if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
-            if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
-
-            // Active Health Checks
-            if (handler.health_uri) sb += `\t\t\thealth_uri ${handler.health_uri}\n`;
-            if (handler.health_port) sb += `\t\t\thealth_port ${handler.health_port}\n`;
-            if (handler.health_interval) sb += `\t\t\thealth_interval ${formatDuration(handler.health_interval)}\n`;
-            if (handler.health_timeout) sb += `\t\t\thealth_timeout ${formatDuration(handler.health_timeout)}\n`;
-            if (handler.health_status) sb += `\t\t\thealth_status ${handler.health_status}\n`;
-            if (handler.health_body) sb += `\t\t\thealth_body "${handler.health_body}"\n`;
-            if (handler.health_passes) sb += `\t\t\thealth_passes ${parseInt(handler.health_passes, 10)}\n`;
-            if (handler.health_fails) sb += `\t\t\thealth_fails ${parseInt(handler.health_fails, 10)}\n`;
-            if (handler.health_follow_redirects) sb += `\t\t\thealth_follow_redirects\n`;
-            if (handler.health_headers && handler.health_headers.length > 0) {
-              sb += `\t\t\thealth_headers {\n`;
-              for (const hID of handler.health_headers) {
-                const h = headersMap[hID];
-                if (h) {
-                  const action = h.headerValue ? 'set' : '-';
-                  if (action === '-') {
-                    sb += `\t\t\t\t-${h.headerType}\n`;
-                  } else {
-                    sb += `\t\t\t\t${h.headerType} ${h.headerValue}\n`;
-                  }
-                }
-              }
-              sb += `\t\t\t}\n`;
-            }
-
-            // Passive Health Checks
-            if (handler.passive_health_fail_duration) sb += `\t\t\tfail_duration ${formatDuration(handler.passive_health_fail_duration)}\n`;
-            if (handler.passive_health_max_fails) sb += `\t\t\tmax_fails ${parseInt(handler.passive_health_max_fails, 10)}\n`;
-            if (handler.passive_health_unhealthy_status) sb += `\t\t\tunhealthy_status ${handler.passive_health_unhealthy_status}\n`;
-            if (handler.passive_health_unhealthy_latency) sb += `\t\t\tunhealthy_latency ${formatDuration(handler.passive_health_unhealthy_latency)}\n`;
-            if (handler.passive_health_unhealthy_request_count) sb += `\t\t\tunhealthy_request_count ${parseInt(handler.passive_health_unhealthy_request_count, 10)}\n`;
-
-            sb += '\t\t}\n';
-          } else if (directive === 'redir') {
-            const to = handler.toDomain && handler.toDomain.length > 0 ? handler.toDomain[0] : '';
-            const status = handler.redir_status || '301';
-            sb += `\t\tredir ${to} ${status}\n`;
-          }
-
-          sb += '\t}\n';
-        }
-      }
-
-      sb += '}\n\n';
     }
   }
 
