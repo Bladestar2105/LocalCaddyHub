@@ -14,6 +14,15 @@ const certDir = appPaths.certsDir;
 
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
+function toStringArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [];
+}
+
 // /api/config
 router.get('/config', async (req, res) => {
   try {
@@ -139,9 +148,9 @@ router.get('/config/structured', (req, res) => {
         invert_matchers: Boolean(l.invert_matchers),
         terminateTls: Boolean(l.terminateTls),
         starttls: Boolean(l.starttls),
-        fromDomain: parseJSON(l.fromDomain),
-        toDomain: parseJSON(l.toDomain),
-        remote_ip: parseJSON(l.remote_ip)
+        fromDomain: toStringArray(parseJSON(l.fromDomain)),
+        toDomain: toStringArray(parseJSON(l.toDomain)),
+        remote_ip: toStringArray(parseJSON(l.remote_ip))
       }))
     };
 
@@ -363,11 +372,11 @@ router.post('/config/structured', express.json(), async (req, res) => {
     const processedLayer4 = (config.layer4 || []).map(l => ({
       ...l,
       enabled: l.enabled ? 1 : 0,
-      fromDomain: JSON.stringify(l.fromDomain || []),
+      fromDomain: JSON.stringify(toStringArray(l.fromDomain)),
       invert_matchers: l.invert_matchers ? 1 : 0,
-      toDomain: JSON.stringify(l.toDomain || []),
+      toDomain: JSON.stringify(toStringArray(l.toDomain)),
       terminateTls: l.terminateTls ? 1 : 0,
-      remote_ip: JSON.stringify(l.remote_ip || []),
+      remote_ip: JSON.stringify(toStringArray(l.remote_ip)),
       starttls: l.starttls ? 1 : 0
     }));
 

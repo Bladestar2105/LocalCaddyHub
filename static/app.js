@@ -795,6 +795,9 @@ const app = {
             $form.find('select[multiple]').each(function() {
                  let val = $(this).val() || [];
                  if (this.name === 'http_version' || this.name === 'matchers') {
+                     if (this.name === 'matchers' && val.includes('any')) {
+                         val = ['any'];
+                     }
                      obj[this.name] = val.join(' ');
                  } else {
                      obj[this.name] = val;
