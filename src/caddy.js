@@ -105,29 +105,47 @@ function generateCaddyfile(config, certsDir = './certs') {
       return matcher || 'any';
     }
 
-    function layer4MaxFails(l4) {
-      const maxFails = parseInt(l4.passive_health_max_fails, 10);
-      return Number.isFinite(maxFails) && maxFails > 0 ? maxFails : null;
+    function layer4UpstreamAddress(l4, to) {
+      return `${l4._protocol}/${to}:${l4.toPort}`;
     }
 
-    function hasLayer4ProxyOptions(l4) {
-      return Boolean(l4.lb_policy || l4.passive_health_fail_duration || layer4MaxFails(l4) !== null || l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2');
+    function layer4ProxyOptionLines(l4) {
+      const lines = [];
+      if (l4.lb_policy) {
+        lines.push(`lb_policy ${l4.lb_policy}`);
+      }
+      if (l4.passive_health_fail_duration) {
+        lines.push(`fail_duration ${formatDuration(l4.passive_health_fail_duration)}`);
+      }
+      const maxFails = Number.parseInt(l4.passive_health_max_fails, 10);
+      if (Number.isFinite(maxFails) && maxFails > 0) {
+        lines.push(`max_fails ${maxFails}`);
+      }
+      if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
+        lines.push(`proxy_protocol ${l4.proxyProtocol}`);
+      }
+      return lines;
     }
 
     function writeLayer4ProxyOptions(l4, indent) {
-      if (l4.lb_policy) {
-        sb += `${indent}\tlb_policy ${l4.lb_policy}\n`;
+      for (const line of layer4ProxyOptionLines(l4)) {
+        sb += `${indent}${line}\n`;
       }
-      if (l4.passive_health_fail_duration) {
-        sb += `${indent}\tfail_duration ${formatDuration(l4.passive_health_fail_duration)}\n`;
+    }
+
+    function writeLayer4Proxy(l4, indent) {
+      const optionLines = layer4ProxyOptionLines(l4);
+      sb += `${indent}proxy`;
+      for (const to of l4.toDomain) {
+        sb += ` ${layer4UpstreamAddress(l4, to)}`;
       }
-      const maxFails = layer4MaxFails(l4);
-      if (maxFails !== null) {
-        sb += `${indent}\tmax_fails ${maxFails}\n`;
+      if (optionLines.length === 0) {
+        sb += '\n';
+        return;
       }
-      if (l4.proxyProtocol === 'v1' || l4.proxyProtocol === 'v2') {
-        sb += `${indent}\tproxy_protocol ${l4.proxyProtocol}\n`;
-      }
+      sb += ' {\n';
+      writeLayer4ProxyOptions(l4, `${indent}\t`);
+      sb += `${indent}}\n`;
     }
 
     function layer4MatcherExpression(l4) {
@@ -164,12 +182,11 @@ function generateCaddyfile(config, certsDir = './certs') {
         sb += ` ${matcherExpr}\n\n`;
 
         sb += `\t\t\troute ${matcherName} {\n`;
-        sb += `\t\t\t\tsubroute {\n`;
       } else {
         sb += `\t\t\troute {\n`;
       }
 
-      let indent = hasMatcher ? '\t\t\t\t\t' : '\t\t\t\t';
+      let indent = '\t\t\t\t';
 
       let hasRemoteIp = l4.remote_ip && l4.remote_ip.length > 0;
       if (hasRemoteIp) {
@@ -232,33 +249,18 @@ function generateCaddyfile(config, certsDir = './certs') {
           // The proxy handler is no longer needed since upstream_starttls does the proxying and internal load balancing.
         } else if (hasTlsClient) {
           sb += `${indent}proxy {\n`;
-          sb += `${indent}\tupstream`;
+          writeLayer4ProxyOptions(l4, `${indent}\t`);
           for (const to of l4.toDomain) {
-            sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
+            sb += `${indent}\tupstream ${layer4UpstreamAddress(l4, to)} {\n`;
+            sb += `${indent}\t\ttls\n`;
+            if (l4.originate_tls === 'tls_insecure_skip_verify') {
+              sb += `${indent}\t\ttls_insecure_skip_verify\n`;
+            }
+            sb += `${indent}\t}\n`;
           }
-          sb += ' {\n';
-          sb += `${indent}\t\ttls\n`;
-          if (l4.originate_tls === 'tls_insecure_skip_verify') {
-            sb += `${indent}\t\ttls_insecure_skip_verify\n`;
-          }
-          sb += `${indent}\t}\n`;
-          writeLayer4ProxyOptions(l4, indent);
           sb += `${indent}}\n`;
         } else {
-          if (hasLayer4ProxyOptions(l4)) {
-            sb += `${indent}proxy {\n`;
-            for (const to of l4.toDomain) {
-              sb += `${indent}\tupstream ${l4._protocol}/${to}:${l4.toPort}\n`;
-            }
-            writeLayer4ProxyOptions(l4, indent);
-            sb += `${indent}}\n`;
-          } else {
-            sb += `${indent}proxy`;
-            for (const to of l4.toDomain) {
-              sb += ` ${l4._protocol}/${to}:${l4.toPort}`;
-            }
-            sb += '\n';
-          }
+          writeLayer4Proxy(l4, indent);
         }
       }
 
@@ -269,7 +271,6 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       if (hasMatcher) {
-        sb += `\t\t\t\t}\n`;
         sb += `\t\t\t}\n`;
       } else {
         sb += `\t\t\t}\n`;
@@ -288,7 +289,7 @@ function generateCaddyfile(config, certsDir = './certs') {
   sb += '}\n\n';
 
   if (!config.general.enabled) {
-    return sb; // Return early if General is disabled
+    return sb.trimEnd() + '\n'; // Return early if General is disabled
   }
 
   // Helper maps for relations

@@ -254,8 +254,12 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(imapsBlock, /@l4_imap_lab tls sni imap\.lab\.example\.com/);
     assert.match(imapsBlock, /route @l4_imap_lab \{/);
-    assert.match(imapsBlock, /proxy \{\n\t+upstream tcp\/172\.16\.16\.5:993\n\t+upstream tcp\/172\.16\.16\.6:993/);
-    assert.doesNotMatch(imapsBlock, /proxy tcp\/172\.16\.16\.5:993 tcp\/172\.16\.16\.6:993 \{/);
+    assert.match(imapsBlock, /proxy tcp\/172\.16\.16\.5:993 tcp\/172\.16\.16\.6:993/);
+    assert.doesNotMatch(imapsBlock, /subroute/);
+    assert.match(imapsBlock, /proxy tcp\/172\.16\.16\.5:993 tcp\/172\.16\.16\.6:993 \{/);
+    assert.match(imapsBlock, /lb_policy round_robin/);
+    assert.match(imapsBlock, /fail_duration 5s/);
+    assert.match(imapsBlock, /max_fails 1/);
     assert.match(imapsBlock, /@l4_imap_prod tls sni imap\.example\.com/);
     assert.match(imapsBlock, /route @l4_imap_prod \{/);
     assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
@@ -290,6 +294,33 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(blockFor(config, 'tcp/:993'), /@l4_imap_auto tls sni imap\.example\.com/);
     assert.match(blockFor(config, 'tcp/:80'), /@l4_web_auto http host app\.example\.com/);
+  });
+
+  test('emits tls layer4 upstreams separately for load balancing', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'imap_tls_upstream',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '995',
+        matchers: 'tlssni',
+        fromDomain: ['imap.example.com'],
+        toDomain: ['10.0.0.1', '10.0.0.2'],
+        toPort: '995',
+        originate_tls: 'tls_insecure_skip_verify',
+        lb_policy: 'round_robin',
+        proxyProtocol: 'v2'
+      }]
+    });
+
+    const imapsBlock = blockFor(config, 'tcp/:995');
+    assert.match(imapsBlock, /proxy \{/);
+    assert.match(imapsBlock, /lb_policy round_robin/);
+    assert.match(imapsBlock, /proxy_protocol v2/);
+    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.1:995 \{\n\t+\ttls\n\t+\ttls_insecure_skip_verify/);
+    assert.match(imapsBlock, /upstream tcp\/10\.0\.0\.2:995 \{\n\t+\ttls\n\t+\ttls_insecure_skip_verify/);
+    assert.doesNotMatch(imapsBlock, /upstream tcp\/10\.0\.0\.1:995 tcp\/10\.0\.0\.2:995 \{/);
   });
 
   test('omits layer4 max_fails when set to zero', () => {
