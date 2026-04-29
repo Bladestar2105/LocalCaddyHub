@@ -13,6 +13,12 @@ describe('formatDuration', () => {
     assert.strictEqual(formatDuration('0'), '0s');
   });
 
+  test('appends "s" to decimal numeric values', () => {
+    assert.strictEqual(formatDuration(10.5), '10.5s');
+    assert.strictEqual(formatDuration('10.0'), '10.0s');
+    assert.strictEqual(formatDuration('.5'), '.5s');
+  });
+
   test('trims whitespace and appends "s" to string numeric values', () => {
     assert.strictEqual(formatDuration('  45  '), '45s');
   });

@@ -110,6 +110,9 @@ describe('generateCaddyfile UI parity', () => {
         http_tls_trusted_ca_certs: 'ca.pem',
         http_version: 'h1 h2 h3 h2c',
         http_keepalive: 30,
+        lb_try_duration: '10.0',
+        health_timeout: '2.5',
+        passive_health_unhealthy_latency: '1.25',
         to_path: '/internal'
       }]
     }, '/certs');
@@ -118,6 +121,9 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(config, /tls_trust_pool file \/certs\/ca\.pem/);
     assert.match(config, /versions 1\.1 2 3 h2c/);
     assert.match(config, /keepalive 30s/);
+    assert.match(config, /lb_try_duration 10\.0s/);
+    assert.match(config, /health_timeout 2\.5s/);
+    assert.match(config, /unhealthy_latency 1\.25s/);
   });
 
   test('uses Caddy automatic HTTPS for ACME and ignores custom certificates', () => {

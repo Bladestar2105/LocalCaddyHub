@@ -19,7 +19,7 @@ function safeCompare(a, b) {
 }
 
 /**
- * Formats a duration value for Caddy. If it's a number, appends 's'.
+ * Formats a duration value for Caddy. If it's a bare numeric value, appends 's'.
  * @param {string|number} val
  * @returns {string|number}
  */
@@ -27,7 +27,7 @@ function formatDuration(val) {
   if (val === null || val === undefined || val === '' || val === false) return val;
   const strVal = val.toString().trim();
   if (strVal === '') return val;
-  if (/^\d+$/.test(strVal)) return strVal + 's';
+  if (/^(?:\d+|\d*\.\d+)$/.test(strVal)) return strVal + 's';
   return strVal;
 }
 
