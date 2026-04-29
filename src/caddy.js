@@ -85,10 +85,31 @@ function generateCaddyfile(config, certsDir = './certs') {
       listeners.get(key).push(route);
     }
 
+    function layer4Values(value) {
+      if (Array.isArray(value)) return value.filter(Boolean);
+      if (typeof value === 'string') {
+        return value.split(',').map(v => v.trim()).filter(Boolean);
+      }
+      return [];
+    }
+
+    function inferLayer4Matcher(l4) {
+      if (l4.starttls) return 'any';
+      if (l4._protocol !== 'tcp') return 'any';
+      return String(l4._listenPort) === '80' ? 'http' : 'tlssni';
+    }
+
+    function layer4MatcherValue(value) {
+      if (Array.isArray(value)) return value.join(' ');
+      const matcher = String(value || 'any').trim();
+      return matcher || 'any';
+    }
+
     function layer4MatcherExpression(l4) {
-      const matcher = l4.matchers || 'any';
+      const values = layer4Values(l4.fromDomain);
+      let matcher = layer4MatcherValue(l4.matchers);
+      if (matcher === 'any' && values.length > 0) matcher = inferLayer4Matcher(l4);
       if (matcher === 'any') return '';
-      const values = Array.isArray(l4.fromDomain) ? l4.fromDomain.filter(Boolean) : [];
 
       if (matcher === 'tlssni' || matcher === 'tls_sni') {
         return values.length ? `tls sni ${values.join(' ')}` : 'tls';
