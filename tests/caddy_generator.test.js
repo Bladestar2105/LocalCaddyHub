@@ -221,8 +221,11 @@ describe('generateCaddyfile UI parity', () => {
         fromPort: '993',
         matchers: 'tlssni',
         fromDomain: ['imap.lab.example.com'],
-        toDomain: ['172.16.16.5'],
-        toPort: '993'
+        toDomain: ['172.16.16.5', '172.16.16.6'],
+        toPort: '993',
+        lb_policy: 'round_robin',
+        passive_health_fail_duration: '5',
+        passive_health_max_fails: '1'
       }, {
         id: 'imap_prod',
         enabled: true,
@@ -251,7 +254,8 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(imapsBlock, /@l4_imap_lab tls sni imap\.lab\.example\.com/);
     assert.match(imapsBlock, /route @l4_imap_lab \{/);
-    assert.match(imapsBlock, /proxy tcp\/172\.16\.16\.5:993/);
+    assert.match(imapsBlock, /proxy \{\n\t+upstream tcp\/172\.16\.16\.5:993\n\t+upstream tcp\/172\.16\.16\.6:993/);
+    assert.doesNotMatch(imapsBlock, /proxy tcp\/172\.16\.16\.5:993 tcp\/172\.16\.16\.6:993 \{/);
     assert.match(imapsBlock, /@l4_imap_prod tls sni imap\.example\.com/);
     assert.match(imapsBlock, /route @l4_imap_prod \{/);
     assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
@@ -286,5 +290,26 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(blockFor(config, 'tcp/:993'), /@l4_imap_auto tls sni imap\.example\.com/);
     assert.match(blockFor(config, 'tcp/:80'), /@l4_web_auto http host app\.example\.com/);
+  });
+
+  test('omits layer4 max_fails when set to zero', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'imap_zero',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'tlssni',
+        fromDomain: ['imap.example.com'],
+        toDomain: ['192.168.225.204'],
+        toPort: '993',
+        passive_health_max_fails: '0'
+      }]
+    });
+
+    const imapsBlock = blockFor(config, 'tcp/:993');
+    assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
+    assert.doesNotMatch(imapsBlock, /max_fails 0/);
   });
 });
