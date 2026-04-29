@@ -12,6 +12,7 @@ const { safeCompare } = require('./utils');
 const { loginRateLimiter, recordFailedAttempt, clearAttempts } = require('./rateLimiter');
 const apiRoutes = require('./api');
 const appPaths = require('./paths');
+const { resolveCaddyBinary } = require('./caddyBinary');
 const fs = require('fs');
 
 // Handle --help or -h flags for CI compatibility
@@ -207,7 +208,7 @@ app.listen(port, () => {
   // Auto-start Caddy if a Caddyfile exists
   if (fs.existsSync(appPaths.caddyfile)) {
     const { spawn } = require('child_process');
-    const cp = spawn('caddy', ['start', '--config', appPaths.caddyfile], {
+    const cp = spawn(resolveCaddyBinary(), ['start', '--config', appPaths.caddyfile], {
       detached: true,
       stdio: 'ignore'
     });

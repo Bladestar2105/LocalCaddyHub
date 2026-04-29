@@ -7,6 +7,7 @@ const db = require('./db');
 const { parseJSON, isSafeFilename } = require('./utils');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
+const { resolveCaddyBinary } = require('./caddyBinary');
 
 const router = express.Router();
 
@@ -522,7 +523,7 @@ router.get('/logs/stream', async (req, res) => {
 
 // Exec Caddy commands
 function execCaddy(cmdArgs, res) {
-  execFile('caddy', cmdArgs, (error, stdout, stderr) => {
+  execFile(resolveCaddyBinary(), cmdArgs, (error, stdout, stderr) => {
     res.json({
       output: stdout,
       stderr: stderr,
@@ -544,7 +545,7 @@ router.post('/start', async (req, res) => {
     console.error('Failed to check if Caddy is running:', e.message || e);
   }
 
-  const cp = spawn('caddy', ['run', '--config', appPaths.caddyfile], {
+  const cp = spawn(resolveCaddyBinary(), ['run', '--config', appPaths.caddyfile], {
     detached: true,
     stdio: 'ignore'
   });
@@ -654,7 +655,7 @@ router.get('/certs/acme/download', async (req, res) => {
     return await serveCertificates(certificatesDir, res);
   }
 
-  execFile('caddy', ['environ'], async (error, stdout) => {
+  execFile(resolveCaddyBinary(), ['environ'], async (error, stdout) => {
     if (error) {
       console.error('Failed to query Caddy environment:', error);
       return res.status(500).send('Failed to query Caddy environment');
