@@ -586,11 +586,21 @@ const app = {
                     subdomain.acme = false;
                 }
             });
+
+            (app.config.layer4 || []).forEach(route => {
+                if (acmeBlocked || (!route.terminateTls && !route.starttls)) {
+                    route.acme = false;
+                }
+                if (route.acme) {
+                    route.customCert = '';
+                }
+            });
         },
 
         syncAcmeControls: function() {
             this.syncDomainTlsControls();
             this.syncSubdomainTlsControls();
+            this.syncLayer4TlsControls();
         },
 
         syncDomainTlsControls: function() {
@@ -615,6 +625,33 @@ const app = {
                 note = app.t('Unavailable for HTTP-only domains.');
             }
             $('#d_acme_note')
+                .text(note)
+                .toggleClass('text-warning', acmeUnavailable)
+                .toggleClass('text-muted', !acmeUnavailable);
+        },
+
+        syncLayer4TlsControls: function() {
+            const $acme = $('#l4_acme');
+            if (!$acme.length) return;
+
+            const acmeBlocked = this.acmeBlockedByAutoHttps();
+            const tlsEnabled = $('#l4_ttls').is(':checked') || $('#l4_starttls').is(':checked');
+            const acmeUnavailable = acmeBlocked || !tlsEnabled;
+
+            $acme.prop('disabled', acmeUnavailable);
+            if (acmeUnavailable) {
+                $acme.prop('checked', false);
+            }
+
+            $('#l4_cc').prop('disabled', !tlsEnabled || $acme.is(':checked'));
+
+            let note = app.t('Uses Caddy Automatic HTTPS for Layer 4 TLS termination.');
+            if (acmeBlocked) {
+                note = app.t('Unavailable because global Auto HTTPS is set to Off or Disable Certs.');
+            } else if (!tlsEnabled) {
+                note = app.t('Unavailable until Terminate TLS or STARTTLS is enabled.');
+            }
+            $('#l4_acme_note')
                 .text(note)
                 .toggleClass('text-warning', acmeUnavailable)
                 .toggleClass('text-muted', !acmeUnavailable);
@@ -926,6 +963,14 @@ const app = {
                 obj.passive_health_max_fails = 0;
                 obj.proxyProtocol = '';
             }
+            if (modalId === 'layer4Modal') {
+                if (this.acmeBlockedByAutoHttps() || (!obj.terminateTls && !obj.starttls)) {
+                    obj.acme = false;
+                }
+                if (obj.acme) {
+                    obj.customCert = '';
+                }
+            }
             if (modalId === 'domainModal') {
                 if (this.acmeBlockedByAutoHttps() || obj.disableTls) {
                     obj.acme = false;
@@ -961,6 +1006,7 @@ const app = {
                 $('#l4_lb, #l4_pp').val('');
                 $('#l4_hfd, #l4_hmf').val('');
             }
+            this.syncLayer4TlsControls();
         },
 
         initModals: function() {
@@ -1170,8 +1216,10 @@ const app = {
                         <div class="mb-2"><input type="checkbox" name="starttls" id="l4_starttls"> <label for="l4_starttls">STARTTLS (SMTP Port 587)</label></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_cc">Custom Certificate (Terminate)</label><select id="l4_cc" name="customCert" class="form-select cert-select"></select></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="l4_acme"> <label for="l4_acme">Use Caddy-managed public ACME certificate</label> <small id="l4_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for Layer 4 TLS termination.</small></div>
                         <div class="mb-2"><label for="l4_default_sni">Default SNI <span class="text-muted">(?)</span></label><input type="text" id="l4_default_sni" name="default_sni" class="form-control"><small class="text-muted d-block">Fallback SNI if client (e.g., SMTP) does not provide one during TLS termination.</small></div>
                         <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select" onchange="app.ui.toggleLayer4UpstreamOptions()"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option><option value="starttls">STARTTLS (Verify)</option><option value="starttls_insecure_skip_verify">STARTTLS (Skip Verification)</option></select></div>
+                        <div class="mb-2"><label for="l4_upstream_tls_sni">Upstream TLS Server Name (SNI)</label><input type="text" id="l4_upstream_tls_sni" name="upstream_tls_server_name" class="form-control"></div>
                         <div class="mb-2"><label for="l4_pp">Proxy Protocol</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Off (Default)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
                         <div class="mb-3"><label for="l4_desc">Description</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
 
@@ -1193,6 +1241,7 @@ const app = {
             $('#d_dtls, #d_acme').on('change', () => app.ui.syncDomainTlsControls());
             $('#sd_rev, #sd_acme').on('change', () => app.ui.syncSubdomainTlsControls());
             $('#l4_otls').on('change', () => app.ui.toggleLayer4UpstreamOptions());
+            $('#l4_ttls, #l4_starttls, #l4_acme').on('change', () => app.ui.syncLayer4TlsControls());
             app.applyI18n(document.getElementById('modalsContainer'));
         }
     }

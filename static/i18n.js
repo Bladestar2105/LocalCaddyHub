@@ -287,6 +287,8 @@
             'Invert matcher': 'Matcher umkehren',
             'Upstream Domain/IPs (comma separated)': 'Upstream-Domains/IPs (kommagetrennt)',
             'Custom Certificate (Terminate)': 'Benutzerdefiniertes Zertifikat (Terminieren)',
+            'Uses Caddy Automatic HTTPS for Layer 4 TLS termination.': 'Verwendet Caddy Automatic HTTPS für Layer-4-TLS-Terminierung.',
+            'Unavailable until Terminate TLS or STARTTLS is enabled.': 'Nicht verfügbar, bis TLS terminieren oder STARTTLS aktiviert ist.',
             'Default SNI': 'Standard-SNI',
             'Fallback SNI if client (e.g., SMTP) does not provide one during TLS termination.': 'Fallback-SNI, wenn der Client (z. B. SMTP) bei TLS-Terminierung keine SNI sendet.',
             'Originate TLS to Upstream': 'TLS zum Upstream aufbauen',

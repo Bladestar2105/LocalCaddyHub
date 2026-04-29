@@ -28,7 +28,7 @@ type CustomTLS struct {
 	logger    *zap.Logger
 	tlsConfig *tls.Config
 
-    Next layer4.Handler `json:"-"`
+	Next layer4.Handler `json:"-"`
 }
 
 func (*CustomTLS) CaddyModule() caddy.ModuleInfo {
@@ -107,7 +107,7 @@ func (c *CustomTLS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 }
 
 func (c *CustomTLS) Handle(cx *layer4.Connection, next layer4.Handler) error {
-	tlsConn := tls.Server(cx.Conn, c.tlsConfig)
+	tlsConn := tls.Server(cx, c.tlsConfig)
 
 	// Perform handshake explicitly to catch errors early,
 	// otherwise it happens lazily on first read/write.
@@ -118,16 +118,15 @@ func (c *CustomTLS) Handle(cx *layer4.Connection, next layer4.Handler) error {
 
 	c.logger.Debug("TLS handshake successful", zap.String("remote", cx.Conn.RemoteAddr().String()))
 
-	// Wrap the connection for the next handler
-	newCx := layer4.WrapConnection(tlsConn, nil, cx.Logger)
-	newCx.Context = cx.Context
+	// Preserve any Layer4 context while replacing the transport with TLS.
+	newCx := cx.Wrap(tlsConn)
 
 	return next.Handle(newCx)
 }
 
 // Interface guards
 var (
-	_ layer4.NextHandler        = (*CustomTLS)(nil)
+	_ layer4.NextHandler    = (*CustomTLS)(nil)
 	_ caddyfile.Unmarshaler = (*CustomTLS)(nil)
 	_ caddy.Provisioner     = (*CustomTLS)(nil)
 )

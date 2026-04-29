@@ -1,9 +1,11 @@
 const path = require('path');
+const net = require('net');
 const { formatDuration } = require('./utils');
 
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
   const automaticCertsDisabled = ['off', 'disable_certs'].includes(config.general && config.general.auto_https);
+  const layer4ManagedCertificateHosts = new Set();
 
   // Global options
   sb += '{\n';
@@ -148,6 +150,44 @@ function generateCaddyfile(config, certsDir = './certs') {
       sb += `${indent}}\n`;
     }
 
+    function layer4UpstreamTlsServerName(l4) {
+      const configured = String(l4.upstream_tls_server_name || '').trim();
+      if (configured) return configured;
+      const matcherValues = layer4Values(l4.fromDomain);
+      return matcherValues.length === 1 ? matcherValues[0] : '';
+    }
+
+    function layer4UsesManagedCertificate(l4) {
+      return !automaticCertsDisabled && Boolean(l4.acme) && Boolean(l4.terminateTls || l4.starttls);
+    }
+
+    function isAutomatableLayer4Host(value) {
+      const host = String(value || '').trim();
+      return Boolean(
+        host &&
+        host.includes('.') &&
+        !host.includes('*') &&
+        !host.includes(':') &&
+        net.isIP(host) === 0 &&
+        /^[A-Za-z0-9.-]+$/.test(host)
+      );
+    }
+
+    function collectLayer4ManagedCertificateHosts(l4) {
+      if (!layer4UsesManagedCertificate(l4)) return;
+
+      const hosts = layer4Values(l4.fromDomain);
+      if (hosts.length === 0 && l4.default_sni) {
+        hosts.push(l4.default_sni);
+      }
+
+      for (const host of hosts) {
+        if (isAutomatableLayer4Host(host)) {
+          layer4ManagedCertificateHosts.add(host);
+        }
+      }
+    }
+
     function layer4MatcherExpression(l4) {
       const values = layer4Values(l4.fromDomain);
       let matcher = layer4MatcherValue(l4.matchers);
@@ -201,7 +241,7 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
 
       if (l4.terminateTls || l4.starttls) {
-        if (l4.customCert) {
+        if (l4.customCert && !layer4UsesManagedCertificate(l4)) {
           const certPath = path.join(certsDir, l4.customCert).replace(/\\/g, '/');
           const keyPath = path.join(certsDir, l4.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
           sb += `${indent}custom_tls ${certPath} ${keyPath} {\n`;
@@ -245,14 +285,22 @@ function generateCaddyfile(config, certsDir = './certs') {
           if (l4.originate_tls === 'starttls_insecure_skip_verify') {
             sb += `${indent}\tinsecure_skip_verify\n`;
           }
+          const upstreamServerName = layer4UpstreamTlsServerName(l4);
+          if (upstreamServerName) {
+            sb += `${indent}\tserver_name ${upstreamServerName}\n`;
+          }
           sb += `${indent}}\n`;
           // The proxy handler is no longer needed since upstream_starttls does the proxying and internal load balancing.
         } else if (hasTlsClient) {
           sb += `${indent}proxy {\n`;
           writeLayer4ProxyOptions(l4, `${indent}\t`);
+          const upstreamServerName = layer4UpstreamTlsServerName(l4);
           for (const to of l4.toDomain) {
             sb += `${indent}\tupstream ${layer4UpstreamAddress(l4, to)} {\n`;
             sb += `${indent}\t\ttls\n`;
+            if (upstreamServerName) {
+              sb += `${indent}\t\ttls_server_name ${upstreamServerName}\n`;
+            }
             if (l4.originate_tls === 'tls_insecure_skip_verify') {
               sb += `${indent}\t\ttls_insecure_skip_verify\n`;
             }
@@ -277,6 +325,10 @@ function generateCaddyfile(config, certsDir = './certs') {
       }
     }
 
+    for (const route of layer4Routes) {
+      collectLayer4ManagedCertificateHosts(route);
+    }
+
     for (const [listener, routes] of listeners.entries()) {
       sb += `\t\t${listener} {\n`;
       for (const route of routes) {
@@ -288,7 +340,20 @@ function generateCaddyfile(config, certsDir = './certs') {
   }
   sb += '}\n\n';
 
+  function writeLayer4ManagedCertificateSiteBlocks(existingHosts = new Set()) {
+    for (const host of layer4ManagedCertificateHosts) {
+      const normalized = host.toLowerCase();
+      if (existingHosts.has(normalized)) continue;
+
+      sb += `${host} {\n`;
+      sb += '\trespond "OK" 200\n';
+      sb += '}\n\n';
+      existingHosts.add(normalized);
+    }
+  }
+
   if (!config.general.enabled) {
+    writeLayer4ManagedCertificateSiteBlocks();
     return sb.trimEnd() + '\n'; // Return early if General is disabled
   }
 
@@ -644,18 +709,23 @@ function generateCaddyfile(config, certsDir = './certs') {
   }
 
   // Reverse Proxy Domains
+  const writtenSiteHosts = new Set();
   if (config.domains) {
     for (const domain of config.domains) {
       if (!domain.enabled) continue;
 
+      writtenSiteHosts.add(String(domain.fromDomain || '').toLowerCase());
       writeSiteBlock(siteAddress(domain.fromDomain, domain), domain, domain, handlersByDomain[domain.id] || []);
 
       for (const sub of subdomainsByDomain[domain.id] || []) {
         const subHost = `${sub.fromDomain}.${domain.fromDomain}`;
+        writtenSiteHosts.add(subHost.toLowerCase());
         writeSiteBlock(siteAddress(subHost, domain), sub, domain, handlersBySubdomain[sub.id] || []);
       }
     }
   }
+
+  writeLayer4ManagedCertificateSiteBlocks(writtenSiteHosts);
 
   return sb;
 }

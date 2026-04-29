@@ -150,6 +150,8 @@ const SCHEMA_SQL = `
       passive_health_max_fails TEXT,
       starttls INTEGER DEFAULT 0,
       default_sni TEXT,
+      upstream_tls_server_name TEXT,
+      acme INTEGER DEFAULT 0,
       customCert TEXT
     );
 
@@ -230,6 +232,8 @@ function runMigrations() {
     { table: 'layer4', column: 'invert_matchers', def: 'INTEGER DEFAULT 0' },
     { table: 'layer4', column: 'starttls', def: 'INTEGER DEFAULT 0' },
     { table: 'layer4', column: 'default_sni', def: 'TEXT' },
+    { table: 'layer4', column: 'upstream_tls_server_name', def: 'TEXT' },
+    { table: 'layer4', column: 'acme', def: 'INTEGER DEFAULT 0' },
     { table: 'layer4', column: 'customCert', def: 'TEXT' }
   ];
 
