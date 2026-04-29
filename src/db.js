@@ -240,7 +240,8 @@ function runMigrations() {
   for (const table of uniqueTables) {
     try {
       const info = db.pragma(`table_info(${table})`);
-      schemaCache.set(table, new Set(info.map(col => col.name)));
+      const columns = Array.isArray(info) ? info : [];
+      schemaCache.set(table, new Set(columns.map(col => col.name)));
     } catch (e) {
       console.warn(`Failed to fetch schema for ${table}: ${e.message}`);
     }
