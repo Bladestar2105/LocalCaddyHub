@@ -209,4 +209,54 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.ok(config.indexOf('tcp/:1000') < config.indexOf('tcp/:2000'));
   });
+
+  test('groups layer4 routes by listener and emits domain matchers', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'imap_lab',
+        enabled: true,
+        sequence: '10',
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'tlssni',
+        fromDomain: ['imap.lab.example.com'],
+        toDomain: ['172.16.16.5'],
+        toPort: '993'
+      }, {
+        id: 'imap_prod',
+        enabled: true,
+        sequence: '20',
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'tlssni',
+        fromDomain: ['imap.example.com'],
+        toDomain: ['192.168.225.204'],
+        toPort: '993'
+      }, {
+        id: 'http_route',
+        enabled: true,
+        sequence: '30',
+        protocol: 'tcp',
+        fromPort: '80',
+        matchers: 'http',
+        fromDomain: ['app.example.com'],
+        toDomain: ['127.0.0.1'],
+        toPort: '8080'
+      }]
+    });
+
+    assert.strictEqual((config.match(/\n\t\ttcp\/:993 \{/g) || []).length, 1);
+    const imapsBlock = blockFor(config, 'tcp/:993');
+
+    assert.match(imapsBlock, /@l4_imap_lab tls sni imap\.lab\.example\.com/);
+    assert.match(imapsBlock, /route @l4_imap_lab \{/);
+    assert.match(imapsBlock, /proxy tcp\/172\.16\.16\.5:993/);
+    assert.match(imapsBlock, /@l4_imap_prod tls sni imap\.example\.com/);
+    assert.match(imapsBlock, /route @l4_imap_prod \{/);
+    assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
+
+    const httpBlock = blockFor(config, 'tcp/:80');
+    assert.match(httpBlock, /@l4_http_route http host app\.example\.com/);
+  });
 });
