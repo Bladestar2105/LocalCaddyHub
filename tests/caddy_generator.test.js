@@ -1,5 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
 const { generateCaddyfile } = require('../src/caddy');
 
 function blockFor(config, address) {
@@ -267,6 +268,51 @@ describe('generateCaddyfile UI parity', () => {
 
     const httpBlock = blockFor(config, 'tcp/:80');
     assert.match(httpBlock, /@l4_http_route http host app\.example\.com/);
+  });
+
+  test('keeps layer4 proxy handler separate from PROXY protocol header option', () => {
+    const config = generateCaddyfile({
+      general: { enabled: false, enable_layer4: true },
+      layer4: [{
+        id: 'imap_plain_upstream',
+        enabled: true,
+        protocol: 'tcp',
+        fromPort: '993',
+        matchers: 'tlssni',
+        fromDomain: 'imap.example.com',
+        toDomain: '192.168.225.204',
+        toPort: '993',
+        proxyProtocol: ''
+      }]
+    });
+
+    const imapsBlock = blockFor(config, 'tcp/:993');
+    assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
+    assert.doesNotMatch(imapsBlock, /proxy_protocol/);
+  });
+
+  test('persists every layer4 UI field through the database API schema', () => {
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+    const dbJs = fs.readFileSync('src/db.js', 'utf8');
+    const layer4Form = appJs.match(/<form id="layer4ModalForm">([\s\S]*?)<\/form>/);
+    assert.ok(layer4Form, 'missing layer4 modal form');
+
+    const formFields = [...layer4Form[1].matchAll(/name="([^"]+)"/g)].map(match => match[1]);
+    const insertColumns = apiJs.match(/INSERT INTO layer4 \(([^)]+)\)/);
+    assert.ok(insertColumns, 'missing layer4 insert statement');
+    const persistedFields = new Set(insertColumns[1].split(',').map(field => field.trim()));
+    const schemaColumns = new Set(
+      dbJs.match(/CREATE TABLE IF NOT EXISTS layer4 \(([\s\S]*?)\);/)[1]
+        .split('\n')
+        .map(line => line.trim().split(/\s+/)[0])
+        .filter(Boolean)
+    );
+
+    for (const field of formFields) {
+      assert.ok(persistedFields.has(field), `${field} is present in the Layer4 UI but not persisted`);
+      assert.ok(schemaColumns.has(field), `${field} is present in the Layer4 UI but missing from the DB schema`);
+    }
   });
 
   test('infers host matcher when layer4 host values are present', () => {

@@ -296,7 +296,7 @@
             'TLS (Skip Verification)': 'TLS (Prüfung überspringen)',
             'STARTTLS (Verify)': 'STARTTLS (prüfen)',
             'STARTTLS (Skip Verification)': 'STARTTLS (Prüfung überspringen)',
-            'Proxy Protocol': 'Proxy-Protokoll',
+            'Send PROXY Protocol Header': 'PROXY-Protokoll-Header senden',
             'Off (Default)': 'Aus (Standard)',
             'Load Balancing': 'Lastausgleich',
             'Default (Random)': 'Standard (Random)',
