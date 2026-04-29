@@ -25,8 +25,10 @@ const app = {
     logStreamSource: null,
     logFiltersCache: { level: '', status: '', method: '', ip: '', path: '', text: '' },
     logFilterTimeout: null,
+    i18n: window.LocalCaddyHubI18n,
 
     init: async function() {
+        this.i18n.init();
         await this.loadCerts();
         await this.loadConfig();
         this.ui.initModals();
@@ -47,6 +49,14 @@ const app = {
                  app.applyLogFiltersToDOM();
              }, 150); // 150ms debounce
         });
+    },
+
+    t: function(source, replacements = {}) {
+        return this.i18n ? this.i18n.t(source, replacements) : source;
+    },
+
+    applyI18n: function(root = document) {
+        if (this.i18n) this.i18n.apply(root);
     },
 
     updateLogFiltersCache: function() {
@@ -81,7 +91,7 @@ const app = {
     saveStructuredConfig: async function() {
         const btn = $('#applyConfigBtn');
         const originalText = btn.html();
-        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Saving...'));
 
         this.config.general.enabled = $('#genEnabled').is(':checked');
         this.config.general.enable_layer4 = $('#genEnableLayer4').is(':checked');
@@ -123,15 +133,15 @@ const app = {
     validateConfig: async function() {
         const btn = $('#validateConfigBtn');
         const originalText = btn.html();
-        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Validating...');
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Validating...'));
 
         try {
             const res = await fetch('/api/validate', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
             if (res.ok && !data.error) {
-                this.showStatus('Configuration is valid!\n\n' + data.output, 'success');
+                this.showStatus(this.t('Configuration is valid!') + '\n\n' + data.output, 'success');
             } else {
-                this.showStatus('Validation failed!\n\n' + (data.error || '') + '\n' + (data.output || ''), 'danger');
+                this.showStatus(this.t('Validation failed!') + '\n\n' + (data.error || '') + '\n' + (data.output || ''), 'danger');
             }
         } catch (e) {
             this.showStatus('Error: ' + e.message, 'danger');
@@ -142,7 +152,7 @@ const app = {
 
     showStatus: function(msg, type) {
         const box = $('#globalStatus');
-        box.text(msg).removeClass('text-success text-danger').addClass('text-' + type).fadeIn();
+        box.text(this.t(msg)).removeClass('text-success text-danger').addClass('text-' + type).fadeIn();
         setTimeout(() => box.fadeOut(), 5000);
     },
 
@@ -151,16 +161,16 @@ const app = {
         let originalText = '';
         if (btn) {
             originalText = btn.html();
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Loading...'));
         }
         try {
             const res = await fetch('/api/' + action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
-            let msg = data.output || "Success";
-            if (data.error) msg += "\nError: " + data.error;
+            let msg = this.t(data.output || 'Success');
+            if (data.error) msg += '\n' + this.t('Error: ') + data.error;
             $('#controlStatus').text(msg).show();
         } catch (e) {
-            $('#controlStatus').text("Error: " + e.message).show();
+            $('#controlStatus').text(this.t('Error: ') + e.message).show();
         } finally {
             if (btn) {
                 btn.prop('disabled', false).html(originalText);
@@ -174,7 +184,7 @@ const app = {
             const text = await res.text();
             $('#statsOutput').text(text);
         } catch (e) {
-             $('#statsOutput').text("Error fetching stats. Is Caddy running with metrics enabled?");
+             $('#statsOutput').text(this.t('Error fetching stats. Is Caddy running with metrics enabled?'));
         }
     },
 
@@ -190,13 +200,13 @@ const app = {
             document.execCommand('copy');
             const $btn = $(btn);
             const originalText = $btn.text();
-            $btn.text('Copied!').removeClass('btn-outline-secondary').addClass('btn-success');
+            $btn.text(this.t('Copied!')).removeClass('btn-outline-secondary').addClass('btn-success');
             setTimeout(() => {
                 $btn.text(originalText).removeClass('btn-success').addClass('btn-outline-secondary');
             }, 2000);
         } catch (err) {
             console.error('Copy failed', err);
-            alert('Failed to copy text.');
+            alert(this.t('Failed to copy text.'));
         }
 
         // Deselect
@@ -225,20 +235,20 @@ const app = {
         let originalText = '';
         if (btn) {
             originalText = btn.html();
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Uploading...'));
         }
 
         try {
             const res = await fetch('/api/certs', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
             if (res.ok) {
-                $('#certUploadStatus').text("File uploaded successfully!").show();
+                $('#certUploadStatus').text(this.t('File uploaded successfully!')).show();
                 fileInput.value = "";
                 this.loadCerts();
             } else {
-                $('#certUploadStatus').text("Upload failed.").show();
+                $('#certUploadStatus').text(this.t('Upload failed.')).show();
             }
         } catch (e) {
-             $('#certUploadStatus').text("Error: " + e.message).show();
+             $('#certUploadStatus').text(this.t('Error: ') + e.message).show();
         } finally {
             if (btn) {
                 btn.prop('disabled', false).html(originalText);
@@ -249,16 +259,16 @@ const app = {
     },
 
     deleteCert: async function(filename) {
-        if (!confirm(`Delete ${filename}?`)) return;
+        if (!confirm(this.t('Delete {name}?', { name: filename }))) return;
         try {
             const res = await fetch(`/api/certs?file=${encodeURIComponent(filename)}`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (res.ok) {
                 this.loadCerts();
             } else {
-                alert("Failed to delete cert.");
+                alert(this.t('Failed to delete cert.'));
             }
         } catch (e) {
-            alert("Error: " + e.message);
+            alert(this.t('Error: ') + e.message);
         }
     },
 
@@ -269,11 +279,11 @@ const app = {
             const data = await res.json();
             const badge = $('#2faStatusBadge');
             if (data.enabled) {
-                badge.text('Enabled').removeClass('bg-secondary bg-danger').addClass('bg-success');
+                badge.text(this.t('Enabled')).removeClass('bg-secondary bg-danger').addClass('bg-success');
                 $('#2faSetupArea').hide();
                 $('#2faDisableArea').show();
             } else {
-                badge.text('Disabled').removeClass('bg-secondary bg-success').addClass('bg-danger');
+                badge.text(this.t('Disabled')).removeClass('bg-secondary bg-success').addClass('bg-danger');
                 $('#2faDisableArea').hide();
                 this.generate2fa();
             }
@@ -293,7 +303,7 @@ const app = {
         let originalText = '';
         if (btn) {
             originalText = btn.html();
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Verifying...');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Verifying...'));
         }
         const token = $('#2faVerifyToken').val();
         const secret = $('#2faVerifySecret').val();
@@ -304,10 +314,10 @@ const app = {
                 body: JSON.stringify({ token, secret })
             });
             if (res.ok) {
-                alert('2FA Enabled successfully!');
+                alert(this.t('2FA Enabled successfully!'));
                 this.check2faStatus();
             } else {
-                alert('Invalid Code.');
+                alert(this.t('Invalid Code.'));
             }
         } catch(e) { console.error(e); } finally {
             if (btn) {
@@ -316,7 +326,7 @@ const app = {
         }
     },
     disable2fa: async function() {
-        if (!confirm('Are you sure you want to disable 2FA?')) return;
+        if (!confirm(this.t('Are you sure you want to disable 2FA?'))) return;
         try {
             const res = await fetch('/api/2fa/disable', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (res.ok) {
@@ -452,17 +462,17 @@ const app = {
              if (lineData.request) {
                  reqStr = ` <span style="color:#33b5e5">${this.escapeHtml(lineData.request.method)}</span> ${this.escapeHtml(lineData.request.uri)} [${this.escapeHtml(lineData.request.remote_ip)}]`;
              }
-             let statusStr = lineData.status !== undefined ? ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status)}</span>` : '';
+             let statusStr = lineData.status !== undefined ? ` <span style="color:#ffbb33">${this.escapeHtml(this.t('Status'))}: ${this.escapeHtml(lineData.status)}</span>` : '';
 
              let extraStr = '';
              if (lineData.upstream) {
-                 extraStr += ` <span style="color:#ffbb33">Upstream: ${this.escapeHtml(lineData.upstream)}</span>`;
+                 extraStr += ` <span style="color:#ffbb33">${this.escapeHtml(this.t('Upstream'))}: ${this.escapeHtml(lineData.upstream)}</span>`;
              }
              if (lineData.error) {
-                 extraStr += ` <span style="color:#ff4444">Error: ${this.escapeHtml(lineData.error)}</span>`;
+                 extraStr += ` <span style="color:#ff4444">${this.escapeHtml(this.t('Error'))}: ${this.escapeHtml(lineData.error)}</span>`;
              }
              if (lineData.status_code !== undefined && lineData.status === undefined) {
-                 extraStr += ` <span style="color:#ffbb33">Status: ${this.escapeHtml(lineData.status_code)}</span>`;
+                 extraStr += ` <span style="color:#ffbb33">${this.escapeHtml(this.t('Status'))}: ${this.escapeHtml(lineData.status_code)}</span>`;
              }
 
              div.innerHTML = `<strong style="color:${levelColor}">[${this.escapeHtml(lineData.level)}]</strong> <span class="text-muted">${this.escapeHtml(time)}</span> ${this.escapeHtml(lineData.msg)}${reqStr}${statusStr}${extraStr}`;
@@ -508,9 +518,9 @@ const app = {
         const clone = JSON.parse(JSON.stringify(item));
         clone.id = uuidv4();
         if (clone.description) {
-            clone.description = clone.description + " (Copy)";
+            clone.description = clone.description + " " + this.t('(Copy)');
         } else {
-            clone.description = "Copy";
+            clone.description = this.t('Copy');
         }
 
         this.config[type].push(clone);
@@ -518,7 +528,7 @@ const app = {
     },
 
     deleteItem: function(type, id) {
-        if (confirm('Are you sure you want to delete this item?')) {
+        if (confirm(this.t('Are you sure you want to delete this item?'))) {
             if (type === 'domains') {
                 const subdomainsToDelete = this.config.subdomains.filter(s => s.reverse === id).map(s => s.id);
                 this.config.domains = this.config.domains.filter(d => d.id !== id);
@@ -598,11 +608,11 @@ const app = {
 
             $('#d_cc').prop('disabled', httpOnly || $acme.is(':checked'));
 
-            let note = 'Uses Caddy Automatic HTTPS with a public ACME issuer such as Let\'s Encrypt or ZeroSSL. Overrides custom certificate when enabled.';
+            let note = app.t('Uses Caddy Automatic HTTPS with a public ACME issuer such as Let\'s Encrypt or ZeroSSL. Overrides custom certificate when enabled.');
             if (acmeBlocked) {
-                note = 'Unavailable because global Auto HTTPS is set to Off or Disable Certs.';
+                note = app.t('Unavailable because global Auto HTTPS is set to Off or Disable Certs.');
             } else if (httpOnly) {
-                note = 'Unavailable for HTTP-only domains.';
+                note = app.t('Unavailable for HTTP-only domains.');
             }
             $('#d_acme_note')
                 .text(note)
@@ -624,13 +634,13 @@ const app = {
                 $acme.prop('checked', false);
             }
 
-            let note = 'Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.';
+            let note = app.t('Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.');
             if (acmeBlocked) {
-                note = 'Unavailable because global Auto HTTPS is set to Off or Disable Certs.';
+                note = app.t('Unavailable because global Auto HTTPS is set to Off or Disable Certs.');
             } else if (parentHttpOnly) {
-                note = 'Unavailable because the parent domain is HTTP-only.';
+                note = app.t('Unavailable because the parent domain is HTTP-only.');
             } else if (parent && parent.acme) {
-                note = 'Parent domain ACME is enabled, so this subdomain already uses a Caddy-managed public certificate.';
+                note = app.t('Parent domain ACME is enabled, so this subdomain already uses a Caddy-managed public certificate.');
             }
             $('#sd_acme_note')
                 .text(note)
@@ -667,6 +677,7 @@ const app = {
 
             this.populateSelects();
             this.syncAcmeControls();
+            app.applyI18n();
         },
 
         renderTable: function(configKey, tableId, cols) {
@@ -674,7 +685,7 @@ const app = {
 
             const items = app.config[configKey] || [];
             if (items.length === 0) {
-                tbody.append(`<tr><td colspan="${cols.length + 1}" class="text-center text-muted py-3">No items found. Click Add to create one.</td></tr>`);
+                tbody.append(`<tr><td colspan="${cols.length + 1}" class="text-center text-muted py-3">${app.t('No items found. Click Add to create one.')}</td></tr>`);
                 return;
             }
 
@@ -696,7 +707,7 @@ const app = {
                 let tr = $('<tr>');
                 cols.forEach(col => {
                     let val = item[col];
-                    if (col === 'enabled' || col === 'invert') val = val ? 'Yes' : 'No';
+                    if (col === 'enabled' || col === 'invert') val = val ? app.t('Yes') : app.t('No');
                     if (Array.isArray(val)) val = val.join(', ');
                     if (col === 'reverse' && configKey === 'handlers') {
                         // resolve domain name
@@ -713,20 +724,20 @@ const app = {
                 });
 
                 let actions = $('<td>').addClass('action-btns');
-                let upBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8593;').attr('title', 'Move Up').attr('aria-label', 'Move Up').click(() => app.moveItem(configKey, item.id, 'up'));
+                let upBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8593;').attr('title', app.t('Move Up')).attr('aria-label', app.t('Move Up')).click(() => app.moveItem(configKey, item.id, 'up'));
                 if (index === 0) upBtn.prop('disabled', true);
 
-                let downBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8595;').attr('title', 'Move Down').attr('aria-label', 'Move Down').click(() => app.moveItem(configKey, item.id, 'down'));
+                let downBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8595;').attr('title', app.t('Move Down')).attr('aria-label', app.t('Move Down')).click(() => app.moveItem(configKey, item.id, 'down'));
                 if (index === items.length - 1) downBtn.prop('disabled', true);
 
-                let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text('Edit').attr('title', 'Edit').attr('aria-label', 'Edit').click(() => this.editItem(configKey, item.id));
+                let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text(app.t('Edit')).attr('title', app.t('Edit')).attr('aria-label', app.t('Edit')).click(() => this.editItem(configKey, item.id));
 
                 let dupBtn = null;
                 if (['domains', 'subdomains', 'handlers'].includes(configKey)) {
-                    dupBtn = $('<button>').addClass('btn btn-sm btn-outline-info').text('Dup').attr('title', 'Duplicate').attr('aria-label', 'Duplicate').click(() => app.duplicateItem(configKey, item.id));
+                    dupBtn = $('<button>').addClass('btn btn-sm btn-outline-info').text(app.t('Dup')).attr('title', app.t('Duplicate')).attr('aria-label', app.t('Duplicate')).click(() => app.duplicateItem(configKey, item.id));
                 }
 
-                let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text('Del').attr('title', 'Delete').attr('aria-label', 'Delete').click(() => app.deleteItem(configKey, item.id));
+                let delBtn = $('<button>').addClass('btn btn-sm btn-outline-danger').text(app.t('Del')).attr('title', app.t('Delete')).attr('aria-label', app.t('Delete')).click(() => app.deleteItem(configKey, item.id));
 
                 if (dupBtn) {
                     tr.append(actions.append(upBtn, downBtn, editBtn, dupBtn, delBtn));
@@ -743,15 +754,16 @@ const app = {
             const list = $('#certsList').empty();
             const certs = app.certs || [];
             if (certs.length === 0) {
-                 list.append($('<li>').addClass('list-group-item text-center text-muted py-3').text('No certificates found. Upload one above.'));
+                 list.append($('<li>').addClass('list-group-item text-center text-muted py-3').text(app.t('No certificates found. Upload one above.')));
             } else {
                 certs.forEach(c => {
                     let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').text(c);
-                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text('Delete').attr('title', 'Delete certificate').attr('aria-label', 'Delete certificate').click(() => app.deleteCert(c));
+                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text(app.t('Delete')).attr('title', app.t('Delete certificate')).attr('aria-label', app.t('Delete certificate')).click(() => app.deleteCert(c));
                     list.append(li.append(btn));
                 });
             }
             this.populateSelects();
+            app.applyI18n(list[0]);
         },
 
         populateSelects: function() {
@@ -775,14 +787,14 @@ const app = {
                 headerSelects.append(new Option(label, h.id));
             });
 
-            const certSelects = $('.cert-select').empty().append(new Option("Caddy-managed / Internal", ""));
+            const certSelects = $('.cert-select').empty().append(new Option(app.t('Caddy-managed / Internal'), ""));
             (app.certs || []).filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
 
             // Handlers and Subdomains need Domain selects
-            const domainSelects = $('.domain-select').empty().append(new Option("Select Domain", ""));
+            const domainSelects = $('.domain-select').empty().append(new Option(app.t('Select Domain'), ""));
             app.config.domains.forEach(d => domainSelects.append(new Option(d.fromDomain, d.id)));
 
-            const subDomainSelects = $('.subdomain-select').empty().append(new Option("None / Match All", ""));
+            const subDomainSelects = $('.subdomain-select').empty().append(new Option(app.t('None / Match All'), ""));
             app.config.subdomains.forEach(s => subDomainSelects.append(new Option(s.fromDomain, s.id)));
         },
 
@@ -802,7 +814,7 @@ const app = {
             $form.find('input[type="checkbox"]').prop('checked', false);
 
             if (item) {
-                $(`#${modalId} .modal-title`).text('Edit Item');
+                $(`#${modalId} .modal-title`).text(app.t('Edit Item'));
                 // Auto-fill form
                 Object.keys(item).forEach(key => {
                     const el = $(form.elements[key]);
@@ -827,7 +839,7 @@ const app = {
                 });
                 $(`#${modalId}`).data('edit-id', item.id);
             } else {
-                $(`#${modalId} .modal-title`).text('Add Item');
+                $(`#${modalId} .modal-title`).text(app.t('Add Item'));
                 $(`#${modalId}`).removeData('edit-id');
             }
 
@@ -844,6 +856,7 @@ const app = {
             } else if (modalId === 'subdomainModal') {
                 this.syncSubdomainTlsControls();
             }
+            app.applyI18n(document.getElementById(modalId));
         },
 
         editItem: function(configKey, id) {
@@ -1136,36 +1149,36 @@ const app = {
                     <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="layer4ModalForm">
 
-                        <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Aktiviert (Enabled)</label></div>
-                        <div class="mb-3"><label for="l4_seq">Sequenz (Sequence)</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
+                        <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
+                        <div class="mb-3"><label for="l4_seq">Sequence</label><input type="text" id="l4_seq" name="sequence" class="form-control"></div>
 
-                        <h6 class="mt-3 border-bottom pb-2">Schicht 4 (Layer 4)</h6>
-                        <div class="mb-2"><label for="l4_proto">Protokoll (Protocol)</label><select id="l4_proto" name="protocol" class="form-select"><option value="tcp" selected>TCP</option><option value="udp">UDP</option></select></div>
-                        <div class="mb-3"><label for="l4_fp">Lokaler Port (Listen Port)</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
+                        <h6 class="mt-3 border-bottom pb-2">Layer 4</h6>
+                        <div class="mb-2"><label for="l4_proto">Protocol</label><select id="l4_proto" name="protocol" class="form-select"><option value="tcp" selected>TCP</option><option value="udp">UDP</option></select></div>
+                        <div class="mb-3"><label for="l4_fp">Listen Port</label><input type="text" id="l4_fp" name="fromPort" class="form-control" required placeholder="443"></div>
 
-                        <h6 class="mt-3 border-bottom pb-2">Schicht 7 (Layer 7)</h6>
+                        <h6 class="mt-3 border-bottom pb-2">Layer 7</h6>
                         <div class="mb-2"><label for="l4_match">Matcher</label><select id="l4_match" name="matchers" class="form-select"><option value="any" selected>ANY</option><option value="http">http</option><option value="tlssni">tlssni</option></select></div>
                         <div class="mb-2"><label for="l4_fd">Listen Domains/IPs (comma separated)</label><input type="text" id="l4_fd" name="fromDomain" class="form-control array-input"></div>
-                        <div class="mb-3"><input type="checkbox" name="invert_matchers" id="l4_inv_match"> <label for="l4_inv_match">Matcher umkehren (Invert matcher)</label></div>
+                        <div class="mb-3"><input type="checkbox" name="invert_matchers" id="l4_inv_match"> <label for="l4_inv_match">Invert matcher</label></div>
 
                         <h6 class="mt-3 border-bottom pb-2">Upstream</h6>
-                        <div class="mb-2"><label for="l4_td">Upstream-Domain (IPs/Domains, comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
-                        <div class="mb-2"><label for="l4_tp">Upstream-Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
+                        <div class="mb-2"><label for="l4_td">Upstream Domain/IPs (comma separated)</label><input type="text" id="l4_td" name="toDomain" class="form-control array-input" required></div>
+                        <div class="mb-2"><label for="l4_tp">Upstream Port</label><input type="text" id="l4_tp" name="toPort" class="form-control" required></div>
                         <div class="mb-2"><input type="checkbox" name="starttls" id="l4_starttls"> <label for="l4_starttls">STARTTLS (SMTP Port 587)</label></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_cc">Custom Certificate (Terminate)</label><select id="l4_cc" name="customCert" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="l4_default_sni">Default SNI <span class="text-muted">(?)</span></label><input type="text" id="l4_default_sni" name="default_sni" class="form-control"><small class="text-muted d-block">Fallback SNI if client (e.g., SMTP) does not provide one during TLS termination.</small></div>
                         <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select" onchange="app.ui.toggleLayer4UpstreamOptions()"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option><option value="starttls">STARTTLS (Verify)</option><option value="starttls_insecure_skip_verify">STARTTLS (Skip Verification)</option></select></div>
-                        <div class="mb-2"><label for="l4_pp">Proxyprotokoll (Proxy Protocol)</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Aus (Standard)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
-                        <div class="mb-3"><label for="l4_desc">Beschreibung (Description)</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
+                        <div class="mb-2"><label for="l4_pp">Proxy Protocol</label><select id="l4_pp" name="proxyProtocol" class="form-select"><option value="">Off (Default)</option><option value="v1">v1</option><option value="v2">v2</option></select></div>
+                        <div class="mb-3"><label for="l4_desc">Description</label><input type="text" id="l4_desc" name="description" class="form-control"></div>
 
-                        <h6 class="mt-3 border-bottom pb-2">Lastausgleich (Load Balancing)</h6>
-                        <div class="mb-2"><label for="l4_lb">Lastverteilungsrichtlinie (LB Policy)</label><select id="l4_lb" name="lb_policy" class="form-select"><option value="">Default (Random)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option></select></div>
-                        <div class="mb-2"><label for="l4_hfd">Passive-Health-Ausfalldauer (Sekunden)</label><input type="text" id="l4_hfd" name="passive_health_fail_duration" class="form-control"></div>
-                        <div class="mb-3"><label for="l4_hmf">Max. Fehlversuche bei Passive Health (Max Fails)</label><input type="number" id="l4_hmf" name="passive_health_max_fails" class="form-control"></div>
+                        <h6 class="mt-3 border-bottom pb-2">Load Balancing</h6>
+                        <div class="mb-2"><label for="l4_lb">LB Policy</label><select id="l4_lb" name="lb_policy" class="form-select"><option value="">Default (Random)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option></select></div>
+                        <div class="mb-2"><label for="l4_hfd">Passive Health Fail Duration (seconds)</label><input type="text" id="l4_hfd" name="passive_health_fail_duration" class="form-control"></div>
+                        <div class="mb-3"><label for="l4_hmf">Max Passive Health Fails</label><input type="number" id="l4_hmf" name="passive_health_max_fails" class="form-control"></div>
 
-                        <h6 class="mt-3 border-bottom pb-2">Zugriff (Access)</h6>
-                        <div class="mb-3"><label for="l4_rem_ip">Ferne IP (Remote IPs, comma separated)</label><input type="text" id="l4_rem_ip" name="remote_ip" class="form-control array-input"></div>
+                        <h6 class="mt-3 border-bottom pb-2">Access</h6>
+                        <div class="mb-3"><label for="l4_rem_ip">Remote IPs (comma separated)</label><input type="text" id="l4_rem_ip" name="remote_ip" class="form-control array-input"></div>
 
                     </form></div>
                     <div class="modal-footer"><button class="btn btn-primary" onclick="app.ui.saveModal('layer4Modal', 'layer4')">Save</button></div>
@@ -1177,8 +1190,10 @@ const app = {
             $('#d_dtls, #d_acme').on('change', () => app.ui.syncDomainTlsControls());
             $('#sd_rev, #sd_acme').on('change', () => app.ui.syncSubdomainTlsControls());
             $('#l4_otls').on('change', () => app.ui.toggleLayer4UpstreamOptions());
+            app.applyI18n(document.getElementById('modalsContainer'));
         }
     }
 };
 
+window.app = app;
 $(document).ready(() => app.init());
