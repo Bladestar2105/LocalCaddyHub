@@ -75,6 +75,9 @@ function generateCaddyfile(config, certsDir = './certs') {
       })
       .map(item => ({
         ...item.route,
+        fromDomain: layer4Values(item.route.fromDomain),
+        toDomain: layer4Values(item.route.toDomain),
+        remote_ip: layer4Values(item.route.remote_ip),
         _index: item.index,
         _protocol: item.route.protocol || 'tcp',
         _listenPort: item.route.fromPort || '443'
