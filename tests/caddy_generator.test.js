@@ -255,6 +255,7 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(imapsBlock, /@l4_imap_prod tls sni imap\.example\.com/);
     assert.match(imapsBlock, /route @l4_imap_prod \{/);
     assert.match(imapsBlock, /proxy tcp\/192\.168\.225\.204:993/);
+    assert.doesNotMatch(imapsBlock, /proxy tcp\/192\.168\.225\.204:993 \{\s*\}/);
 
     const httpBlock = blockFor(config, 'tcp/:80');
     assert.match(httpBlock, /@l4_http_route http host app\.example\.com/);
