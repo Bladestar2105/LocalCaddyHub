@@ -3,6 +3,7 @@ const { formatDuration } = require('./utils');
 
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
+  const automaticCertsDisabled = ['off', 'disable_certs'].includes(config.general && config.general.auto_https);
 
   // Global options
   sb += '{\n';
@@ -284,7 +285,7 @@ function generateCaddyfile(config, certsDir = './certs') {
   }
 
   function mergedTlsSettings(site, domain) {
-    const useAcme = Boolean(site.acme || (site !== domain && domain.acme));
+    const useAcme = !automaticCertsDisabled && Boolean(site.acme || (site !== domain && domain.acme));
     return {
       acme: useAcme,
       customCert: useAcme ? '' : (site.customCert || domain.customCert || ''),

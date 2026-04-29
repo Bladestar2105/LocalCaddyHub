@@ -82,8 +82,10 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(domainBlock, /reverse_proxy domain-upstream:8080/);
     assert.doesNotMatch(domainBlock, /sub-upstream:9090/);
+    assert.doesNotMatch(domainBlock, /\ttls (internal|\/certs)/);
     assert.match(domainBlock, /basic_auth \{\n\t\tdomain-user/);
 
+    assert.doesNotMatch(subBlock, /\ttls (internal|\/certs)/);
     assert.match(subBlock, /trust_pool file \/certs\/ca\.pem/);
     assert.match(subBlock, /@al_sub_s1_al1 not client_ip 10\.0\.0\.0\/8/);
     assert.match(subBlock, /respond @al_sub_s1_al1 "Forbidden" 403/);
@@ -116,6 +118,65 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(config, /tls_trust_pool file \/certs\/ca\.pem/);
     assert.match(config, /versions 1\.1 2 3 h2c/);
     assert.match(config, /keepalive 30s/);
+  });
+
+  test('uses Caddy automatic HTTPS for ACME and ignores custom certificates', () => {
+    const config = generateCaddyfile({
+      general: { enabled: true, tls_email: 'admin@example.com' },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        acme: true,
+        customCert: 'custom.pem'
+      }],
+      handlers: []
+    }, '/certs');
+
+    const domainBlock = blockFor(config, 'https://example.com:443');
+
+    assert.match(config, /\temail admin@example\.com/);
+    assert.doesNotMatch(domainBlock, /\ttls internal/);
+    assert.doesNotMatch(domainBlock, /custom\.pem/);
+  });
+
+  test('falls back to explicit TLS when automatic certificate management is disabled', () => {
+    const config = generateCaddyfile({
+      general: { enabled: true, auto_https: 'disable_certs' },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        acme: true,
+        customCert: 'fallback.pem'
+      }],
+      handlers: []
+    }, '/certs');
+
+    const domainBlock = blockFor(config, 'https://example.com:443');
+
+    assert.match(config, /\tauto_https disable_certs/);
+    assert.match(domainBlock, /\ttls \/certs\/fallback\.pem \/certs\/fallback\.key \{/);
+  });
+
+  test('does not emit TLS automation for HTTP-only domains', () => {
+    const config = generateCaddyfile({
+      general: { enabled: true },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        disableTls: true,
+        acme: true,
+        customCert: 'custom.pem'
+      }],
+      handlers: []
+    }, '/certs');
+
+    const domainBlock = blockFor(config, 'http://example.com:80');
+
+    assert.doesNotMatch(domainBlock, /\ttls /);
+    assert.doesNotMatch(domainBlock, /custom\.pem/);
   });
 
   test('honors layer4 sequence ordering', () => {
