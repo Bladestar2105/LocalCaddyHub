@@ -1502,14 +1502,15 @@ const app = {
 
         initModals: function() {
             const modalHTML = `
-                <!-- Domain Modal -->
+	                <!-- Domain Modal -->
                 <div class="modal fade" id="domainModal" tabindex="-1">
                   <div class="modal-dialog"><div class="modal-content">
                     <div class="modal-header"><h5 class="modal-title">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="domainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="d_en"> <label for="d_en">Enabled</label></div>
-                        <div class="mb-2"><label for="d_fd">Domain</label><input type="text" id="d_fd" name="fromDomain" class="form-control" required placeholder="example.com"></div>
-                        <div class="mb-2"><label for="d_fp">Port (Empty for default)</label><input type="text" id="d_fp" name="fromPort" class="form-control"></div>
+	                        <div class="mb-2"><label for="d_fd">Domain</label><input type="text" id="d_fd" name="fromDomain" class="form-control" required placeholder="example.com"></div>
+	                        <div class="mb-2"><label for="d_ah">Additional Hostnames (SANs, comma separated)</label><input type="text" id="d_ah" name="additionalHosts" class="form-control array-input" placeholder="www.example.com, autodiscover.example.com"></div>
+	                        <div class="mb-2"><label for="d_fp">Port (Empty for default)</label><input type="text" id="d_fp" name="fromPort" class="form-control"></div>
                         <div class="mb-2"><label for="d_desc">Description</label><input type="text" id="d_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="accessLog" id="d_al"> <label for="d_al">Enable Access Log</label></div>
                         <div class="mb-2"><input type="checkbox" name="disableTls" id="d_dtls"> <label for="d_dtls">Disable TLS (HTTP only)</label></div>
@@ -1530,8 +1531,9 @@ const app = {
                     <div class="modal-header"><h5 class="modal-title">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="subdomainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="sd_en"> <label for="sd_en">Enabled</label></div>
-                        <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
-                        <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
+	                        <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
+	                        <div class="mb-2"><label for="sd_ah">Additional Hostnames (SANs, comma separated)</label><input type="text" id="sd_ah" name="additionalHosts" class="form-control array-input" placeholder="autodiscover.example.com, legacy.example.com"></div>
+	                        <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
                         <div class="mb-2"><label for="sd_desc">Description</label><input type="text" id="sd_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Use Let's Encrypt public certificate</label> <small id="sd_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.</small></div>
                         <div class="mb-2"><label for="sd_cam">Client Auth Mode</label><select id="sd_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>

@@ -31,6 +31,31 @@ function toStringArray(value) {
   return [];
 }
 
+function toHostArray(value) {
+  if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
+  if (typeof value === 'string') {
+    return value.split(',').map(v => v.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function additionalAcmeHosts(value, parentDomain = '') {
+  const parent = String(parentDomain || '').trim().toLowerCase();
+  const seen = new Set();
+  const hosts = [];
+
+  for (let host of toHostArray(value)) {
+    host = host.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
+    if (!host) continue;
+    if (!host.includes('.') && parent) host = `${host}.${parent}`;
+    if (seen.has(host)) continue;
+    seen.add(host);
+    hosts.push(host);
+  }
+
+  return hosts;
+}
+
 function autoHttpsDisablesAcme(general = {}) {
   return ['off', 'disable_certs'].includes(general.auto_https || '');
 }
@@ -158,6 +183,7 @@ function structuredConfigFromDb() {
       accessLog: Boolean(d.accessLog),
       disableTls: Boolean(d.disableTls),
       acme: Boolean(d.acme),
+      additionalHosts: toHostArray(parseJSON(d.additionalHosts)),
       accesslist: parseJSON(d.accesslist),
       basicauth: parseJSON(d.basicauth)
     })),
@@ -165,6 +191,7 @@ function structuredConfigFromDb() {
       ...s,
       enabled: Boolean(s.enabled),
       acme: Boolean(s.acme),
+      additionalHosts: toHostArray(parseJSON(s.additionalHosts)),
       accesslist: parseJSON(s.accesslist),
       basicauth: parseJSON(s.basicauth)
     })),
@@ -232,11 +259,12 @@ const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enabl
 
 const deleteDomainsStmt = db.prepare('DELETE FROM domains');
 const insertDomainStmt = db.prepare(`
-  INSERT INTO domains (id, enabled, fromDomain, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool, acme)
+  INSERT INTO domains (id, enabled, fromDomain, additionalHosts, fromPort, accesslist, basicauth, description, accessLog, disableTls, customCert, client_auth_mode, client_auth_trust_pool, acme)
   SELECT
     json_extract(value, '$.id'),
     json_extract(value, '$.enabled'),
     json_extract(value, '$.fromDomain'),
+    json_extract(value, '$.additionalHosts'),
     json_extract(value, '$.fromPort'),
     json_extract(value, '$.accesslist'),
     json_extract(value, '$.basicauth'),
@@ -252,12 +280,13 @@ const insertDomainStmt = db.prepare(`
 
 const deleteSubdomainsStmt = db.prepare('DELETE FROM subdomains');
 const insertSubdomainStmt = db.prepare(`
-  INSERT INTO subdomains (id, enabled, reverse, fromDomain, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool, acme)
+  INSERT INTO subdomains (id, enabled, reverse, fromDomain, additionalHosts, accesslist, basicauth, description, client_auth_mode, client_auth_trust_pool, acme)
   SELECT
     json_extract(value, '$.id'),
     json_extract(value, '$.enabled'),
     json_extract(value, '$.reverse'),
     json_extract(value, '$.fromDomain'),
+    json_extract(value, '$.additionalHosts'),
     json_extract(value, '$.accesslist'),
     json_extract(value, '$.basicauth'),
     json_extract(value, '$.description'),
@@ -499,6 +528,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       enabled: d.enabled ? 1 : 0,
       accesslist: JSON.stringify(d.accesslist || []),
       basicauth: JSON.stringify(d.basicauth || []),
+      additionalHosts: JSON.stringify(toHostArray(d.additionalHosts)),
       accessLog: d.accessLog ? 1 : 0,
       disableTls: d.disableTls ? 1 : 0,
       acme: d.acme ? 1 : 0
@@ -509,6 +539,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       enabled: s.enabled ? 1 : 0,
       accesslist: JSON.stringify(s.accesslist || []),
       basicauth: JSON.stringify(s.basicauth || []),
+      additionalHosts: JSON.stringify(toHostArray(s.additionalHosts)),
       acme: s.acme ? 1 : 0
     }));
 
@@ -871,6 +902,9 @@ function configuredAcmeTargets() {
   for (const domain of domains) {
     if (domain.enabled && domain.acme && !domain.disableTls) {
       addTarget(domain.fromDomain, 'Domain');
+      for (const host of additionalAcmeHosts(parseJSON(domain.additionalHosts), domain.fromDomain)) {
+        addTarget(host, 'Domain SAN');
+      }
     }
   }
 
@@ -879,6 +913,9 @@ function configuredAcmeTargets() {
     if (!subdomain.enabled || !parent || !parent.enabled || parent.disableTls) continue;
     if (subdomain.acme || parent.acme) {
       addTarget(`${subdomain.fromDomain}.${parent.fromDomain}`, 'Subdomain');
+      for (const host of additionalAcmeHosts(parseJSON(subdomain.additionalHosts), parent.fromDomain)) {
+        addTarget(host, 'Subdomain SAN');
+      }
     }
   }
 
@@ -933,6 +970,19 @@ function parseCaddyLogLine(line) {
   }
 }
 
+function certificateMetadataHosts(metadata = {}) {
+  const hosts = new Set();
+  const san = metadata.subjectAltName || '';
+  for (const match of san.matchAll(/DNS:([^,\s]+)/g)) {
+    hosts.add(match[1].toLowerCase());
+  }
+  const subject = metadata.subject || '';
+  for (const match of subject.matchAll(/(?:^|\n|,\s*)CN=([^,\n]+)/g)) {
+    hosts.add(match[1].trim().toLowerCase());
+  }
+  return hosts;
+}
+
 async function readAcmeLogEntries(targetHosts) {
   const logPath = path.join(logsDir, 'caddy-global.log');
   let text = '';
@@ -975,19 +1025,21 @@ async function findManagedCertificateHosts(certificateHosts) {
       return;
     }
 
-    for (const entry of entries) {
-      const entryPath = path.join(dir, entry.name);
-      const lowerPath = entryPath.toLowerCase();
-      if (entry.isDirectory()) {
-        await walk(entryPath, depth + 1);
-      } else if (/\.(crt|pem)$/.test(entry.name.toLowerCase())) {
-        for (const host of certificateHosts) {
-          if (lowerPath.includes(host.toLowerCase())) {
-            found.add(host);
-          }
-        }
-      }
-    }
+	  for (const entry of entries) {
+	    const entryPath = path.join(dir, entry.name);
+	    const lowerPath = entryPath.toLowerCase();
+	    if (entry.isDirectory()) {
+	      await walk(entryPath, depth + 1);
+	    } else if (/\.(crt|pem)$/.test(entry.name.toLowerCase())) {
+	      const certificateNames = certificateMetadataHosts(await readCertificateMetadata(entryPath));
+	      for (const host of certificateHosts) {
+	        const normalizedHost = host.toLowerCase();
+	        if (lowerPath.includes(normalizedHost) || certificateNames.has(normalizedHost)) {
+	          found.add(host);
+	        }
+	      }
+	    }
+	  }
   }
 
   await walk(certificatesDir);

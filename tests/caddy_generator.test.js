@@ -96,6 +96,30 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(subBlock, /reverse_proxy sub-upstream:9090/);
   });
 
+  test('emits additional SAN hostnames on domain and subdomain site blocks', () => {
+    const config = generateCaddyfile({
+      general: { enabled: true },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        additionalHosts: ['www.example.com', 'autodiscover'],
+        acme: true
+      }],
+      subdomains: [{
+        id: 's1',
+        enabled: true,
+        reverse: 'd1',
+        fromDomain: 'mail',
+        additionalHosts: ['owa.example.com', 'legacy'],
+        acme: true
+      }]
+    }, '/certs');
+
+    assert.match(config, /https:\/\/example\.com:443, https:\/\/www\.example\.com:443, https:\/\/autodiscover\.example\.com:443 \{/);
+    assert.match(config, /https:\/\/mail\.example\.com:443, https:\/\/owa\.example\.com:443, https:\/\/legacy\.example\.com:443 \{/);
+  });
+
   test('maps UI HTTP versions and writes current trust pool syntax', () => {
     const config = generateCaddyfile({
       general: { enabled: true },
@@ -352,6 +376,19 @@ describe('generateCaddyfile UI parity', () => {
       assert.ok(persistedFields.has(field), `${field} is present in the Layer4 UI but not persisted`);
       assert.ok(schemaColumns.has(field), `${field} is present in the Layer4 UI but missing from the DB schema`);
     }
+  });
+
+  test('persists additional SAN hostnames through UI and API schema', () => {
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+    const dbJs = fs.readFileSync('src/db.js', 'utf8');
+
+    assert.match(appJs, /name="additionalHosts"/);
+    assert.match(appJs, /Additional Hostnames \(SANs, comma separated\)/);
+    assert.match(apiJs, /additionalHosts: toHostArray\(parseJSON\(d\.additionalHosts\)\)/);
+    assert.match(apiJs, /additionalHosts: JSON\.stringify\(toHostArray\(d\.additionalHosts\)\)/);
+    assert.match(apiJs, /additionalAcmeHosts/);
+    assert.match(dbJs, /additionalHosts TEXT/);
   });
 
   test('persists ACME CA general setting through UI and API schema', () => {
