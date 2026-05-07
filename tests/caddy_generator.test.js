@@ -368,6 +368,35 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(dbJs, /acme_ca TEXT/);
   });
 
+  test('exposes Lets Encrypt request status in API and UI', () => {
+    const indexHtml = fs.readFileSync('static/index.html', 'utf8');
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+
+    assert.match(indexHtml, /id="certAcmeStatus"/);
+    assert.match(appJs, /pollLetsEncryptStatus/);
+    assert.match(appJs, /renderLetsEncryptStatus/);
+    assert.match(apiJs, /router\.get\('\/certs\/letsencrypt\/status'/);
+    assert.match(apiJs, /readAcmeLogEntries/);
+    assert.match(apiJs, /findManagedCertificateHosts/);
+  });
+
+  test('exposes password-protected PFX export in API and UI', () => {
+    const indexHtml = fs.readFileSync('static/index.html', 'utf8');
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+
+    assert.match(indexHtml, /id="pfxCertSelect"/);
+    assert.match(indexHtml, /id="pfxPassword"/);
+    assert.match(indexHtml, /Download PFX/);
+    assert.match(appJs, /downloadPfx/);
+    assert.match(appJs, /loadPfxCertificates/);
+    assert.match(apiJs, /router\.get\('\/certs\/pfx\/list'/);
+    assert.match(apiJs, /router\.post\('\/certs\/pfx\/download'/);
+    assert.match(apiJs, /'pkcs12'/);
+    assert.match(apiJs, /LOCALCADDYHUB_PFX_PASSWORD/);
+  });
+
   test('infers host matcher when layer4 host values are present', () => {
     const config = generateCaddyfile({
       general: { enabled: false, enable_layer4: true },

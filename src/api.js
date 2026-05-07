@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 const db = require('./db');
 const { parseJSON, isSafeFilename } = require('./utils');
@@ -730,8 +731,279 @@ router.get('/stats', (req, res) => {
 // Certs
 let cachedAppDataDir = null;
 
+function normalizeAcmeHost(value) {
+  let host = String(value || '').trim().toLowerCase();
+  if (!host) return '';
+  try {
+    if (/^https?:\/\//.test(host)) host = new URL(host).hostname;
+  } catch (e) {
+    return '';
+  }
+  host = host.replace(/^\*\./, '').replace(/\.$/, '');
+  if (!host || host.includes('*') || host.includes(':') || !host.includes('.')) return '';
+  return host;
+}
+
+function configuredAcmeTargets() {
+  const general = getGeneralStmt.get() || {};
+  if (autoHttpsDisablesAcme(general)) return [];
+
+  const targets = [];
+  const seen = new Set();
+  const domains = getDomainsStmt.all();
+  const domainsById = new Map(domains.map(domain => [domain.id, domain]));
+
+  function addTarget(host, type) {
+    const normalized = normalizeAcmeHost(host);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    targets.push({ host: normalized, type });
+  }
+
+  for (const domain of domains) {
+    if (domain.enabled && domain.acme && !domain.disableTls) {
+      addTarget(domain.fromDomain, 'Domain');
+    }
+  }
+
+  for (const subdomain of getSubdomainsStmt.all()) {
+    const parent = domainsById.get(subdomain.reverse);
+    if (!subdomain.enabled || !parent || !parent.enabled || parent.disableTls) continue;
+    if (subdomain.acme || parent.acme) {
+      addTarget(`${subdomain.fromDomain}.${parent.fromDomain}`, 'Subdomain');
+    }
+  }
+
+  for (const route of getLayer4Stmt.all()) {
+    if (!route.enabled || !route.acme || (!route.terminateTls && !route.starttls)) continue;
+    let hosts = toStringArray(parseJSON(route.fromDomain));
+    if (hosts.length === 0 && route.default_sni) hosts = [route.default_sni];
+    for (const host of hosts) {
+      addTarget(host, 'Layer 4');
+    }
+  }
+
+  return targets;
+}
+
+async function getCaddyAppDataDir() {
+  if (cachedAppDataDir) return cachedAppDataDir;
+  const { stdout } = await execCaddyPromise(['environ']);
+  const match = stdout.match(/caddy\.AppDataDir=(.+)/);
+  if (!match) throw new Error('Could not find Caddy AppDataDir');
+  cachedAppDataDir = match[1].trim();
+  return cachedAppDataDir;
+}
+
+async function readRecentTextFile(filePath, maxBytes = 256 * 1024) {
+  const handle = await fs.promises.open(filePath, 'r');
+  try {
+    const stat = await handle.stat();
+    const start = Math.max(0, stat.size - maxBytes);
+    const length = stat.size - start;
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, start);
+    return buffer.toString('utf-8');
+  } finally {
+    await handle.close();
+  }
+}
+
+function parseCaddyLogLine(line) {
+  try {
+    const entry = JSON.parse(line);
+    return {
+      time: entry.ts ? new Date(entry.ts * 1000).toISOString() : '',
+      level: entry.level || '',
+      logger: entry.logger || '',
+      msg: entry.msg || '',
+      error: entry.error || '',
+      raw: line
+    };
+  } catch (e) {
+    return { time: '', level: '', logger: '', msg: line, error: '', raw: line };
+  }
+}
+
+async function readAcmeLogEntries(targetHosts) {
+  const logPath = path.join(logsDir, 'caddy-global.log');
+  let text = '';
+  try {
+    text = await readRecentTextFile(logPath);
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+
+  const terms = ['acme', 'letsencrypt', 'certificate', 'challenge', 'issuer', 'tls.obtain', 'tls.renew', 'tls.cache'];
+  const hosts = targetHosts.map(host => host.toLowerCase());
+  return text.split('\n')
+    .filter(Boolean)
+    .filter(line => {
+      const lower = line.toLowerCase();
+      return terms.some(term => lower.includes(term)) || hosts.some(host => lower.includes(host));
+    })
+    .slice(-80)
+    .map(parseCaddyLogLine);
+}
+
+async function findManagedCertificateHosts(certificateHosts) {
+  const found = new Set();
+  if (certificateHosts.length === 0) return found;
+
+  let certificatesDir;
+  try {
+    certificatesDir = path.join(await getCaddyAppDataDir(), 'certificates');
+  } catch (e) {
+    return found;
+  }
+
+  async function walk(dir, depth = 0) {
+    if (depth > 6) return;
+    let entries = [];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      const lowerPath = entryPath.toLowerCase();
+      if (entry.isDirectory()) {
+        await walk(entryPath, depth + 1);
+      } else if (/\.(crt|pem)$/.test(entry.name.toLowerCase())) {
+        for (const host of certificateHosts) {
+          if (lowerPath.includes(host.toLowerCase())) {
+            found.add(host);
+          }
+        }
+      }
+    }
+  }
+
+  await walk(certificatesDir);
+  return found;
+}
+
+function pfxCertificateId(source, certPath, keyPath) {
+  return crypto
+    .createHash('sha256')
+    .update(`${source}\0${certPath}\0${keyPath}`)
+    .digest('hex');
+}
+
+function safeDownloadName(value, fallback = 'certificate') {
+  const name = String(value || fallback).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  return name || fallback;
+}
+
+async function listCertificatePairs(rootDir, options = {}) {
+  const pairs = [];
+  const source = options.source || 'Certificate';
+  const recursive = Boolean(options.recursive);
+  const maxDepth = options.maxDepth || 6;
+
+  async function scan(dir, depth = 0) {
+    let entries = [];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+
+    const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+    const keys = new Map(
+      files
+        .filter(name => name.toLowerCase().endsWith('.key'))
+        .map(name => [name.replace(/\.key$/i, '').toLowerCase(), name])
+    );
+    const certs = files.filter(name => /\.(crt|pem|cer)$/i.test(name));
+
+    for (const certName of certs) {
+      const base = certName.replace(/\.(crt|pem|cer)$/i, '');
+      const keyName = keys.get(base.toLowerCase());
+      if (!keyName) continue;
+
+      const certPath = path.join(dir, certName);
+      const keyPath = path.join(dir, keyName);
+      const relDir = path.relative(rootDir, dir);
+      const relCert = path.relative(rootDir, certPath);
+      const relKey = path.relative(rootDir, keyPath);
+      const issuer = relDir && relDir !== '.' ? relDir.split(path.sep)[0] : '';
+      const host = base.toLowerCase();
+
+      pairs.push({
+        id: pfxCertificateId(source, certPath, keyPath),
+        name: base,
+        host,
+        source,
+        issuer,
+        certRelPath: relCert,
+        keyRelPath: relKey,
+        certPath,
+        keyPath
+      });
+    }
+
+    if (!recursive || depth >= maxDepth) return;
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await scan(path.join(dir, entry.name), depth + 1);
+      }
+    }
+  }
+
+  await scan(rootDir);
+  return pairs;
+}
+
+async function listPfxCertificates() {
+  const customPairs = await listCertificatePairs(certDir, { source: 'Custom upload' });
+  let managedPairs = [];
+  try {
+    const certificatesDir = path.join(await getCaddyAppDataDir(), 'certificates');
+    managedPairs = await listCertificatePairs(certificatesDir, {
+      source: 'Caddy-managed ACME',
+      recursive: true
+    });
+  } catch (e) {
+    managedPairs = [];
+  }
+
+  const byId = new Map();
+  for (const pair of [...managedPairs, ...customPairs]) {
+    byId.set(pair.id, pair);
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    return `${a.source}:${a.name}`.localeCompare(`${b.source}:${b.name}`);
+  });
+}
+
+function publicPfxCertificate(pair) {
+  return {
+    id: pair.id,
+    name: pair.name,
+    host: pair.host,
+    source: pair.source,
+    issuer: pair.issuer,
+    certRelPath: pair.certRelPath
+  };
+}
+
 router.post('/certs/letsencrypt/request', async (req, res) => {
   try {
+    const targets = configuredAcmeTargets();
+    if (targets.length === 0) {
+      return res.json({
+        output: '',
+        stderr: '',
+        error: 'No valid Let\'s Encrypt targets are configured. Enable Let\'s Encrypt on a public domain first.',
+        targets
+      });
+    }
+
     await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
     await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
 
@@ -740,7 +1012,8 @@ router.post('/certs/letsencrypt/request', async (req, res) => {
       return res.json({
         output: 'Caddy reloaded successfully. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.',
         stderr: '',
-        error: undefined
+        error: undefined,
+        targets
       });
     }
 
@@ -748,7 +1021,8 @@ router.post('/certs/letsencrypt/request', async (req, res) => {
     res.json({
       output: 'Caddy start command executed. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.',
       stderr: '',
-      error: undefined
+      error: undefined,
+      targets
     });
   } catch (err) {
     res.json({
@@ -759,25 +1033,89 @@ router.post('/certs/letsencrypt/request', async (req, res) => {
   }
 });
 
-router.get('/certs/acme/download', async (req, res) => {
-  if (cachedAppDataDir) {
-    const certificatesDir = path.join(cachedAppDataDir, 'certificates');
-    return await serveCertificates(certificatesDir, res);
+router.get('/certs/letsencrypt/status', async (req, res) => {
+  try {
+    const targets = configuredAcmeTargets();
+    const hosts = targets.map(target => target.host);
+    const [caddyRunning, foundHosts, logs] = await Promise.all([
+      isCaddyAdminReady(),
+      findManagedCertificateHosts(hosts),
+      readAcmeLogEntries(hosts)
+    ]);
+
+    res.json({
+      checkedAt: new Date().toISOString(),
+      caddyRunning,
+      targets: targets.map(target => ({
+        ...target,
+        certificateFound: foundHosts.has(target.host)
+      })),
+      logs
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/certs/pfx/list', async (req, res) => {
+  try {
+    const certificates = await listPfxCertificates();
+    res.json(certificates.map(publicPfxCertificate));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/certs/pfx/download', express.json(), async (req, res) => {
+  const { id, password } = req.body || {};
+  if (typeof id !== 'string' || !id) {
+    return res.status(400).send('Missing certificate selection');
+  }
+  if (typeof password !== 'string' || password.length < 1 || password.length > 256 || password.includes('\0')) {
+    return res.status(400).send('Password must be between 1 and 256 characters');
   }
 
-  execFile(resolveCaddyBinary(), ['environ'], async (error, stdout) => {
+  const certificate = (await listPfxCertificates()).find(pair => pair.id === id);
+  if (!certificate) {
+    return res.status(404).send('Certificate/key pair not found');
+  }
+
+  const outputName = `${safeDownloadName(certificate.name)}.pfx`;
+  const env = {
+    ...process.env,
+    LOCALCADDYHUB_PFX_PASSWORD: password
+  };
+  const args = [
+    'pkcs12',
+    '-export',
+    '-inkey', certificate.keyPath,
+    '-in', certificate.certPath,
+    '-out', '-',
+    '-name', certificate.name,
+    '-passout', 'env:LOCALCADDYHUB_PFX_PASSWORD'
+  ];
+
+  execFile('openssl', args, { encoding: 'buffer', maxBuffer: 20 * 1024 * 1024, env }, (error, stdout, stderr) => {
     if (error) {
-      console.error('Failed to query Caddy environment:', error);
-      return res.status(500).send('Failed to query Caddy environment');
+      console.error(`PFX export failed: ${stderr ? stderr.toString('utf-8') : error.message}`);
+      return res.status(500).send(stderr ? stderr.toString('utf-8') : error.message);
     }
-    const match = stdout.match(/caddy\.AppDataDir=(.+)/);
-    if (!match) {
-      return res.status(500).send('Could not find Caddy AppDataDir');
-    }
-    cachedAppDataDir = match[1].trim();
-    const certificatesDir = path.join(cachedAppDataDir, 'certificates');
-    return await serveCertificates(certificatesDir, res);
+
+    res.setHeader('Content-Type', 'application/x-pkcs12');
+    res.setHeader('Content-Disposition', `attachment; filename="${outputName}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(stdout);
   });
+});
+
+router.get('/certs/acme/download', async (req, res) => {
+  try {
+    const certificatesDir = path.join(await getCaddyAppDataDir(), 'certificates');
+    return await serveCertificates(certificatesDir, res);
+  } catch (error) {
+    console.error('Failed to query Caddy environment:', error);
+    return res.status(500).send(error.message || 'Failed to query Caddy environment');
+  }
 });
 
 async function serveCertificates(certificatesDir, res) {

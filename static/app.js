@@ -22,14 +22,18 @@ const app = {
         layer4: []
     },
     certs: [],
+    pfxCertificates: [],
     logStreamSource: null,
     logFiltersCache: { level: '', status: '', method: '', ip: '', path: '', text: '' },
     logFilterTimeout: null,
+    acmeStatusTimer: null,
+    acmeLastRequestMessage: '',
     i18n: window.LocalCaddyHubI18n,
 
     init: async function() {
         this.i18n.init();
         await this.loadCerts();
+        await this.loadPfxCertificates();
         await this.loadConfig();
         this.ui.initModals();
         this.ui.renderAll();
@@ -164,10 +168,93 @@ const app = {
         setTimeout(() => box.fadeOut(), 5000);
     },
 
+    renderLetsEncryptStatus: function(statusData = {}, requestMessage = '', type = 'info') {
+        const lines = [];
+        if (requestMessage) {
+            lines.push(this.t('Request result:'));
+            lines.push(requestMessage);
+            lines.push('');
+        }
+
+        if (statusData.error) {
+            lines.push(this.t('Status error:') + ' ' + statusData.error);
+        }
+
+        if (statusData.checkedAt) {
+            lines.push(`${this.t('Status updated:')} ${new Date(statusData.checkedAt).toLocaleString()}`);
+        }
+
+        if (typeof statusData.caddyRunning === 'boolean') {
+            lines.push(`${this.t('Caddy admin API:')} ${statusData.caddyRunning ? this.t('reachable') : this.t('not reachable')}`);
+        }
+
+        const targets = statusData.targets || [];
+        lines.push('');
+        lines.push(this.t('Configured ACME targets:'));
+        if (targets.length === 0) {
+            lines.push('- ' + this.t('No valid Let\'s Encrypt targets are configured.'));
+        } else {
+            targets.forEach(target => {
+                const state = target.certificateFound ? this.t('Certificate found') : this.t('Waiting for certificate');
+                lines.push(`- ${target.host} (${this.t(target.type || 'Target')}): ${state}`);
+            });
+        }
+
+        const logs = statusData.logs || [];
+        lines.push('');
+        lines.push(this.t('Recent ACME log entries:'));
+        if (logs.length === 0) {
+            lines.push('- ' + this.t('No matching ACME log entries yet. Keep this panel open after requesting.'));
+        } else {
+            logs.slice(-20).forEach(log => {
+                const meta = [log.time, log.level, log.logger].filter(Boolean).join(' ');
+                const msg = [log.msg || log.raw || '', log.error ? `${this.t('Error')}: ${log.error}` : ''].filter(Boolean).join(' | ');
+                lines.push(`- ${meta ? meta + ' ' : ''}${msg}`);
+            });
+        }
+
+        $('#certAcmeStatus')
+            .text(lines.join('\n'))
+            .removeClass('text-info text-success text-danger')
+            .addClass('text-' + type)
+            .show();
+    },
+
+    pollLetsEncryptStatus: async function(attempt = 0, requestMessage = '') {
+        const currentRequestMessage = requestMessage || this.acmeLastRequestMessage;
+        if (this.acmeStatusTimer) {
+            clearTimeout(this.acmeStatusTimer);
+            this.acmeStatusTimer = null;
+        }
+
+        try {
+            const res = await fetch('/api/certs/letsencrypt/status');
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                this.renderLetsEncryptStatus(data, currentRequestMessage, 'danger');
+                return;
+            }
+            const targets = data.targets || [];
+            const allFound = targets.length > 0 && targets.every(target => target.certificateFound);
+            this.renderLetsEncryptStatus(data, currentRequestMessage, allFound ? 'success' : 'info');
+            if (targets.some(target => target.certificateFound)) {
+                this.loadPfxCertificates();
+            }
+
+            if (!allFound && attempt < 40) {
+                this.acmeStatusTimer = setTimeout(() => this.pollLetsEncryptStatus(attempt + 1), 3000);
+            }
+        } catch (e) {
+            this.renderLetsEncryptStatus({ error: e.message }, currentRequestMessage, 'danger');
+        }
+    },
+
     requestLetsEncrypt: async function(btnElement) {
         this.collectGeneralConfigFromForm();
         if (!this.ui.hasAcmeTargets()) {
-            this.showStatus('Enable Let\'s Encrypt on at least one enabled Domain, Subdomain, or Layer 4 route first.', 'danger');
+            this.renderLetsEncryptStatus({
+                error: this.t('Enable Let\'s Encrypt on at least one enabled Domain, Subdomain, or Layer 4 route first.')
+            }, '', 'danger');
             return;
         }
 
@@ -196,16 +283,17 @@ const app = {
             });
             const data = await res.json();
             const message = [data.output, data.stderr, data.error ? this.t('Error: ') + data.error : ''].filter(Boolean).join('\n');
-            status.text(this.t(message || 'Success'))
-                .removeClass('text-info text-success text-danger')
-                .addClass(data.error ? 'text-danger' : 'text-success')
-                .show();
+            this.acmeLastRequestMessage = this.t(message || 'Success');
+            this.renderLetsEncryptStatus({
+                checkedAt: new Date().toISOString(),
+                targets: data.targets || [],
+                logs: [],
+                error: data.error || ''
+            }, this.acmeLastRequestMessage, data.error ? 'danger' : 'info');
+            this.pollLetsEncryptStatus(0);
             this.fetchLogFiles();
         } catch (e) {
-            status.text(this.t('Error: ') + e.message)
-                .removeClass('text-info text-success')
-                .addClass('text-danger')
-                .show();
+            this.renderLetsEncryptStatus({ error: e.message }, this.t('Error: ') + e.message, 'danger');
         } finally {
             if (btn) {
                 btn.prop('disabled', false).html(originalText);
@@ -300,7 +388,8 @@ const app = {
             if (res.ok) {
                 $('#certUploadStatus').text(this.t('File uploaded successfully!')).show();
                 fileInput.value = "";
-                this.loadCerts();
+                await this.loadCerts();
+                await this.loadPfxCertificates();
             } else {
                 $('#certUploadStatus').text(this.t('Upload failed.')).show();
             }
@@ -320,12 +409,83 @@ const app = {
         try {
             const res = await fetch(`/api/certs?file=${encodeURIComponent(filename)}`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (res.ok) {
-                this.loadCerts();
+                await this.loadCerts();
+                await this.loadPfxCertificates();
             } else {
                 alert(this.t('Failed to delete cert.'));
             }
         } catch (e) {
             alert(this.t('Error: ') + e.message);
+        }
+    },
+
+    loadPfxCertificates: async function() {
+        try {
+            const res = await fetch('/api/certs/pfx/list');
+            if (res.ok) {
+                this.pfxCertificates = await res.json();
+            } else {
+                this.pfxCertificates = [];
+            }
+        } catch (e) {
+            console.error("Failed to load PFX certificates", e);
+            this.pfxCertificates = [];
+        }
+        this.ui.renderPfxCertificates();
+    },
+
+    downloadPfx: async function(btnElement) {
+        const certId = $('#pfxCertSelect').val();
+        const password = $('#pfxPassword').val();
+        const status = $('#pfxExportStatus');
+
+        if (!certId) {
+            status.text(this.t('Select a certificate/key pair first.')).removeClass('text-success').addClass('text-danger').show();
+            return;
+        }
+        if (!password) {
+            status.text(this.t('Enter a PFX password first.')).removeClass('text-success').addClass('text-danger').show();
+            return;
+        }
+
+        const btn = btnElement ? $(btnElement) : null;
+        const originalText = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Exporting...'));
+        }
+
+        try {
+            const res = await fetch('/api/certs/pfx/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ id: certId, password })
+            });
+
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+
+            const blob = await res.blob();
+            const disposition = res.headers.get('Content-Disposition') || '';
+            const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+            const filename = filenameMatch ? filenameMatch[1] : 'certificate.pfx';
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            $('#pfxPassword').val('');
+            status.text(this.t('PFX export started.')).removeClass('text-danger').addClass('text-success').show();
+        } catch (e) {
+            status.text(this.t('Error: ') + e.message).removeClass('text-success').addClass('text-danger').show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
         }
     },
 
@@ -880,6 +1040,25 @@ const app = {
             }
             this.populateSelects();
             app.applyI18n(list[0]);
+        },
+
+        renderPfxCertificates: function() {
+            const select = $('#pfxCertSelect').empty();
+            const certificates = app.pfxCertificates || [];
+            if (certificates.length === 0) {
+                select.append(new Option(app.t('No certificate/key pairs found'), ''));
+                select.prop('disabled', true);
+                $('#pfxExportBtn').prop('disabled', true);
+                return;
+            }
+
+            select.prop('disabled', false);
+            $('#pfxExportBtn').prop('disabled', false);
+            certificates.forEach(cert => {
+                const label = [cert.name, cert.source, cert.issuer].filter(Boolean).join(' - ');
+                select.append(new Option(label, cert.id));
+            });
+            app.applyI18n(select[0]);
         },
 
         populateSelects: function() {
