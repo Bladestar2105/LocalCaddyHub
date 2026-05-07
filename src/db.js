@@ -33,6 +33,7 @@ const SCHEMA_SQL = `
       id TEXT PRIMARY KEY,
       enabled INTEGER DEFAULT 0,
       fromDomain TEXT,
+      additionalHosts TEXT,
       fromPort TEXT,
       accesslist TEXT, -- JSON array
       basicauth TEXT, -- JSON array
@@ -50,6 +51,7 @@ const SCHEMA_SQL = `
       enabled INTEGER DEFAULT 0,
       reverse TEXT, -- ID of Domain
       fromDomain TEXT,
+      additionalHosts TEXT,
       accesslist TEXT, -- JSON array
       basicauth TEXT, -- JSON array
       description TEXT,
@@ -204,8 +206,10 @@ function runMigrations() {
     { table: 'general_config', column: 'log_roll_keep', def: 'INTEGER DEFAULT 7' },
     { table: 'domains', column: 'client_auth_mode', def: 'TEXT' },
     { table: 'domains', column: 'client_auth_trust_pool', def: 'TEXT' },
+    { table: 'domains', column: 'additionalHosts', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_mode', def: 'TEXT' },
     { table: 'subdomains', column: 'client_auth_trust_pool', def: 'TEXT' },
+    { table: 'subdomains', column: 'additionalHosts', def: 'TEXT' },
     { table: 'domains', column: 'acme', def: 'INTEGER DEFAULT 0' },
     { table: 'subdomains', column: 'acme', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'to_path', def: 'TEXT' },

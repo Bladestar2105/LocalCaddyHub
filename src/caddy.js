@@ -670,8 +670,52 @@ function generateCaddyfile(config, certsDir = './certs') {
     return `${addr}:${port}`;
   }
 
-  function writeSiteBlock(address, site, domain, handlers) {
-    sb += `${address} {\n`;
+  function hostValues(value) {
+    if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
+    if (typeof value === 'string') {
+      return value.split(',').map(v => v.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
+  function normalizeAdditionalHost(host, parentDomain) {
+    let normalized = String(host || '').trim().toLowerCase();
+    if (!normalized) return '';
+    normalized = normalized.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
+    if (!normalized) return '';
+    if (!normalized.includes('.') && parentDomain) {
+      normalized = `${normalized}.${parentDomain}`;
+    }
+    return normalized;
+  }
+
+  function siteHosts(site, domain) {
+    const parentHost = String(domain.fromDomain || '').trim().toLowerCase();
+    const primaryHost = site === domain
+      ? parentHost
+      : `${String(site.fromDomain || '').trim().toLowerCase()}.${parentHost}`;
+    const hosts = [];
+    const seen = new Set();
+
+    function add(host) {
+      if (!host || seen.has(host)) return;
+      seen.add(host);
+      hosts.push(host);
+    }
+
+    add(primaryHost);
+    for (const host of hostValues(site.additionalHosts)) {
+      add(normalizeAdditionalHost(host, parentHost));
+    }
+    return hosts;
+  }
+
+  function siteAddresses(site, domain) {
+    return siteHosts(site, domain).map(host => siteAddress(host, domain)).join(', ');
+  }
+
+  function writeSiteBlock(addresses, site, domain, handlers) {
+    sb += `${addresses} {\n`;
     writeTlsForSite(site, domain);
 
     if (site === domain && domain.accessLog) {
@@ -733,13 +777,16 @@ function generateCaddyfile(config, certsDir = './certs') {
     for (const domain of config.domains) {
       if (!domain.enabled) continue;
 
-      writtenSiteHosts.add(String(domain.fromDomain || '').toLowerCase());
-      writeSiteBlock(siteAddress(domain.fromDomain, domain), domain, domain, handlersByDomain[domain.id] || []);
+      for (const host of siteHosts(domain, domain)) {
+        writtenSiteHosts.add(host.toLowerCase());
+      }
+      writeSiteBlock(siteAddresses(domain, domain), domain, domain, handlersByDomain[domain.id] || []);
 
       for (const sub of subdomainsByDomain[domain.id] || []) {
-        const subHost = `${sub.fromDomain}.${domain.fromDomain}`;
-        writtenSiteHosts.add(subHost.toLowerCase());
-        writeSiteBlock(siteAddress(subHost, domain), sub, domain, handlersBySubdomain[sub.id] || []);
+        for (const host of siteHosts(sub, domain)) {
+          writtenSiteHosts.add(host.toLowerCase());
+        }
+        writeSiteBlock(siteAddresses(sub, domain), sub, domain, handlersBySubdomain[sub.id] || []);
       }
     }
   }
