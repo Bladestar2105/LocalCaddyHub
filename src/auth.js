@@ -11,7 +11,7 @@ function generateSessionToken() {
 }
 
 function authMiddleware(req, res, next) {
-  const allowList = ['/login', '/login.html', '/setup.html'];
+  const allowList = ['/login', '/login.html', '/setup.html', '/i18n.js'];
   if (allowList.includes(req.path)) {
     return next();
   }

@@ -40,7 +40,7 @@
 
 <script src="/i18n.js"></script>
 <script>
-    const i18n = window.LocalCaddyHubI18n;
+    const i18n = window.LocalCaddyHubI18n || { init() {}, t(text) { return text; } };
     i18n.init();
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
