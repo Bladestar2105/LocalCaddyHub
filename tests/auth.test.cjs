@@ -21,31 +21,65 @@ nodeModule.prototype.require = function(name) {
   return originalRequire.apply(this, arguments);
 };
 
-const { csrfMiddleware } = require('../src/auth');
+const { authMiddleware, csrfMiddleware } = require('../src/auth');
 
-describe('csrfMiddleware', () => {
-  const mockRes = () => {
-    const res = {};
-    res.status = (code) => {
-      res.statusCode = code;
-      return res;
-    };
-    res.send = (msg) => {
-      res.body = msg;
-      return res;
-    };
+const mockRes = () => {
+  const res = {};
+  res.status = (code) => {
+    res.statusCode = code;
     return res;
   };
-
-  const mockNext = () => {
-    let called = false;
-    const next = () => {
-      called = true;
-    };
-    next.isCalled = () => called;
-    return next;
+  res.send = (msg) => {
+    res.body = msg;
+    return res;
   };
+  res.redirect = (location) => {
+    res.redirectLocation = location;
+    return res;
+  };
+  return res;
+};
 
+const mockNext = () => {
+  let called = false;
+  const next = () => {
+    called = true;
+  };
+  next.isCalled = () => called;
+  return next;
+};
+
+describe('authMiddleware', () => {
+  test('allows unauthenticated login support script', () => {
+    const req = {
+      path: '/i18n.js',
+      cookies: {}
+    };
+    const res = mockRes();
+    const next = mockNext();
+
+    authMiddleware(req, res, next);
+
+    assert.strictEqual(next.isCalled(), true);
+    assert.strictEqual(res.redirectLocation, undefined);
+  });
+
+  test('redirects other unauthenticated static assets to login', () => {
+    const req = {
+      path: '/app.js',
+      cookies: {}
+    };
+    const res = mockRes();
+    const next = mockNext();
+
+    authMiddleware(req, res, next);
+
+    assert.strictEqual(next.isCalled(), false);
+    assert.strictEqual(res.redirectLocation, '/login.html');
+  });
+});
+
+describe('csrfMiddleware', () => {
   test('allows GET request to /api/ without header', () => {
     const req = {
       method: 'GET',
