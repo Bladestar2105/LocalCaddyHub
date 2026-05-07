@@ -6,6 +6,7 @@ const allowedAcmeCaEndpoints = new Set([
   'https://acme-v02.api.letsencrypt.org/directory',
   'https://acme-staging-v02.api.letsencrypt.org/directory'
 ]);
+const allowedTlsKeyTypes = new Set(['rsa2048', 'rsa4096', 'p256', 'p384', 'ed25519']);
 
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
@@ -41,6 +42,11 @@ function generateCaddyfile(config, certsDir = './certs') {
 
   if (config.general.tls_email) {
     sb += `\temail ${config.general.tls_email}\n`;
+  }
+
+  const tlsKeyType = String(config.general.tls_key_type || 'rsa2048').trim();
+  if (allowedTlsKeyTypes.has(tlsKeyType)) {
+    sb += `\tkey_type ${tlsKeyType}\n`;
   }
 
   const acmeCa = String(config.general.acme_ca || '').trim();

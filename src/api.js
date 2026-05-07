@@ -20,6 +20,7 @@ const allowedAcmeCaEndpoints = new Set([
   'https://acme-v02.api.letsencrypt.org/directory',
   'https://acme-staging-v02.api.letsencrypt.org/directory'
 ]);
+const allowedTlsKeyTypes = new Set(['', 'rsa2048', 'rsa4096', 'p256', 'p384', 'ed25519']);
 
 function toStringArray(value) {
   if (Array.isArray(value)) return value;
@@ -39,6 +40,12 @@ function normalizeAcmeCa(value) {
   return allowedAcmeCaEndpoints.has(endpoint) ? endpoint : '';
 }
 
+function normalizeTlsKeyType(value) {
+  const keyType = typeof value === 'string' ? value.trim() : '';
+  if (!keyType) return 'rsa2048';
+  return allowedTlsKeyTypes.has(keyType) ? keyType : 'rsa2048';
+}
+
 function normalizeAcmeConfig(input) {
   const config = {
     ...input,
@@ -48,6 +55,7 @@ function normalizeAcmeConfig(input) {
     layer4: (input.layer4 || []).map(l => ({ ...l }))
   };
   config.general.acme_ca = normalizeAcmeCa(config.general.acme_ca);
+  config.general.tls_key_type = normalizeTlsKeyType(config.general.tls_key_type);
   const acmeDisabled = autoHttpsDisablesAcme(config.general);
   const domainsById = new Map();
 
@@ -113,111 +121,114 @@ const getBasicAuthsStmt = db.prepare('SELECT * FROM basic_auths');
 const getHeadersStmt = db.prepare('SELECT * FROM headers');
 const getLayer4Stmt = db.prepare('SELECT * FROM layer4');
 
+function structuredConfigFromDb() {
+  const general = getGeneralStmt.get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO', acme_ca: '' };
+
+  const domainsRows = getDomainsStmt.all();
+  const subdomainsRows = getSubdomainsStmt.all();
+  const handlersRows = getHandlersStmt.all();
+  const accessListsRows = getAccessListsStmt.all();
+  const basicAuthsRows = getBasicAuthsStmt.all();
+  const headersRows = getHeadersStmt.all();
+  const layer4Rows = getLayer4Stmt.all();
+
+  return {
+    general: {
+      enabled: Boolean(general.enabled),
+      enable_layer4: Boolean(general.enable_layer4),
+      http_port: general.http_port || '',
+      https_port: general.https_port || '',
+      log_level: general.log_level || '',
+      tls_email: general.tls_email || '',
+      acme_ca: normalizeAcmeCa(general.acme_ca),
+      tls_key_type: normalizeTlsKeyType(general.tls_key_type),
+      http_versions: general.http_versions || '',
+      timeout_read_body: general.timeout_read_body || '',
+      timeout_read_header: general.timeout_read_header || '',
+      timeout_write: general.timeout_write || '',
+      timeout_idle: general.timeout_idle || '',
+      log_credentials: Boolean(general.log_credentials),
+      auto_https: general.auto_https || '',
+      log_roll_size_mb: general.log_roll_size_mb || 10,
+      log_roll_keep: general.log_roll_keep || 7
+    },
+    domains: domainsRows.map(d => ({
+      ...d,
+      enabled: Boolean(d.enabled),
+      accessLog: Boolean(d.accessLog),
+      disableTls: Boolean(d.disableTls),
+      acme: Boolean(d.acme),
+      accesslist: parseJSON(d.accesslist),
+      basicauth: parseJSON(d.basicauth)
+    })),
+    subdomains: subdomainsRows.map(s => ({
+      ...s,
+      enabled: Boolean(s.enabled),
+      acme: Boolean(s.acme),
+      accesslist: parseJSON(s.accesslist),
+      basicauth: parseJSON(s.basicauth)
+    })),
+    handlers: handlersRows.map(h => ({
+      ...h,
+      enabled: Boolean(h.enabled),
+      httpTls: Boolean(h.httpTls),
+      ntlm: Boolean(h.ntlm),
+      health_follow_redirects: Boolean(h.health_follow_redirects),
+      health_status: h.health_status || '',
+      health_body: h.health_body || '',
+      health_passes: h.health_passes || 0,
+      health_fails: h.health_fails || 0,
+      health_uri: h.health_uri || '',
+      health_port: h.health_port || '',
+      health_interval: h.health_interval || '',
+      health_timeout: h.health_timeout || '',
+      health_headers: parseJSON(h.health_headers),
+      passive_health_fail_duration: h.passive_health_fail_duration || '',
+      passive_health_max_fails: h.passive_health_max_fails || '',
+      passive_health_unhealthy_status: h.passive_health_unhealthy_status || '',
+      passive_health_unhealthy_latency: h.passive_health_unhealthy_latency || '',
+      passive_health_unhealthy_request_count: h.passive_health_unhealthy_request_count || '',
+      http_tls_insecure_skip_verify: Boolean(h.http_tls_insecure_skip_verify),
+      http_tls_server_name: h.http_tls_server_name || '',
+      http_tls_trusted_ca_certs: h.http_tls_trusted_ca_certs || '',
+      accesslist: parseJSON(h.accesslist),
+      basicauth: parseJSON(h.basicauth),
+      header: parseJSON(h.header),
+      toDomain: parseJSON(h.toDomain),
+      waf_enabled: Boolean(h.waf_enabled)
+    })),
+    accessLists: accessListsRows.map(a => ({
+      ...a,
+      invert: Boolean(a.invert),
+      clientIps: parseJSON(a.clientIps)
+    })),
+    basicAuths: basicAuthsRows,
+    headers: headersRows,
+    layer4: layer4Rows.map(l => ({
+      ...l,
+      enabled: Boolean(l.enabled),
+      invert_matchers: Boolean(l.invert_matchers),
+      terminateTls: Boolean(l.terminateTls),
+      starttls: Boolean(l.starttls),
+      acme: Boolean(l.acme),
+      fromDomain: toStringArray(parseJSON(l.fromDomain)),
+      toDomain: toStringArray(parseJSON(l.toDomain)),
+      remote_ip: toStringArray(parseJSON(l.remote_ip))
+    }))
+  };
+}
+
 // /api/config/structured
 router.get('/config/structured', (req, res) => {
   try {
-    const general = getGeneralStmt.get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO', acme_ca: '' };
-
-    const domainsRows = getDomainsStmt.all();
-    const subdomainsRows = getSubdomainsStmt.all();
-    const handlersRows = getHandlersStmt.all();
-    const accessListsRows = getAccessListsStmt.all();
-    const basicAuthsRows = getBasicAuthsStmt.all();
-    const headersRows = getHeadersStmt.all();
-    const layer4Rows = getLayer4Stmt.all();
-
-    const config = {
-      general: {
-        enabled: Boolean(general.enabled),
-        enable_layer4: Boolean(general.enable_layer4),
-        http_port: general.http_port || '',
-        https_port: general.https_port || '',
-        log_level: general.log_level || '',
-        tls_email: general.tls_email || '',
-        acme_ca: normalizeAcmeCa(general.acme_ca),
-        http_versions: general.http_versions || '',
-        timeout_read_body: general.timeout_read_body || '',
-        timeout_read_header: general.timeout_read_header || '',
-        timeout_write: general.timeout_write || '',
-        timeout_idle: general.timeout_idle || '',
-        log_credentials: Boolean(general.log_credentials),
-        auto_https: general.auto_https || '',
-        log_roll_size_mb: general.log_roll_size_mb || 10,
-        log_roll_keep: general.log_roll_keep || 7
-      },
-      domains: domainsRows.map(d => ({
-        ...d,
-        enabled: Boolean(d.enabled),
-        accessLog: Boolean(d.accessLog),
-        disableTls: Boolean(d.disableTls),
-        acme: Boolean(d.acme),
-        accesslist: parseJSON(d.accesslist),
-        basicauth: parseJSON(d.basicauth)
-      })),
-      subdomains: subdomainsRows.map(s => ({
-        ...s,
-        enabled: Boolean(s.enabled),
-        acme: Boolean(s.acme),
-        accesslist: parseJSON(s.accesslist),
-        basicauth: parseJSON(s.basicauth)
-      })),
-      handlers: handlersRows.map(h => ({
-        ...h,
-        enabled: Boolean(h.enabled),
-        httpTls: Boolean(h.httpTls),
-        ntlm: Boolean(h.ntlm),
-        health_follow_redirects: Boolean(h.health_follow_redirects),
-        health_status: h.health_status || '',
-        health_body: h.health_body || '',
-        health_passes: h.health_passes || 0,
-        health_fails: h.health_fails || 0,
-        health_uri: h.health_uri || '',
-        health_port: h.health_port || '',
-        health_interval: h.health_interval || '',
-        health_timeout: h.health_timeout || '',
-        health_headers: parseJSON(h.health_headers),
-        passive_health_fail_duration: h.passive_health_fail_duration || '',
-        passive_health_max_fails: h.passive_health_max_fails || '',
-        passive_health_unhealthy_status: h.passive_health_unhealthy_status || '',
-        passive_health_unhealthy_latency: h.passive_health_unhealthy_latency || '',
-        passive_health_unhealthy_request_count: h.passive_health_unhealthy_request_count || '',
-        http_tls_insecure_skip_verify: Boolean(h.http_tls_insecure_skip_verify),
-        http_tls_server_name: h.http_tls_server_name || '',
-        http_tls_trusted_ca_certs: h.http_tls_trusted_ca_certs || '',
-        accesslist: parseJSON(h.accesslist),
-        basicauth: parseJSON(h.basicauth),
-        header: parseJSON(h.header),
-        toDomain: parseJSON(h.toDomain),
-        waf_enabled: Boolean(h.waf_enabled)
-      })),
-      accessLists: accessListsRows.map(a => ({
-        ...a,
-        invert: Boolean(a.invert),
-        clientIps: parseJSON(a.clientIps)
-      })),
-      basicAuths: basicAuthsRows,
-      headers: headersRows,
-      layer4: layer4Rows.map(l => ({
-        ...l,
-        enabled: Boolean(l.enabled),
-        invert_matchers: Boolean(l.invert_matchers),
-        terminateTls: Boolean(l.terminateTls),
-        starttls: Boolean(l.starttls),
-        acme: Boolean(l.acme),
-        fromDomain: toStringArray(parseJSON(l.fromDomain)),
-        toDomain: toStringArray(parseJSON(l.toDomain)),
-        remote_ip: toStringArray(parseJSON(l.remote_ip))
-      }))
-    };
-
-    res.json(config);
+    res.json(structuredConfigFromDb());
   } catch (err) {
     console.error(err);
     res.status(500).send('Failed to read config');
   }
 });
 
-const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, acme_ca=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
+const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, acme_ca=?, tls_key_type=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
 
 const deleteDomainsStmt = db.prepare('DELETE FROM domains');
 const insertDomainStmt = db.prepare(`
@@ -381,6 +392,103 @@ const insertLayer4Stmt = db.prepare(`
   FROM json_each(?)
 `);
 
+const clearDomainCustomCertStmt = db.prepare('UPDATE domains SET customCert="" WHERE id=?');
+const clearDomainClientAuthTrustPoolStmt = db.prepare('UPDATE domains SET client_auth_trust_pool="" WHERE id=?');
+const clearSubdomainClientAuthTrustPoolStmt = db.prepare('UPDATE subdomains SET client_auth_trust_pool="" WHERE id=?');
+const clearHandlerTrustedCaStmt = db.prepare('UPDATE handlers SET http_tls_trusted_ca_certs="" WHERE id=?');
+const clearLayer4CustomCertStmt = db.prepare('UPDATE layer4 SET customCert="" WHERE id=?');
+const setGeneralTlsKeyTypeStmt = db.prepare('UPDATE general_config SET tls_key_type=? WHERE id=1');
+
+function keyNameForCustomCertificate(filename) {
+  return String(filename || '').replace(/\.pem$/i, '') + '.key';
+}
+
+function certificateReferenceRows() {
+  const references = [];
+
+  function add(file, type, owner, clearKey, companionOf = '') {
+    if (!file) return;
+    references.push({ file, type, owner, clearKey, companionOf });
+  }
+
+  for (const domain of getDomainsStmt.all()) {
+    const owner = domain.fromDomain || domain.id;
+    if (domain.customCert) {
+      add(domain.customCert, 'Domain custom certificate', owner, `domain:customCert:${domain.id}`);
+      add(keyNameForCustomCertificate(domain.customCert), 'Domain custom certificate key', owner, `domain:customCert:${domain.id}`, domain.customCert);
+    }
+    add(domain.client_auth_trust_pool, 'Domain client auth trust pool', owner, `domain:client_auth_trust_pool:${domain.id}`);
+  }
+
+  for (const subdomain of getSubdomainsStmt.all()) {
+    const owner = subdomain.fromDomain || subdomain.id;
+    add(subdomain.client_auth_trust_pool, 'Subdomain client auth trust pool', owner, `subdomain:client_auth_trust_pool:${subdomain.id}`);
+  }
+
+  for (const handler of getHandlersStmt.all()) {
+    const owner = handler.description || handler.handlePath || handler.id;
+    add(handler.http_tls_trusted_ca_certs, 'Handler upstream TLS trusted CA', owner, `handler:http_tls_trusted_ca_certs:${handler.id}`);
+  }
+
+  for (const route of getLayer4Stmt.all()) {
+    const owner = route.description || route.fromPort || route.id;
+    if (route.customCert) {
+      add(route.customCert, 'Layer 4 custom certificate', owner, `layer4:customCert:${route.id}`);
+      add(keyNameForCustomCertificate(route.customCert), 'Layer 4 custom certificate key', owner, `layer4:customCert:${route.id}`, route.customCert);
+    }
+  }
+
+  return references;
+}
+
+function clearCertificateReference(clearKey) {
+  const [table, field, id] = String(clearKey).split(':');
+  if (!table || !field || !id) return false;
+
+  if (table === 'domain' && field === 'customCert') clearDomainCustomCertStmt.run(id);
+  else if (table === 'domain' && field === 'client_auth_trust_pool') clearDomainClientAuthTrustPoolStmt.run(id);
+  else if (table === 'subdomain' && field === 'client_auth_trust_pool') clearSubdomainClientAuthTrustPoolStmt.run(id);
+  else if (table === 'handler' && field === 'http_tls_trusted_ca_certs') clearHandlerTrustedCaStmt.run(id);
+  else if (table === 'layer4' && field === 'customCert') clearLayer4CustomCertStmt.run(id);
+  else return false;
+
+  return true;
+}
+
+function clearCertificateReferencesForFiles(filenames) {
+  const files = new Set(filenames.filter(Boolean));
+  const cleared = [];
+  const seen = new Set();
+  const tx = db.transaction(() => {
+    for (const reference of certificateReferenceRows()) {
+      if (!files.has(reference.file)) continue;
+      if (seen.has(reference.clearKey)) continue;
+      if (clearCertificateReference(reference.clearKey)) {
+        seen.add(reference.clearKey);
+        cleared.push(reference);
+      }
+    }
+  });
+
+  tx();
+  return cleared;
+}
+
+async function writeStructuredCaddyfileFromDb() {
+  const caddyfileContent = generateCaddyfile(structuredConfigFromDb(), certDir);
+  await fs.promises.writeFile(appPaths.caddyfile, caddyfileContent, 'utf-8');
+}
+
+async function existingCustomCertFileSet() {
+  const dirents = await fs.promises.readdir(certDir, { withFileTypes: true });
+  return new Set(dirents.filter(dirent => !dirent.isDirectory()).map(dirent => dirent.name));
+}
+
+async function missingCertificateReferences() {
+  const existingFiles = await existingCustomCertFileSet();
+  return certificateReferenceRows().filter(reference => !existingFiles.has(reference.file));
+}
+
 router.post('/config/structured', express.json(), async (req, res) => {
   try {
     const config = normalizeAcmeConfig(req.body || {});
@@ -444,7 +552,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       // General
       if (config.general) {
         const http_versions = Array.isArray(config.general.http_versions) ? config.general.http_versions.join(' ') : (config.general.http_versions || '');
-        updateGeneralStmt.run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.acme_ca, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
+        updateGeneralStmt.run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.acme_ca, config.general.tls_key_type, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
       }
 
       deleteDomainsStmt.run();
@@ -898,6 +1006,65 @@ function safeDownloadName(value, fallback = 'certificate') {
   return name || fallback;
 }
 
+function parseCertificateDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function firstCertificateInput(buffer) {
+  const text = buffer.toString('utf-8');
+  const match = text.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/);
+  return match ? match[0] : buffer;
+}
+
+async function readCertificateMetadata(certPath) {
+  try {
+    const input = firstCertificateInput(await fs.promises.readFile(certPath));
+    const certificate = new crypto.X509Certificate(input);
+    const validFrom = parseCertificateDate(certificate.validFrom);
+    const validTo = parseCertificateDate(certificate.validTo);
+    const daysRemaining = validTo ? Math.ceil((validTo.getTime() - Date.now()) / 86400000) : null;
+
+    return {
+      validFrom: validFrom ? validFrom.toISOString() : '',
+      validTo: validTo ? validTo.toISOString() : '',
+      daysRemaining,
+      expired: typeof daysRemaining === 'number' ? daysRemaining < 0 : false,
+      expiresSoon: typeof daysRemaining === 'number' ? daysRemaining >= 0 && daysRemaining <= 30 : false,
+      subject: certificate.subject || '',
+      certificateIssuer: certificate.issuer || '',
+      subjectAltName: certificate.subjectAltName || '',
+      serialNumber: certificate.serialNumber || '',
+      fingerprint256: certificate.fingerprint256 || ''
+    };
+  } catch (err) {
+    return {
+      validFrom: '',
+      validTo: '',
+      daysRemaining: null,
+      expired: false,
+      expiresSoon: false,
+      certificateParseError: err.message
+    };
+  }
+}
+
+function publicCertificateMetadata(certificate) {
+  return {
+    validFrom: certificate.validFrom || '',
+    validTo: certificate.validTo || '',
+    daysRemaining: typeof certificate.daysRemaining === 'number' ? certificate.daysRemaining : null,
+    expired: Boolean(certificate.expired),
+    expiresSoon: Boolean(certificate.expiresSoon),
+    subject: certificate.subject || '',
+    certificateIssuer: certificate.certificateIssuer || '',
+    subjectAltName: certificate.subjectAltName || '',
+    serialNumber: certificate.serialNumber || '',
+    fingerprint256: certificate.fingerprint256 || '',
+    certificateParseError: certificate.certificateParseError || ''
+  };
+}
+
 async function listCertificatePairs(rootDir, options = {}) {
   const pairs = [];
   const source = options.source || 'Certificate';
@@ -932,6 +1099,7 @@ async function listCertificatePairs(rootDir, options = {}) {
       const relKey = path.relative(rootDir, keyPath);
       const issuer = relDir && relDir !== '.' ? relDir.split(path.sep)[0] : '';
       const host = base.toLowerCase();
+      const metadata = await readCertificateMetadata(certPath);
 
       pairs.push({
         id: pfxCertificateId(source, certPath, keyPath),
@@ -942,7 +1110,10 @@ async function listCertificatePairs(rootDir, options = {}) {
         certRelPath: relCert,
         keyRelPath: relKey,
         certPath,
-        keyPath
+        keyPath,
+        storageDir: dir,
+        renewable: source === 'Caddy-managed ACME',
+        ...metadata
       });
     }
 
@@ -988,8 +1159,156 @@ function publicPfxCertificate(pair) {
     host: pair.host,
     source: pair.source,
     issuer: pair.issuer,
-    certRelPath: pair.certRelPath
+    certRelPath: pair.certRelPath,
+    renewable: Boolean(pair.renewable),
+    ...publicCertificateMetadata(pair)
   };
+}
+
+async function listCustomCertificateFiles() {
+  const dirents = await fs.promises.readdir(certDir, { withFileTypes: true });
+  const files = dirents
+    .filter(dirent => !dirent.isDirectory())
+    .map(dirent => dirent.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  return Promise.all(files.map(async (name) => {
+    const lowerName = name.toLowerCase();
+    const isCertificate = /\.(crt|pem|cer)$/i.test(name);
+    const file = {
+      name,
+      source: 'Custom upload',
+      kind: lowerName.endsWith('.key') ? 'key' : (isCertificate ? 'certificate' : 'file')
+    };
+
+    if (isCertificate) {
+      Object.assign(file, await readCertificateMetadata(path.join(certDir, name)));
+    }
+
+    return file;
+  }));
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function stopCaddyThroughAdmin() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  try {
+    const apiRes = await fetch('http://localhost:2019/stop', {
+      method: 'POST',
+      headers: { 'Origin': 'http://localhost:2019' },
+      signal: controller.signal
+    });
+    if (!apiRes.ok) {
+      throw new Error(`Failed to stop Caddy: ${apiRes.statusText}`);
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function waitForCaddyAdminState(expectedReady, timeoutMs = 10000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if ((await isCaddyAdminReady()) === expectedReady) return;
+    await sleep(250);
+  }
+  throw new Error(expectedReady ? 'Caddy admin API did not become reachable' : 'Caddy admin API did not stop');
+}
+
+async function restartOrStartCaddy() {
+  const wasRunning = await isCaddyAdminReady();
+  if (wasRunning) {
+    await stopCaddyThroughAdmin();
+    await waitForCaddyAdminState(false, 8000);
+  }
+
+  await startCaddyDetached();
+  await waitForCaddyAdminState(true, 15000);
+  return wasRunning ? 'Caddy restarted successfully.' : 'Caddy started successfully.';
+}
+
+function renewalBackupRoot() {
+  return path.join(path.dirname(certDir), 'renewal-backups', new Date().toISOString().replace(/[:.]/g, '-'));
+}
+
+function renewalAssetPaths(certificate) {
+  const dir = path.dirname(certificate.certPath);
+  const certBase = path.basename(certificate.certPath).replace(/\.(crt|pem|cer)$/i, '');
+  const keyBase = path.basename(certificate.keyPath).replace(/\.key$/i, '');
+  const names = new Set([
+    path.basename(certificate.certPath),
+    path.basename(certificate.keyPath),
+    `${certBase}.json`,
+    `${keyBase}.json`
+  ]);
+  return [...names].map(name => path.join(dir, name));
+}
+
+async function moveFileToBackup(from, to) {
+  await fs.promises.mkdir(path.dirname(to), { recursive: true });
+  try {
+    await fs.promises.rename(from, to);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    await fs.promises.copyFile(from, to);
+    await fs.promises.unlink(from);
+  }
+}
+
+async function moveRenewalAssetsToBackup(certificate) {
+  const backupDir = renewalBackupRoot();
+  const moved = [];
+
+  for (const filePath of renewalAssetPaths(certificate)) {
+    const backupPath = path.join(backupDir, path.basename(filePath));
+    try {
+      await moveFileToBackup(filePath, backupPath);
+      moved.push({ from: filePath, to: backupPath });
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
+
+  if (moved.length === 0) {
+    throw new Error('No stored certificate assets were found for renewal');
+  }
+
+  return { backupDir, moved };
+}
+
+async function restoreRenewalAssets(moved) {
+  for (const item of [...moved].reverse()) {
+    try {
+      await moveFileToBackup(item.to, item.from);
+    } catch (err) {
+      console.error(`Failed to restore certificate asset ${item.from}: ${err.message}`);
+    }
+  }
+}
+
+async function moveCertificatesForRenewal(certificates) {
+  const movedGroups = [];
+  try {
+    for (const certificate of certificates) {
+      movedGroups.push(await moveRenewalAssetsToBackup(certificate));
+    }
+    return movedGroups;
+  } catch (err) {
+    for (const group of [...movedGroups].reverse()) {
+      await restoreRenewalAssets(group.moved);
+    }
+    throw err;
+  }
+}
+
+async function restoreRenewalGroups(groups) {
+  for (const group of [...groups].reverse()) {
+    await restoreRenewalAssets(group.moved);
+  }
 }
 
 router.post('/certs/letsencrypt/request', async (req, res) => {
@@ -1057,6 +1376,85 @@ router.get('/certs/letsencrypt/status', async (req, res) => {
   }
 });
 
+router.post('/certs/letsencrypt/renew', express.json(), async (req, res) => {
+  const { id } = req.body || {};
+  if (typeof id !== 'string' || !id) {
+    return res.status(400).json({ error: 'Missing certificate selection' });
+  }
+
+  let movedAssets = null;
+  try {
+    const certificate = (await listPfxCertificates()).find(pair => pair.id === id);
+    if (!certificate) {
+      return res.status(404).json({ error: 'Certificate/key pair not found' });
+    }
+    if (!certificate.renewable) {
+      return res.status(400).json({ error: 'Only Caddy-managed ACME certificates can be renewed here' });
+    }
+
+    setGeneralTlsKeyTypeStmt.run('rsa2048');
+    await writeStructuredCaddyfileFromDb();
+    await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
+    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
+
+    movedAssets = await moveRenewalAssetsToBackup(certificate);
+    const restartMessage = await restartOrStartCaddy();
+
+    res.json({
+      output: `Manual renewal requested for ${certificate.name}. ${restartMessage}`,
+      stderr: '',
+      error: undefined,
+      certificate: publicPfxCertificate(certificate),
+      movedAssets: movedAssets.moved.map(item => path.basename(item.from)),
+      backupDir: movedAssets.backupDir
+    });
+  } catch (err) {
+    if (movedAssets) {
+      await restoreRenewalAssets(movedAssets.moved);
+    }
+    res.status(500).json({
+      output: err.stdout || '',
+      stderr: err.stderr || '',
+      error: err.message
+    });
+  }
+});
+
+router.post('/certs/letsencrypt/renew-all-rsa', express.json(), async (req, res) => {
+  let movedGroups = [];
+  try {
+    setGeneralTlsKeyTypeStmt.run('rsa2048');
+    await writeStructuredCaddyfileFromDb();
+    await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
+    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
+
+    const certificates = (await listPfxCertificates()).filter(pair => pair.renewable);
+    if (certificates.length === 0) {
+      return res.status(404).json({ error: 'No Caddy-managed ACME certificates found' });
+    }
+
+    movedGroups = await moveCertificatesForRenewal(certificates);
+    const restartMessage = await restartOrStartCaddy();
+
+    res.json({
+      output: `RSA renewal requested for ${certificates.length} Caddy-managed ACME certificate(s). ${restartMessage}`,
+      stderr: '',
+      error: undefined,
+      certificates: certificates.map(publicPfxCertificate),
+      backupDirs: movedGroups.map(group => group.backupDir)
+    });
+  } catch (err) {
+    if (movedGroups.length > 0) {
+      await restoreRenewalGroups(movedGroups);
+    }
+    res.status(500).json({
+      output: err.stdout || '',
+      stderr: err.stderr || '',
+      error: err.message
+    });
+  }
+});
+
 router.get('/certs/pfx/list', async (req, res) => {
   try {
     const certificates = await listPfxCertificates();
@@ -1108,6 +1506,25 @@ router.post('/certs/pfx/download', express.json(), async (req, res) => {
   });
 });
 
+router.get('/certs/references/missing', async (req, res) => {
+  try {
+    res.json(await missingCertificateReferences());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/certs/references/cleanup', express.json(), async (req, res) => {
+  try {
+    const missing = await missingCertificateReferences();
+    const cleared = clearCertificateReferencesForFiles(missing.map(reference => reference.file));
+    await writeStructuredCaddyfileFromDb();
+    res.json({ missing, cleared });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/certs/acme/download', async (req, res) => {
   try {
     const certificatesDir = path.join(await getCaddyAppDataDir(), 'certificates');
@@ -1150,11 +1567,7 @@ async function serveCertificates(certificatesDir, res) {
 
 router.get('/certs', async (req, res) => {
   try {
-    // ⚡ Bolt: Use asynchronous readdir with { withFileTypes: true } to prevent event loop blocking
-    // and eliminate O(n) synchronous statSync calls.
-    const dirents = await fs.promises.readdir(certDir, { withFileTypes: true });
-    const files = dirents.filter(dirent => !dirent.isDirectory()).map(dirent => dirent.name);
-    res.json(files);
+    res.json(await listCustomCertificateFiles());
   } catch (err) {
     res.status(500).send('Failed to read certs directory');
   }
@@ -1178,12 +1591,27 @@ router.delete('/certs', async (req, res) => {
   if (!isSafeFilename(filename)) {
     return res.status(400).send('Invalid filename');
   }
+  const removeReferences = req.query.removeReferences === '1';
+  const references = certificateReferenceRows().filter(reference => reference.file === filename);
+  if (references.length > 0 && !removeReferences) {
+    return res.status(409).json({
+      error: 'Certificate is still referenced by the configuration',
+      references
+    });
+  }
+
   const filePath = path.join(certDir, filename);
   try {
+    let clearedReferences = [];
+    if (removeReferences) {
+      clearedReferences = clearCertificateReferencesForFiles([filename]);
+      await writeStructuredCaddyfileFromDb();
+    }
+
     // ⚡ Bolt: Use asynchronous unlink to prevent event loop blocking,
     // and catch ENOENT instead of using existsSync to avoid TOCTOU races.
     await fs.promises.unlink(filePath);
-    res.sendStatus(200);
+    res.json({ deleted: true, clearedReferences });
   } catch (err) {
     if (err.code === 'ENOENT') {
       res.status(404).send('File not found');

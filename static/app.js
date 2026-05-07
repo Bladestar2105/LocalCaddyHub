@@ -12,7 +12,7 @@ function uuidv4() {
 
 const app = {
     config: {
-        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", acme_ca: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false, log_roll_size_mb: 10, log_roll_keep: 7 },
+        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", acme_ca: "", tls_key_type: "rsa2048", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false, log_roll_size_mb: 10, log_roll_keep: 7 },
         domains: [],
         subdomains: [],
         handlers: [],
@@ -23,6 +23,7 @@ const app = {
     },
     certs: [],
     pfxCertificates: [],
+    missingCertReferences: [],
     logStreamSource: null,
     logFiltersCache: { level: '', status: '', method: '', ip: '', path: '', text: '' },
     logFilterTimeout: null,
@@ -34,6 +35,7 @@ const app = {
         this.i18n.init();
         await this.loadCerts();
         await this.loadPfxCertificates();
+        await this.loadMissingCertificateReferences();
         await this.loadConfig();
         this.ui.initModals();
         this.ui.renderAll();
@@ -100,6 +102,7 @@ const app = {
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
         this.config.general.acme_ca = $('#genAcmeCA').val();
+        this.config.general.tls_key_type = $('#genTlsKeyType').val();
         this.config.general.auto_https = $('#genAutoHttps').val();
         let httpVer = $('#genHttpVersions').val();
         this.config.general.http_versions = Array.isArray(httpVer) ? httpVer.join(' ') : (httpVer || '');
@@ -411,11 +414,95 @@ const app = {
             if (res.ok) {
                 await this.loadCerts();
                 await this.loadPfxCertificates();
+                await this.loadMissingCertificateReferences();
+            } else if (res.status === 409) {
+                const data = await res.json();
+                const details = (data.references || []).map(ref => `- ${this.t(ref.type)}: ${ref.owner}`).join('\n');
+                const message = `${this.t('Certificate {name} is still referenced by the configuration.', { name: filename })}\n\n${details}\n\n${this.t('Remove these references and delete the file?')}`;
+                if (!confirm(message)) return;
+
+                const cleanupRes = await fetch(`/api/certs?file=${encodeURIComponent(filename)}&removeReferences=1`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!cleanupRes.ok) throw new Error(await cleanupRes.text());
+                await this.loadConfig();
+                await this.loadCerts();
+                await this.loadPfxCertificates();
+                await this.loadMissingCertificateReferences();
             } else {
                 alert(this.t('Failed to delete cert.'));
             }
         } catch (e) {
             alert(this.t('Error: ') + e.message);
+        }
+    },
+
+    certName: function(cert) {
+        return typeof cert === 'string' ? cert : (cert && cert.name ? cert.name : '');
+    },
+
+    formatCertificateExpiry: function(cert) {
+        if (!cert || !cert.validTo) {
+            return cert && cert.certificateParseError ? this.t('Unreadable') : this.t('Unknown');
+        }
+
+        const expiresAt = new Date(cert.validTo);
+        const days = cert.daysRemaining;
+        let suffix = '';
+        if (typeof days === 'number') {
+            if (days < 0) suffix = this.t('expired');
+            else if (days === 0) suffix = this.t('expires today');
+            else suffix = this.t('{days} days left', { days });
+        }
+
+        return suffix ? `${expiresAt.toLocaleString()} (${suffix})` : expiresAt.toLocaleString();
+    },
+
+    certificateStatusClass: function(cert) {
+        if (!cert || !cert.validTo) return 'text-muted';
+        if (cert.expired) return 'text-danger';
+        if (cert.expiresSoon) return 'text-warning';
+        return 'text-success';
+    },
+
+    loadMissingCertificateReferences: async function() {
+        try {
+            const res = await fetch('/api/certs/references/missing');
+            this.missingCertReferences = res.ok ? await res.json() : [];
+        } catch (e) {
+            console.error("Failed to load missing certificate references", e);
+            this.missingCertReferences = [];
+        }
+        this.ui.renderMissingCertificateReferences();
+    },
+
+    cleanupMissingCertificateReferences: async function(btnElement) {
+        const references = this.missingCertReferences || [];
+        if (references.length === 0) return;
+        if (!confirm(this.t('Remove all missing certificate references from the configuration?'))) return;
+
+        const btn = btnElement ? $(btnElement) : null;
+        const originalText = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Cleaning...'));
+        }
+
+        try {
+            const res = await fetch('/api/certs/references/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error(await res.text());
+            await this.loadConfig();
+            await this.loadCerts();
+            await this.loadPfxCertificates();
+            await this.loadMissingCertificateReferences();
+            $('#certReferenceStatus').text(this.t('Missing certificate references removed.')).removeClass('text-danger').addClass('text-success').show();
+        } catch (e) {
+            $('#certReferenceStatus').text(this.t('Error: ') + e.message).removeClass('text-success').addClass('text-danger').show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
         }
     },
 
@@ -432,6 +519,75 @@ const app = {
             this.pfxCertificates = [];
         }
         this.ui.renderPfxCertificates();
+    },
+
+    renewManagedCertificate: async function(certId, btnElement) {
+        const cert = (this.pfxCertificates || []).find(item => item.id === certId);
+        if (!cert || !cert.renewable) return;
+        if (!confirm(this.t('Delete the stored certificate assets and restart Caddy to request a new certificate for {name}?', { name: cert.name }))) return;
+
+        const btn = btnElement ? $(btnElement) : null;
+        const originalText = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Renewing...'));
+        }
+
+        try {
+            const res = await fetch('/api/certs/letsencrypt/renew', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ id: certId })
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                throw new Error(data.error || data.stderr || this.t('Renewal failed.'));
+            }
+            const message = [data.output, data.stderr].filter(Boolean).join('\n');
+            $('#certRenewStatus').text(this.t(message || 'Renewal requested.')).removeClass('text-danger').addClass('text-success').show();
+            await this.loadPfxCertificates();
+            this.pollLetsEncryptStatus(0, message);
+        } catch (e) {
+            $('#certRenewStatus').text(this.t('Error: ') + e.message).removeClass('text-success').addClass('text-danger').show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
+        }
+    },
+
+    renewAllManagedCertificatesAsRsa: async function(btnElement) {
+        if (!confirm(this.t('Set certificate key type to RSA 2048, delete stored Caddy-managed ACME certificates, and restart Caddy to request new RSA certificates?'))) return;
+
+        const btn = btnElement ? $(btnElement) : null;
+        const originalText = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Renewing...'));
+        }
+
+        try {
+            $('#genTlsKeyType').val('rsa2048');
+            this.config.general.tls_key_type = 'rsa2048';
+            const res = await fetch('/api/certs/letsencrypt/renew-all-rsa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                throw new Error(data.error || data.stderr || this.t('Renewal failed.'));
+            }
+            const message = [data.output, data.stderr].filter(Boolean).join('\n');
+            $('#certRenewStatus').text(this.t(message || 'Renewal requested.')).removeClass('text-danger').addClass('text-success').show();
+            await this.loadConfig();
+            await this.loadPfxCertificates();
+            this.pollLetsEncryptStatus(0, message);
+        } catch (e) {
+            $('#certRenewStatus').text(this.t('Error: ') + e.message).removeClass('text-success').addClass('text-danger').show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
+        }
     },
 
     downloadPfx: async function(btnElement) {
@@ -932,6 +1088,7 @@ const app = {
             $('#genLogLevel').val(app.config.general.log_level);
             $('#genTlsEmail').val(app.config.general.tls_email);
             $('#genAcmeCA').val(app.config.general.acme_ca);
+            $('#genTlsKeyType').val(app.config.general.tls_key_type || 'rsa2048');
             $('#genAutoHttps').val(app.config.general.auto_https);
             let hv = app.config.general.http_versions;
             $('#genHttpVersions').val(hv ? hv.split(' ').filter(v => v) : []);
@@ -1033,8 +1190,14 @@ const app = {
                  list.append($('<li>').addClass('list-group-item text-center text-muted py-3').text(app.t('No certificates found. Upload one above.')));
             } else {
                 certs.forEach(c => {
-                    let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center').text(c);
-                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text(app.t('Delete')).attr('title', app.t('Delete certificate')).attr('aria-label', app.t('Delete certificate')).click(() => app.deleteCert(c));
+                    const filename = app.certName(c);
+                    let meta = $('<div>').addClass('small text-muted');
+                    if (c && typeof c === 'object') {
+                        meta.text(`${app.t('Expires')}: ${app.formatCertificateExpiry(c)}`).addClass(app.certificateStatusClass(c));
+                    }
+                    let label = $('<div>').append($('<div>').text(filename), meta);
+                    let li = $('<li>').addClass('list-group-item d-flex justify-content-between align-items-center gap-2').append(label);
+                    let btn = $('<button>').addClass('btn btn-sm btn-danger').text(app.t('Delete')).attr('title', app.t('Delete certificate')).attr('aria-label', app.t('Delete certificate')).click(() => app.deleteCert(filename));
                     list.append(li.append(btn));
                 });
             }
@@ -1042,23 +1205,90 @@ const app = {
             app.applyI18n(list[0]);
         },
 
+        renderMissingCertificateReferences: function() {
+            const container = $('#missingCertReferences').empty();
+            const references = app.missingCertReferences || [];
+            if (references.length === 0) {
+                container.hide();
+                return;
+            }
+
+            const list = $('<ul>').addClass('mb-2');
+            references.forEach(ref => {
+                list.append($('<li>').text(`${ref.file} - ${app.t(ref.type)}: ${ref.owner}`));
+            });
+
+            const button = $('<button>')
+                .addClass('btn btn-sm btn-warning')
+                .text(app.t('Remove missing references'))
+                .click(function() { app.cleanupMissingCertificateReferences(this); });
+
+            container
+                .addClass('alert alert-warning')
+                .append($('<strong>').text(app.t('Missing certificate references found.')))
+                .append(list)
+                .append(button)
+                .show();
+            app.applyI18n(container[0]);
+        },
+
         renderPfxCertificates: function() {
             const select = $('#pfxCertSelect').empty();
+            const tableContainer = $('#certificatePairsList').empty();
             const certificates = app.pfxCertificates || [];
             if (certificates.length === 0) {
                 select.append(new Option(app.t('No certificate/key pairs found'), ''));
                 select.prop('disabled', true);
                 $('#pfxExportBtn').prop('disabled', true);
+                tableContainer.append($('<div>').addClass('text-muted py-2').text(app.t('No certificate/key pairs found')));
                 return;
             }
 
             select.prop('disabled', false);
             $('#pfxExportBtn').prop('disabled', false);
             certificates.forEach(cert => {
-                const label = [cert.name, cert.source, cert.issuer].filter(Boolean).join(' - ');
+                const label = [cert.name, cert.source, cert.issuer, app.formatCertificateExpiry(cert)].filter(Boolean).join(' - ');
                 select.append(new Option(label, cert.id));
             });
+
+            const table = $('<table>').addClass('table table-sm table-striped align-middle mb-0');
+            const thead = $('<thead>').append(
+                $('<tr>').append(
+                    $('<th>').text(app.t('Name')),
+                    $('<th>').text(app.t('Source')),
+                    $('<th>').text(app.t('Issuer')),
+                    $('<th>').text(app.t('Expires')),
+                    $('<th>').text(app.t('Actions'))
+                )
+            );
+            const tbody = $('<tbody>');
+            certificates.forEach(cert => {
+                const renewCell = $('<td>');
+                if (cert.renewable) {
+                    renewCell.append(
+                        $('<button>')
+                            .addClass('btn btn-sm btn-outline-warning')
+                            .text(app.t('Renew now'))
+                            .click(function() { app.renewManagedCertificate(cert.id, this); })
+                    );
+                } else {
+                    renewCell.append($('<span>').addClass('text-muted small').text(app.t('Not renewable')));
+                }
+
+                tbody.append(
+                    $('<tr>').append(
+                        $('<td>').text(cert.name),
+                        $('<td>').text(app.t(cert.source || '')),
+                        $('<td>').text(cert.issuer || ''),
+                        $('<td>').addClass(app.certificateStatusClass(cert)).text(app.formatCertificateExpiry(cert)),
+                        renewCell
+                    )
+                );
+            });
+            table.append(thead, tbody);
+            tableContainer.append($('<div>').addClass('table-responsive').append(table));
             app.applyI18n(select[0]);
+            app.applyI18n(tableContainer[0]);
         },
 
         populateSelects: function() {
@@ -1083,7 +1313,10 @@ const app = {
             });
 
             const certSelects = $('.cert-select').empty().append(new Option(app.t('Caddy-managed / Internal'), ""));
-            (app.certs || []).filter(c => c.endsWith('.pem')).forEach(c => certSelects.append(new Option(c, c)));
+            (app.certs || [])
+                .map(c => app.certName(c))
+                .filter(c => c.endsWith('.pem'))
+                .forEach(c => certSelects.append(new Option(c, c)));
 
             // Handlers and Subdomains need Domain selects
             const domainSelects = $('.domain-select').empty().append(new Option(app.t('Select Domain'), ""));

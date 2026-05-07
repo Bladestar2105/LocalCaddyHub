@@ -14,10 +14,11 @@ const SCHEMA_SQL = `
       enable_layer4 INTEGER DEFAULT 0,
       http_port TEXT,
       https_port TEXT,
-      log_level TEXT,
-      tls_email TEXT,
-      acme_ca TEXT,
-      http_versions TEXT,
+	      log_level TEXT,
+	      tls_email TEXT,
+	      acme_ca TEXT,
+	      tls_key_type TEXT DEFAULT 'rsa2048',
+	      http_versions TEXT,
       timeout_read_body TEXT,
       timeout_read_header TEXT,
       timeout_write TEXT,
@@ -189,8 +190,9 @@ function initGeneralConfig() {
 function runMigrations() {
   // Perform schema migrations for existing databases
   const migrations = [
-    { table: 'general_config', column: 'tls_email', def: 'TEXT' },
-    { table: 'general_config', column: 'acme_ca', def: 'TEXT' },
+	    { table: 'general_config', column: 'tls_email', def: 'TEXT' },
+	    { table: 'general_config', column: 'acme_ca', def: 'TEXT' },
+	    { table: 'general_config', column: 'tls_key_type', def: "TEXT DEFAULT 'rsa2048'" },
     { table: 'general_config', column: 'http_versions', def: 'TEXT' },
     { table: 'general_config', column: 'timeout_read_body', def: 'TEXT' },
     { table: 'general_config', column: 'timeout_read_header', def: 'TEXT' },

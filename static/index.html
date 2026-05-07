@@ -120,6 +120,16 @@
                     </select>
                 </div>
                 <div class="mb-3">
+                    <label for="genTlsKeyType" class="form-label">Certificate Key Type <i class="text-muted" style="font-size:0.9em;">(?) RSA 2048 requests Let's Encrypt RSA/R certificates for Exchange compatibility.</i></label>
+                    <select class="form-select" id="genTlsKeyType">
+                        <option value="rsa2048">RSA 2048 (Exchange compatible)</option>
+                        <option value="rsa4096">RSA 4096</option>
+                        <option value="p256">ECDSA P-256</option>
+                        <option value="p384">ECDSA P-384</option>
+                        <option value="ed25519">Ed25519</option>
+                    </select>
+                </div>
+                <div class="mb-3">
                     <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures Caddy Automatic HTTPS. Off and Disable Certs prevent public ACME certificate issuance.</i></label>
                     <select class="form-select" id="genAutoHttps">
                         <option value="">On (Default)</option>
@@ -280,12 +290,18 @@
                 <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
             </div>
             <div id="certUploadStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
+            <div id="missingCertReferences" class="mb-3" role="status" aria-live="polite"></div>
+            <div id="certReferenceStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
 
             <h4 class="mt-4">Caddy-managed ACME Certificates</h4>
             <p>Enable Let's Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let's Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.</p>
             <button class="btn btn-primary mt-2 me-2" onclick="app.requestLetsEncrypt(this)">Request Let's Encrypt Certificates</button>
+            <button class="btn btn-warning mt-2 me-2" onclick="app.renewAllManagedCertificatesAsRsa(this)">Renew all as RSA</button>
             <a href="/api/certs/acme/download" class="btn btn-secondary mt-2">Download .tar.gz</a>
             <div id="certAcmeStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
+            <h5>Existing Certificates</h5>
+            <div id="certificatePairsList" class="mb-2"></div>
+            <div id="certRenewStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
 
             <h4 class="mt-4">Windows PFX Export</h4>
             <p>Export a certificate and private key as a password-protected <code>.pfx</code> file for Windows import.</p>
