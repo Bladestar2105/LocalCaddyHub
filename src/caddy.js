@@ -8,6 +8,16 @@ const allowedAcmeCaEndpoints = new Set([
 ]);
 const allowedTlsKeyTypes = new Set(['rsa2048', 'rsa4096', 'p256', 'p384', 'ed25519']);
 
+// 🛡️ Sentinel: allow-list every enum field that ends up in a raw Caddyfile
+// directive. Anything else is dropped (or, where there is a sensible default,
+// replaced) so a malformed value cannot escape the directive line and inject
+// arbitrary Caddy syntax.
+const allowedClientAuthModes = new Set(['request', 'require', 'verify_if_given', 'require_and_verify']);
+const allowedHttpLbPolicies = new Set(['round_robin', 'ip_hash', 'least_conn', 'client_ip_hash']);
+const allowedLayer4LbPolicies = new Set(['round_robin', 'ip_hash', 'least_conn', 'random']);
+const allowedRedirStatuses = new Set(['301', '302', '303', '307', '308', 'html']);
+const safeRedirStatus = (value) => allowedRedirStatuses.has(String(value || '').trim()) ? String(value).trim() : '301';
+
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
   const automaticCertsDisabled = ['off', 'disable_certs'].includes(config.general && config.general.auto_https);
@@ -132,7 +142,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
     function layer4ProxyOptionLines(l4) {
       const lines = [];
-      if (l4.lb_policy) {
+      if (l4.lb_policy && allowedLayer4LbPolicies.has(l4.lb_policy)) {
         lines.push(`lb_policy ${l4.lb_policy}`);
       }
       if (l4.passive_health_fail_duration) {
@@ -412,6 +422,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
   function writeClientAuth(settings, indent) {
     if (!settings.client_auth_mode) return '';
+    if (!allowedClientAuthModes.has(settings.client_auth_mode)) return '';
 
     let out = `${indent}client_auth {\n`;
     out += `${indent}\tmode ${settings.client_auth_mode}\n`;
@@ -616,7 +627,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
         writeProxyTransport(handler);
 
-        if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
+        if (handler.lb_policy && allowedHttpLbPolicies.has(handler.lb_policy)) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
         if (handler.lb_retries) sb += `\t\t\tlb_retries ${parseInt(handler.lb_retries, 10)}\n`;
         if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
         if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
@@ -649,7 +660,7 @@ function generateCaddyfile(config, certsDir = './certs') {
         sb += '\t\t}\n';
       } else if (directive === 'redir') {
         const to = handler.toDomain && handler.toDomain.length > 0 ? handler.toDomain[0] : '';
-        const status = handler.redir_status || '301';
+        const status = safeRedirStatus(handler.redir_status);
         sb += `\t\tredir ${to} ${status}\n`;
       }
 

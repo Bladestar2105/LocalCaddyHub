@@ -1,0 +1,179 @@
+/* ============================================================
+   BW.Tech / LocalCaddyHub — Design tokens
+   Source: design-system/colors_and_type.css
+   Fonts (Geist + Geist Mono) are loaded via <link> in each page.
+   ============================================================ */
+
+:root {
+  --font-display: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans:    'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+
+:root {
+  /* ---------- Color: brand ---------- */
+  --brand-navy:        #0B1B2B;
+  --brand-blue:        #3D8BFF;
+  --brand-teal:        #2EBFA5;
+  --brand-amber:       #F5A524;
+  --brand-crimson:     #E5484D;
+
+  /* ---------- Color: neutral ramp (cool, slightly blue-tinted) ---------- */
+  --gray-1:  #050B12;
+  --gray-2:  #0B1521;
+  --gray-3:  #122031;
+  --gray-4:  #1A2D43;
+  --gray-5:  #243A55;
+  --gray-6:  #324C6B;
+  --gray-7:  #4A6585;
+  --gray-8:  #6B86A6;
+  --gray-9:  #93AAC4;
+  --gray-10: #C2D2E3;
+  --gray-11: #E1EAF3;
+  --gray-12: #F6F9FC;
+
+  /* ---------- Color: light-mode neutrals (marketing) ---------- */
+  --gray-1-light:  #FFFFFF;
+  --gray-2-light:  #F6F9FC;
+  --gray-3-light:  #EDF2F7;
+  --gray-4-light:  #DDE5EE;
+  --gray-5-light:  #C2D0DE;
+  --gray-6-light:  #93A3B5;
+  --gray-7-light:  #5E6F84;
+  --gray-8-light:  #3A4A5E;
+  --gray-9-light:  #1F2D3F;
+  --gray-10-light: #0B1B2B;
+
+  /* ---------- Color: tinted (12% over surface) ---------- */
+  --blue-tint:    rgba(61, 139, 255, 0.12);
+  --teal-tint:    rgba(46, 191, 165, 0.14);
+  --amber-tint:   rgba(245, 165, 36, 0.16);
+  --crimson-tint: rgba(229, 72, 77, 0.14);
+
+  /* ---------- Color: brand ramp ---------- */
+  --blue-7:  #1F5FCC;
+  --blue-9:  #3D8BFF;
+  --blue-10: #6BA8FF;
+  --blue-11: #B6D2FF;
+
+  --teal-7:  #1E8C77;
+  --teal-9:  #2EBFA5;
+  --teal-10: #5BD3BD;
+
+  /* ---------- Semantic ---------- */
+  --bg:           var(--gray-1);
+  --surface:      var(--gray-2);
+  --surface-2:    var(--gray-3);
+  --surface-3:    var(--gray-4);
+  --border:       var(--gray-5);
+  --border-strong: var(--gray-6);
+  --fg:           var(--gray-12);
+  --fg-2:         var(--gray-10);
+  --fg-3:         var(--gray-9);
+  --fg-muted:     var(--gray-8);
+  --link:         var(--blue-9);
+  --focus-ring:   var(--blue-9);
+
+  --success:      var(--brand-teal);
+  --warning:      var(--brand-amber);
+  --danger:       var(--brand-crimson);
+  --info:         var(--brand-blue);
+
+  /* ---------- Type scale (admin / dense) ---------- */
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+  --fs-32: 32px;
+
+  /* ---------- Type scale (marketing / expressive) ---------- */
+  --fs-display-1: 112px;
+  --fs-display-2: 80px;
+  --fs-display-3: 56px;
+  --fs-display-4: 40px;
+  --fs-h1: 32px;
+  --fs-h2: 24px;
+  --fs-h3: 20px;
+  --fs-h4: 16px;
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-eyebrow: 12px;
+
+  /* ---------- Type weights ---------- */
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+  --fw-xbold:   800;
+
+  /* ---------- Type line-heights ---------- */
+  --lh-tight:   1.05;
+  --lh-snug:    1.25;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.7;
+
+  /* ---------- Type letter-spacing ---------- */
+  --ls-display: -0.02em;
+  --ls-h:       -0.01em;
+  --ls-body:    0;
+  --ls-eyebrow: 0.06em;
+  --ls-mono:    0;
+
+  /* ---------- Spacing (4px grid) ---------- */
+  --sp-1:   4px;
+  --sp-2:   8px;
+  --sp-3:   12px;
+  --sp-4:   16px;
+  --sp-5:   24px;
+  --sp-6:   32px;
+  --sp-7:   48px;
+  --sp-8:   64px;
+  --sp-9:   96px;
+  --sp-10: 128px;
+
+  /* ---------- Radii ---------- */
+  --radius-1: 4px;
+  --radius-2: 8px;
+  --radius-3: 12px;
+  --radius-pill: 9999px;
+
+  /* ---------- Shadows (dark surfaces) ---------- */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.35);
+  --shadow-3: 0 12px 32px rgba(0,0,0,0.45);
+  --shadow-4: 0 24px 64px rgba(0,0,0,0.55);
+
+  /* ---------- Shadows (light surfaces) ---------- */
+  --shadow-1-light: 0 1px 2px rgba(11,27,43,0.06);
+  --shadow-2-light: 0 4px 16px rgba(11,27,43,0.08);
+  --shadow-3-light: 0 12px 32px rgba(11,27,43,0.12);
+  --shadow-4-light: 0 24px 64px rgba(11,27,43,0.16);
+
+  /* ---------- Motion ---------- */
+  --ease:        cubic-bezier(0.2, 0, 0, 1);
+  --dur-micro:   120ms;
+  --dur-default: 200ms;
+  --dur-page:    320ms;
+
+  /* ---------- Layout ---------- */
+  --topbar-h: 56px;
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 64px;
+  --content-max: 1280px;
+
+  /* ---------- Z-index ---------- */
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-modal: 1050;
+  --z-toast: 9999;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

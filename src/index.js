@@ -6,10 +6,35 @@ const db = require('./db');
 const bcrypt = require('bcrypt');
 
 const { generateSecret, verifySync, generateURI } = require('otplib');
+
+// 🛡️ Sentinel: TOTP replay-protection.
+// otplib accepts a code that is valid within the current 30s window.
+// Once a code is consumed we record (sha256(secret), code) for ~120s
+// (covers the ±1 step tolerance plus buffer) and reject re-presentation.
+const TOTP_REPLAY_TTL_MS = 120 * 1000;
+const totpReplayCheckStmt = db.prepare('SELECT 1 FROM totp_used WHERE secret_hash = ? AND code = ? AND used_at > ?');
+const totpReplayInsertStmt = db.prepare('INSERT OR REPLACE INTO totp_used (secret_hash, code, used_at) VALUES (?, ?, ?)');
+const totpReplayPruneStmt = db.prepare('DELETE FROM totp_used WHERE used_at <= ?');
+
+function totpAlreadyUsed(secret, code) {
+  if (typeof secret !== 'string' || typeof code !== 'string') return false;
+  const secretHash = crypto.createHash('sha256').update(secret).digest('hex');
+  const cutoff = Date.now() - TOTP_REPLAY_TTL_MS;
+  return Boolean(totpReplayCheckStmt.get(secretHash, code, cutoff));
+}
+
+function recordTotpUse(secret, code) {
+  if (typeof secret !== 'string' || typeof code !== 'string') return;
+  const secretHash = crypto.createHash('sha256').update(secret).digest('hex');
+  const now = Date.now();
+  totpReplayInsertStmt.run(secretHash, code, now);
+  // Opportunistic prune so the table stays small.
+  totpReplayPruneStmt.run(now - TOTP_REPLAY_TTL_MS);
+}
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const { safeCompare } = require('./utils');
-const { loginRateLimiter, recordFailedAttempt, clearAttempts } = require('./rateLimiter');
+const { loginRateLimiter, recordFailedAttempt, clearAttempts, sensitiveActionLimiter } = require('./rateLimiter');
 const apiRoutes = require('./api');
 const appPaths = require('./paths');
 const { resolveCaddyBinary } = require('./caddyBinary');
@@ -83,9 +108,16 @@ app.post('/login', loginRateLimiter, async (req, res) => {
         } catch (err) {
           // Ignore format errors etc and treat as invalid
         }
+        // 🛡️ Sentinel: reject replay of a TOTP code that was already
+        // accepted within the otplib step window so a captured code can't
+        // be reused.
+        if (isValid && totpAlreadyUsed(userRow.totp_secret, tokenInput)) {
+          return res.status(401).json({ error: 'invalid_totp' });
+        }
         if (!isValid) {
           return res.status(401).json({ error: 'invalid_totp' });
         }
+        recordTotpUse(userRow.totp_secret, tokenInput);
       }
       validLogin = true;
     }
@@ -143,7 +175,7 @@ app.use(authMiddleware);
 app.use(csrfMiddleware);
 
 // Setup & 2FA Routes (Protected, but some exceptions in API logic for setup)
-app.post('/api/setup', async (req, res) => {
+app.post('/api/setup', sensitiveActionLimiter, async (req, res) => {
   const { newUsername, newPassword } = req.body;
   if (!newUsername || !newPassword) return res.status(400).send('Missing fields');
   if (typeof newUsername !== 'string' || typeof newPassword !== 'string') return res.status(400).send('Invalid fields');
@@ -159,7 +191,7 @@ app.post('/api/setup', async (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/2fa/generate', async (req, res) => {
+app.post('/api/2fa/generate', sensitiveActionLimiter, async (req, res) => {
   const secret = generateSecret();
   const userRow = getUsernameStmt.get();
   const username = userRow ? userRow.username : process.env.ADMIN_USER;
@@ -170,7 +202,7 @@ app.post('/api/2fa/generate', async (req, res) => {
   res.json({ secret, qrCodeUrl: imageUrl });
 });
 
-app.post('/api/2fa/verify', (req, res) => {
+app.post('/api/2fa/verify', sensitiveActionLimiter, (req, res) => {
   const { token, secret } = req.body;
   let isValid = false;
   try {
@@ -179,15 +211,22 @@ app.post('/api/2fa/verify', (req, res) => {
     // Treat format/length errors as invalid
   }
 
+  // 🛡️ Sentinel: enrolment must consume a fresh code, never one that has
+  // already been seen during this step window.
+  if (isValid && totpAlreadyUsed(secret, token)) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+
   if (isValid) {
     updateTotpSecretStmt.run(secret);
+    recordTotpUse(secret, token);
     res.json({ success: true });
   } else {
     res.status(400).json({ error: 'Invalid token' });
   }
 });
 
-app.post('/api/2fa/disable', (req, res) => {
+app.post('/api/2fa/disable', sensitiveActionLimiter, (req, res) => {
   disableTotpStmt.run();
   res.json({ success: true });
 });
