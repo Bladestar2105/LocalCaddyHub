@@ -368,6 +368,26 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(dbJs, /acme_ca TEXT/);
   });
 
+  test('defaults ACME certificate key type to RSA for Exchange-compatible Lets Encrypt certificates', () => {
+    const indexHtml = fs.readFileSync('static/index.html', 'utf8');
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+    const dbJs = fs.readFileSync('src/db.js', 'utf8');
+    const config = generateCaddyfile({
+      general: { enabled: true, tls_key_type: 'rsa2048' },
+      domains: []
+    }, '/certs');
+
+    assert.match(config, /\tkey_type rsa2048/);
+    assert.match(indexHtml, /id="genTlsKeyType"/);
+    assert.match(indexHtml, /Renew all as RSA/);
+    assert.match(appJs, /tls_key_type: "rsa2048"/);
+    assert.match(appJs, /renewAllManagedCertificatesAsRsa/);
+    assert.match(apiJs, /normalizeTlsKeyType/);
+    assert.match(apiJs, /router\.post\('\/certs\/letsencrypt\/renew-all-rsa'/);
+    assert.match(dbJs, /tls_key_type TEXT DEFAULT 'rsa2048'/);
+  });
+
   test('exposes Lets Encrypt request status in API and UI', () => {
     const indexHtml = fs.readFileSync('static/index.html', 'utf8');
     const appJs = fs.readFileSync('static/app.js', 'utf8');
@@ -395,6 +415,22 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(apiJs, /router\.post\('\/certs\/pfx\/download'/);
     assert.match(apiJs, /'pkcs12'/);
     assert.match(apiJs, /LOCALCADDYHUB_PFX_PASSWORD/);
+  });
+
+  test('exposes certificate expiry, manual renewal, and stale reference cleanup', () => {
+    const indexHtml = fs.readFileSync('static/index.html', 'utf8');
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+
+    assert.match(indexHtml, /id="certificatePairsList"/);
+    assert.match(indexHtml, /id="missingCertReferences"/);
+    assert.match(appJs, /formatCertificateExpiry/);
+    assert.match(appJs, /renewManagedCertificate/);
+    assert.match(appJs, /cleanupMissingCertificateReferences/);
+    assert.match(apiJs, /readCertificateMetadata/);
+    assert.match(apiJs, /router\.post\('\/certs\/letsencrypt\/renew'/);
+    assert.match(apiJs, /router\.get\('\/certs\/references\/missing'/);
+    assert.match(apiJs, /router\.post\('\/certs\/references\/cleanup'/);
   });
 
   test('infers host matcher when layer4 host values are present', () => {
