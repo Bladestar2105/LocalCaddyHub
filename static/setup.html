@@ -13,30 +13,61 @@
 </head>
 <body>
 
-<div class="setup-container">
-    <select id="languageSelect" class="form-select form-select-sm mb-3" aria-label="Language">
-        <option value="en">English</option>
-        <option value="de">Deutsch</option>
-    </select>
-    <h2 class="text-center mb-4">First Time Setup</h2>
-    <p class="text-muted text-center">Please change your admin credentials.</p>
-    <div id="errorMsg" class="error-msg text-center" role="alert" aria-live="assertive">Passwords do not match.</div>
-    <form id="setupForm">
-        <div class="mb-3">
-            <label for="newUsername" class="form-label">New Username</label>
-            <input type="text" class="form-control" id="newUsername" name="newUsername" autocomplete="username" required value="admin">
+<main class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <svg class="glyph" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <rect width="64" height="64" rx="12" fill="#0B1521"/>
+                <g stroke="#3D8BFF" stroke-width="3" fill="#0B1521">
+                    <circle cx="20" cy="22" r="6"/><circle cx="44" cy="22" r="6"/>
+                    <circle cx="20" cy="44" r="6"/><circle cx="44" cy="44" r="6"/>
+                </g>
+                <g stroke="#2EBFA5" stroke-width="3">
+                    <line x1="26" y1="22" x2="38" y2="22"/><line x1="26" y1="44" x2="38" y2="44"/>
+                    <line x1="20" y1="28" x2="20" y2="38"/><line x1="44" y1="28" x2="44" y2="38"/>
+                </g>
+            </svg>
+            <div>
+                <div class="name">LocalCaddyHub</div>
+                <div class="sub">by BW.Tech</div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label for="newPassword" class="form-label">New Password</label>
-            <input type="password" class="form-control" id="newPassword" name="newPassword" autocomplete="new-password" required>
+
+        <div class="steps" aria-label="Setup progress">
+            <span class="dot is-active"></span>
+            <span>Step 1 of 1 · Admin credentials</span>
         </div>
-        <div class="mb-3">
-            <label for="confirmPassword" class="form-label">Confirm Password</label>
-            <input type="password" class="form-control" id="confirmPassword" autocomplete="new-password" required>
+
+        <h1 class="auth-title">First Time Setup</h1>
+        <p class="auth-sub">Please change your admin credentials.</p>
+
+        <div id="errorMsg" class="auth-error" role="alert" aria-live="assertive">Passwords do not match.</div>
+
+        <form id="setupForm" class="d-flex flex-column gap-4" novalidate>
+            <div class="field">
+                <label class="field-label" for="newUsername">New Username</label>
+                <input type="text" class="form-control" id="newUsername" name="newUsername" autocomplete="username" required value="admin">
+            </div>
+            <div class="field">
+                <label class="field-label" for="newPassword">New Password</label>
+                <input type="password" class="form-control" id="newPassword" name="newPassword" autocomplete="new-password" required>
+            </div>
+            <div class="field">
+                <label class="field-label" for="confirmPassword">Confirm Password</label>
+                <input type="password" class="form-control" id="confirmPassword" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="setupSubmitBtn" style="padding:12px 14px;justify-content:center;">Save &amp; Continue</button>
+        </form>
+
+        <div class="auth-foot">
+            <span class="muted" style="font-size:12px;">Pick a strong, unique password.</span>
+            <select id="languageSelect" class="form-select form-select-sm" aria-label="Language" style="width:auto;">
+                <option value="en">EN</option>
+                <option value="de">DE</option>
+            </select>
         </div>
-        <button type="submit" class="btn btn-primary w-100" id="setupSubmitBtn">Save & Continue</button>
-    </form>
-</div>
+    </div>
+</main>
 
 <script src="/i18n.js"></script>
 <script>
