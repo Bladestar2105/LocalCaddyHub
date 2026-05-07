@@ -13,29 +13,56 @@
 </head>
 <body>
 
-<div class="login-container">
-    <select id="languageSelect" class="form-select form-select-sm mb-3" aria-label="Language">
-        <option value="en">English</option>
-        <option value="de">Deutsch</option>
-    </select>
-    <h2 class="text-center mb-4">LocalCaddyHub</h2>
-    <div id="errorMsg" class="error-msg text-center" role="alert" aria-live="assertive">Invalid username or password</div>
-    <form id="loginForm">
-        <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <input type="text" class="form-control" id="username" name="username" autocomplete="username" required>
+<main class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <svg class="glyph" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <rect width="64" height="64" rx="12" fill="#0B1521"/>
+                <g stroke="#3D8BFF" stroke-width="3" fill="#0B1521">
+                    <circle cx="20" cy="22" r="6"/><circle cx="44" cy="22" r="6"/>
+                    <circle cx="20" cy="44" r="6"/><circle cx="44" cy="44" r="6"/>
+                </g>
+                <g stroke="#2EBFA5" stroke-width="3">
+                    <line x1="26" y1="22" x2="38" y2="22"/><line x1="26" y1="44" x2="38" y2="44"/>
+                    <line x1="20" y1="28" x2="20" y2="38"/><line x1="44" y1="28" x2="44" y2="38"/>
+                </g>
+            </svg>
+            <div>
+                <div class="name">LocalCaddyHub</div>
+                <div class="sub">by BW.Tech</div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-sub">Sign in to manage your Caddy instance.</p>
+
+        <div id="errorMsg" class="auth-error" role="alert" aria-live="assertive">Invalid username or password</div>
+
+        <form id="loginForm" class="d-flex flex-column gap-4" novalidate>
+            <div class="field">
+                <label class="field-label" for="username">Username</label>
+                <input type="text" class="form-control" id="username" name="username" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label class="field-label" for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+            </div>
+            <div class="field" id="totpGroup" style="display: none;">
+                <label class="field-label" for="totp">2FA Code</label>
+                <input type="text" class="form-control mono" id="totp" name="totp" placeholder="123456" autocomplete="one-time-code">
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn" style="padding:12px 14px;justify-content:center;">Login</button>
+        </form>
+
+        <div class="auth-foot">
+            <span class="muted" style="font-size:12px;">Default: admin / admin</span>
+            <select id="languageSelect" class="form-select form-select-sm" aria-label="Language" style="width:auto;">
+                <option value="en">EN</option>
+                <option value="de">DE</option>
+            </select>
         </div>
-        <div class="mb-3" id="totpGroup" style="display: none;">
-            <label for="totp" class="form-label">2FA Code</label>
-            <input type="text" class="form-control" id="totp" name="totp" placeholder="123456" autocomplete="one-time-code">
-        </div>
-        <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn">Login</button>
-    </form>
-</div>
+    </div>
+</main>
 
 <script src="/i18n.js"></script>
 <script>
