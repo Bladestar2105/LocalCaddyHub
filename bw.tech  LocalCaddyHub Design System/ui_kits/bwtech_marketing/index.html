@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>BW.Tech — Cloud by Design</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="container nav-row">
+    <a class="nav-brand" href="#">
+      <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
+        <rect width="64" height="64" rx="10" fill="#0B1B2B"/>
+        <text x="32" y="40" text-anchor="middle" font-family="Manrope, sans-serif" font-weight="800" font-size="22" fill="#fff">B<tspan fill="#3D8BFF">·</tspan>W</text>
+      </svg>
+      BW<span class="dot">.</span>Tech
+    </a>
+    <nav class="nav-links">
+      <a href="#solutions">Lösungen</a>
+      <a href="#products">Produkte</a>
+      <a href="#about">Über uns</a>
+      <a href="#news">Aktuelles</a>
+      <a href="#contact">Kontakt</a>
+    </nav>
+    <div class="nav-cta">
+      <span class="nav-lang"><span class="active">DE</span> · EN</span>
+      <a href="#contact" class="btn btn-primary">Kostenlos beraten lassen</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">Cloud by Design</span>
+      <h1 class="h-display">Maßgeschneiderte<br>Cloud-Lösungen,<br>die Sie voran&shy;bringen.</h1>
+      <p class="lede" style="margin-top:24px">Mit BW.Tech erhalten Sie nicht nur die Lösung, die Sie wollen — sondern die, die Sie brauchen. Ehrlich, offen, kundenorientiert.</p>
+      <div class="hero-cta">
+        <a href="#contact" class="btn btn-primary btn-lg">Beratungsgespräch buchen
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a href="#solutions" class="btn btn-ghost btn-lg">Lösungen ansehen</a>
+      </div>
+      <div class="hero-stats">
+        <div><div class="hero-stat-num">99,99%</div><div class="hero-stat-lbl">Verfügbarkeit (SLA)</div></div>
+        <div><div class="hero-stat-num">2010</div><div class="hero-stat-lbl">seit gegründet</div></div>
+        <div><div class="hero-stat-num">120+</div><div class="hero-stat-lbl">Mittelstands-Kunden</div></div>
+      </div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="hero-mock">
+        <div class="ln"><span class="num">1</span><span><span class="com"># /etc/caddy/Caddyfile — generated</span></span></div>
+        <div class="ln"><span class="num">2</span><span>{</span></div>
+        <div class="ln"><span class="num">3</span><span>&nbsp;&nbsp;<span class="kw">email</span> <span class="str">admin@bw.tech</span></span></div>
+        <div class="ln"><span class="num">4</span><span>&nbsp;&nbsp;<span class="kw">acme_ca</span> <span class="str">https://acme-v02.api…</span></span></div>
+        <div class="ln"><span class="num">5</span><span>}</span></div>
+        <div class="ln"><span class="num">6</span><span>&nbsp;</span></div>
+        <div class="ln"><span class="num">7</span><span><span class="str">bw.tech</span>, <span class="str">www.bw.tech</span> {</span></div>
+        <div class="ln"><span class="num">8</span><span>&nbsp;&nbsp;<span class="kw">reverse_proxy</span> 10.0.4.7:8080</span></div>
+        <div class="ln"><span class="num">9</span><span>&nbsp;&nbsp;<span class="kw">header</span> Strict-Transport…</span></div>
+        <div class="ln"><span class="num">10</span><span>}</span></div>
+        <div class="ln"><span class="num">11</span><span>&nbsp;</span></div>
+        <div class="ln"><span class="num">12</span><span><span class="str">helpdesk.bw-tech.de</span> {</span></div>
+        <div class="ln"><span class="num">13</span><span>&nbsp;&nbsp;<span class="kw">reverse_proxy</span> 10.0.4.12:80 {</span></div>
+        <div class="ln"><span class="num">14</span><span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">transport</span> ntlm</span></div>
+        <div class="ln"><span class="num">15</span><span>&nbsp;&nbsp;}</span></div>
+        <div class="ln"><span class="num">16</span><span>}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGOS -->
+<div class="container">
+  <div class="logos-strip">
+    <span class="muted" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase">Vertrauen von</span>
+    <span class="logo">Stadtwerke Saarbrücken</span>
+    <span class="logo">Hohenstein Institute</span>
+    <span class="logo">M-net</span>
+    <span class="logo">Heinemann GmbH</span>
+    <span class="logo">Stark Verlag</span>
+  </div>
+</div>
+
+<!-- SOLUTIONS -->
+<section class="section alt" id="solutions">
+  <div class="container">
+    <span class="eyebrow">Lösungen</span>
+    <h2 class="h-1">Vier Säulen für eine Cloud, die zu Ihrem Geschäft passt.</h2>
+    <p class="lede" style="margin-top:16px">Ob Backup-Strategie, sichere Datenverfügbarkeit oder ein eigener KI-Hosting-Stack — wir entwerfen die Architektur, betreiben den Stack und übergeben ihn dokumentiert.</p>
+    <div class="sol-grid">
+      <div class="sol-card">
+        <div class="sol-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6"/></svg>
+        </div>
+        <h3>Backup &amp; Restore</h3>
+        <p>Server&shy;übergreifende Sicherung mit Wieder&shy;herstellungs&shy;zeiten unter 15 Minuten. Geprüfte Restore-Tests pro Quartal.</p>
+        <span class="arrow">Mehr erfahren →</span>
+      </div>
+      <div class="sol-card">
+        <div class="sol-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/><path d="m9 12 2 2 4-4"/></svg>
+        </div>
+        <h3>Desaster Recovery</h3>
+        <p>Hot-Standby in einem zweiten Rechen&shy;zentrum, automatisierter Failover und ein DR-Plan, den auch Ihre Versicherung versteht.</p>
+        <span class="arrow">Mehr erfahren →</span>
+      </div>
+      <div class="sol-card">
+        <div class="sol-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20M7 4v16"/></svg>
+        </div>
+        <h3>Managed Cloud</h3>
+        <p>Wir betreiben Ihre Infrastruktur — von Caddy/Reverse-Proxy bis zur Datenbank. 24/7 Monitoring, Patch-Management, einer Ansprech&shy;partner.</p>
+        <span class="arrow">Mehr erfahren →</span>
+      </div>
+      <div class="sol-card">
+        <div class="sol-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+        </div>
+        <h3>KI-Hosting</h3>
+        <p>GPU-Hosting in Deutschland für Ihre eigenen Modelle. DSGVO-konform, voll auditiert, ohne Daten&shy;abfluss in die USA.</p>
+        <span class="arrow">Mehr erfahren →</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT -->
+<section class="section" id="products">
+  <div class="container split">
+    <div>
+      <span class="eyebrow">Open Source</span>
+      <h2 class="h-1">LocalCaddyHub — die Schaltzentrale für Ihren Caddy.</h2>
+      <p class="lede" style="margin-top:16px">Domains, Subdomains, Reverse-Proxy, NTLM-Authentifizierung, Layer-4-Routing und ACME-Zertifikate in einer Oberfläche. Kostenlos, MIT-lizenziert, in Go gebaut.</p>
+      <ul class="feature-list">
+        <li>
+          <span class="feature-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg></span>
+          <div><strong>NTLM für Microsoft Exchange / IIS</strong><span>Eines der wenigen Reverse-Proxy-Setups, das Outlook Anywhere zuverlässig vor Caddy stellen kann.</span></div>
+        </li>
+        <li>
+          <span class="feature-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg></span>
+          <div><strong>Layer-4-Proxy mit SNI-Switching</strong><span>TCP/UDP, STARTTLS, Postgres- und SMTP-Routing — alles ohne separate HAProxy-Instanz.</span></div>
+        </li>
+        <li>
+          <span class="feature-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg></span>
+          <div><strong>SQLite-Konfiguration, Caddyfile-Generator</strong><span>Konfiguration relational pflegen, Caddyfile dynamisch erzeugen lassen — kein YAML-Drift mehr.</span></div>
+        </li>
+        <li>
+          <span class="feature-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5L20 7"/></svg></span>
+          <div><strong>Docker-ready, mit Setup-Wizard</strong><span>In zehn Minuten produktiv. Backup-Endpoint inklusive.</span></div>
+        </li>
+      </ul>
+      <div style="margin-top:32px;display:flex;gap:12px">
+        <a href="#" class="btn btn-primary">Auf GitHub öffnen
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.04c-3.34.72-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.09-.74.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .1-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.31-.54-1.53.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.25 2.87.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 0z"/></svg>
+        </a>
+        <a href="#" class="btn btn-ghost">Live-Demo ansehen</a>
+      </div>
+    </div>
+    <div class="split-visual">
+      <div class="row ok">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+        <code style="font:500 13px var(--font-mono)">bw.tech</code>
+        <span class="pill ok">RUNNING · 200</span>
+      </div>
+      <div class="row ok">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3v12M18 9v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M9 18h6c1.66 0 3-1.34 3-3V9"/></svg>
+        <code style="font:500 13px var(--font-mono)">api.bw.tech</code>
+        <span class="pill ok">RUNNING</span>
+      </div>
+      <div class="row warn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11v3a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4v-3"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <code style="font:500 13px var(--font-mono)">helpdesk.bw-tech.de</code>
+        <span class="pill warn">RELOAD</span>
+      </div>
+      <div class="row ok">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <code style="font:500 13px var(--font-mono)">postgres.bw.tech (L4)</code>
+        <span class="pill ok">RUNNING</span>
+      </div>
+      <div class="row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11v7a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V11M22 7a3 3 0 0 0-3-3H5a3 3 0 0 0-3 3l10 6 10-6z"/></svg>
+        <code style="font:500 13px var(--font-mono)">mail.bw-tech.de (NTLM)</code>
+        <span class="pill ok">RUNNING</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAND -->
+<section class="section dark">
+  <div class="container">
+    <div class="stats-band">
+      <div class="stat-block"><div class="num">99,99<span class="unit">%</span></div><div class="lbl">Verfügbarkeit unserer Managed Cloud</div></div>
+      <div class="stat-block"><div class="num">&lt;15<span class="unit">min</span></div><div class="lbl">Restore-Zeit für kritische Systeme</div></div>
+      <div class="stat-block"><div class="num">14<span class="unit">J</span></div><div class="lbl">Erfahrung mit Mittelstands-IT</div></div>
+      <div class="stat-block"><div class="num">100<span class="unit">%</span></div><div class="lbl">Hosting in Deutschland (DSGVO)</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIAL -->
+<section class="section">
+  <div class="container">
+    <span class="eyebrow">Stimme aus dem Mittelstand</span>
+    <p class="quote">„Wir wollten unsere alte Backup-Lösung loswerden, ohne dafür zwei Monate Migrations&shy;projekt zu führen. BW.Tech hat genau zugehört, einen Plan auf zwei Seiten geliefert und ihn dann auch geliefert — ehrlich und ohne Buzzwords."</p>
+    <div class="quote-attr">
+      <div class="avatar">FH</div>
+      <div>
+        <strong style="color:var(--m-fg)">Frank Hohenstein</strong> · IT-Leitung, Hohenstein GmbH<br>
+        Kunde seit 2019
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="section alt" id="about">
+  <div class="container">
+    <span class="eyebrow">Service-Pakete</span>
+    <h2 class="h-1">Drei Wege zur Zusammenarbeit.</h2>
+    <p class="lede" style="margin-top:16px">Vom einmaligen Architektur-Workshop bis zum vollständig betreuten Betrieb. Alle Pakete enthalten einen festen Ansprechpartner.</p>
+    <div class="svc-grid">
+      <div class="svc">
+        <h3>Discover</h3>
+        <p class="muted" style="font-size:14px">Architektur-Workshop &amp; Roadmap</p>
+        <div class="price">ab 2.400€<span class="per"> · einmalig</span></div>
+        <ul>
+          <li>2-tägiger Vor-Ort-Workshop</li>
+          <li>Ist-Analyse Ihrer aktuellen Infrastruktur</li>
+          <li>Schriftliche Roadmap (12 Monate)</li>
+          <li>Aufwands- und Kosten&shy;schätzung</li>
+        </ul>
+        <a href="#contact" class="btn btn-ghost" style="width:100%;justify-content:center">Anfragen</a>
+      </div>
+      <div class="svc featured">
+        <h3>Build &amp; Hand-Over <span style="background:rgba(61,139,255,.14);color:var(--m-blue);font:700 11px var(--font-display);padding:3px 8px;border-radius:999px;margin-left:8px;letter-spacing:.04em">BELIEBT</span></h3>
+        <p class="muted" style="font-size:14px">Wir bauen, Sie betreiben</p>
+        <div class="price">Festpreis<span class="per"> · projektbezogen</span></div>
+        <ul>
+          <li>Komplett dokumentierte Implementierung</li>
+          <li>Übergabe-Schulung Ihres Teams</li>
+          <li>Ein-Jahres-Wartungs&shy;option</li>
+          <li>Source-Code &amp; Runbooks bei Ihnen</li>
+        </ul>
+        <a href="#contact" class="btn btn-primary" style="width:100%;justify-content:center">Anfragen</a>
+      </div>
+      <div class="svc">
+        <h3>Managed Operations</h3>
+        <p class="muted" style="font-size:14px">Wir übernehmen den Betrieb</p>
+        <div class="price">ab 1.200€<span class="per"> / Monat</span></div>
+        <ul>
+          <li>24/7 Monitoring &amp; On-Call</li>
+          <li>Patch-Management, Backup-Tests</li>
+          <li>Quartals&shy;reports an die Geschäfts&shy;führung</li>
+          <li>SLA 99,9% / 99,99% wählbar</li>
+        </ul>
+        <a href="#contact" class="btn btn-ghost" style="width:100%;justify-content:center">Anfragen</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA + CONTACT -->
+<section class="section" id="contact">
+  <div class="container">
+    <div class="cta-band">
+      <div>
+        <h2 class="h-2" style="color:#fff">Bereit für eine Cloud, die zu Ihnen passt?</h2>
+        <p style="color:#C2D2E3;margin-top:12px;max-width:54ch">30 Minuten ehrliches Gespräch, keine Verkaufs&shy;rhetorik. Wir sagen Ihnen offen, ob wir der richtige Partner für Sie sind.</p>
+      </div>
+      <div style="display:flex;gap:12px">
+        <a href="#" class="btn btn-on-dark btn-lg">Termin vereinbaren →</a>
+        <a href="mailto:hallo@bw.tech" class="btn btn-ghost-dark btn-lg">hallo@bw.tech</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="nav-brand" style="color:#fff;margin-bottom:16px">BW<span class="dot">.</span>Tech</div>
+        <p style="font-size:14px;max-width:36ch">Cloud by Design. Maßgeschneiderte IT-Infrastruktur für den deutschen Mittelstand. Aus Saarbrücken seit 2010.</p>
+      </div>
+      <div>
+        <h4>Lösungen</h4>
+        <a href="#">Backup &amp; Restore</a>
+        <a href="#">Desaster Recovery</a>
+        <a href="#">Managed Cloud</a>
+        <a href="#">KI-Hosting</a>
+      </div>
+      <div>
+        <h4>Unternehmen</h4>
+        <a href="#">Über uns</a>
+        <a href="#">Aktuelles</a>
+        <a href="#">Karriere</a>
+        <a href="#">Kontakt</a>
+      </div>
+      <div>
+        <h4>Rechtliches</h4>
+        <a href="#">Impressum</a>
+        <a href="#">Datenschutz</a>
+        <a href="#">AGB</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 BW.Tech GmbH · Saarbrücken, Deutschland</span>
+      <span>Hosted in Germany · DSGVO-konform</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

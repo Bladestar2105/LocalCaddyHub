@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalCaddyHub</title>
+    <!-- Bootstrap CSS (Darkly) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bs-primary: #008080; /* Caddy tealish color */
+            --bs-primary-rgb: 0,128,128;
+        }
+        .btn-primary { background-color: var(--bs-primary); border-color: var(--bs-primary); }
+        .btn-primary:hover { background-color: #006666; border-color: #006666; }
+        body { font-family: sans-serif; padding: 20px; }
+        .tab-content { padding: 20px; border: 1px solid #444; border-top: none; background: #222; border-radius: 0 0 5px 5px; }
+        .nav-tabs .nav-link { border: 1px solid transparent; color: #adb5bd; }
+        .nav-tabs .nav-link.active { background-color: #222; border-color: #444 #444 transparent; color: #fff; }
+        textarea { width: 100%; height: 300px; font-family: monospace; }
+        .status-box { margin-top: 20px; padding: 15px; border-radius: 5px; background-color: #333; color: #fff; white-space: pre-wrap; display: none; }
+        .text-muted { color: #adb5bd !important; }
+        .table-responsive { margin-top: 20px; }
+        .action-btns button { margin-right: 5px; }
+
+        .table { --bs-table-bg: transparent; --bs-table-color: #fff; --bs-table-striped-bg: rgba(255,255,255,0.05); --bs-table-striped-color: #fff; --bs-table-hover-color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <h1 class="mb-4">LocalCaddyHub</h1>
+
+    <div class="d-flex justify-content-between mb-3 gap-3 flex-wrap">
+        <div>
+            <button id="applyConfigBtn" class="btn btn-primary" onclick="app.saveStructuredConfig()">Apply Configuration</button>
+            <button id="validateConfigBtn" class="btn btn-secondary" onclick="app.validateConfig()">Validate Configuration</button>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <select id="languageSelect" class="form-select form-select-sm" aria-label="Language" style="width:auto;">
+                <option value="en">English</option>
+                <option value="de">Deutsch</option>
+            </select>
+            <div id="globalStatus" class="status-box" style="margin-top:0; padding: 8px 15px; display:inline-block; font-weight: bold; margin-right: 15px;" role="status" aria-live="polite"></div>
+            <button class="btn btn-outline-info" onclick="app.ui.openModal('2faModal')">2FA Settings</button>
+            <a href="/logout" class="btn btn-outline-danger">Logout</a>
+        </div>
+    </div>
+
+    <!-- Main Tabs -->
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+        <li class="nav-item"><a class="nav-link active" id="general-tab" data-bs-toggle="tab" href="#general" role="tab">General</a></li>
+        <li class="nav-item"><a class="nav-link" id="reverse-proxy-tab" data-bs-toggle="tab" href="#reverse-proxy" role="tab">Reverse Proxy</a></li>
+        <li class="nav-item"><a class="nav-link" id="layer4-tab" data-bs-toggle="tab" href="#layer4" role="tab">Layer 4</a></li>
+        <li class="nav-item"><a class="nav-link" id="certs-tab" data-bs-toggle="tab" href="#certs" role="tab">Certificates</a></li>
+        <li class="nav-item"><a class="nav-link" id="control-tab" data-bs-toggle="tab" href="#control" role="tab">Control & Raw</a></li>
+        <li class="nav-item"><a class="nav-link" id="logs-tab" data-bs-toggle="tab" href="#logs" role="tab">Live Logs</a></li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="mainTabsContent">
+
+        <!-- General Tab -->
+        <div class="tab-pane fade show active" id="general" role="tabpanel">
+            <h3>General Settings</h3>
+            <form id="generalForm">
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="genEnabled">
+                    <label class="form-check-label" for="genEnabled">Enable Caddy Configuration</label>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="genEnableLayer4">
+                    <label class="form-check-label" for="genEnableLayer4">Enable Layer 4 Configuration</label>
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpPort" class="form-label">HTTP Port</label>
+                    <input type="text" class="form-control" id="genHttpPort" placeholder="80">
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpsPort" class="form-label">HTTPS Port</label>
+                    <input type="text" class="form-control" id="genHttpsPort" placeholder="443">
+                </div>
+                <div class="mb-3">
+                    <label for="genLogLevel" class="form-label">Log Level</label>
+                    <select class="form-select" id="genLogLevel">
+                        <option value="">Default (INFO)</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="genLogCreds" class="form-check-label">
+                        <input type="checkbox" class="form-check-input" id="genLogCreds">
+                        Log Credentials <i class="text-muted" style="font-size:0.9em;">(?) Enables logging of credentials.</i>
+                    </label>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="genLogRollSize" class="form-label">Log Roll Size (MB) <i class="text-muted" style="font-size:0.9em;">(?) Max size of a log file before it gets rotated.</i></label>
+                        <input type="number" class="form-control" id="genLogRollSize" placeholder="10">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="genLogRollKeep" class="form-label">Rotated Log Files to Keep <i class="text-muted" style="font-size:0.9em;">(?) Max number of rotated log files to keep.</i></label>
+                        <input type="number" class="form-control" id="genLogRollKeep" placeholder="7">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="genTlsEmail" class="form-label">TLS Email <i class="text-muted" style="font-size:0.9em;">(?) The email address to use for the ACME account.</i></label>
+                    <input type="email" class="form-control" id="genTlsEmail" placeholder="admin@example.com">
+                </div>
+                <div class="mb-3">
+                    <label for="genAcmeCA" class="form-label">ACME CA <i class="text-muted" style="font-size:0.9em;">(?) Select the public certificate authority Caddy should use for ACME issuance.</i></label>
+                    <select class="form-select" id="genAcmeCA">
+                        <option value="">Caddy Default</option>
+                        <option value="https://acme-v02.api.letsencrypt.org/directory">Let's Encrypt Production</option>
+                        <option value="https://acme-staging-v02.api.letsencrypt.org/directory">Let's Encrypt Staging</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="genTlsKeyType" class="form-label">Certificate Key Type <i class="text-muted" style="font-size:0.9em;">(?) RSA 2048 requests Let's Encrypt RSA/R certificates for Exchange compatibility.</i></label>
+                    <select class="form-select" id="genTlsKeyType">
+                        <option value="rsa2048">RSA 2048 (Exchange compatible)</option>
+                        <option value="rsa4096">RSA 4096</option>
+                        <option value="p256">ECDSA P-256</option>
+                        <option value="p384">ECDSA P-384</option>
+                        <option value="ed25519">Ed25519</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures Caddy Automatic HTTPS. Off and Disable Certs prevent public ACME certificate issuance.</i></label>
+                    <select class="form-select" id="genAutoHttps">
+                        <option value="">On (Default)</option>
+                        <option value="off">Off</option>
+                        <option value="disable_redirects">Disable Redirects</option>
+                        <option value="disable_certs">Disable Certs</option>
+                        <option value="ignore_loaded_certs">Ignore Loaded Certs</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="genHttpVersions" class="form-label">HTTP Versions <i class="text-muted" style="font-size:0.9em;">(?) Select supported HTTP versions.</i></label>
+                    <select id="genHttpVersions" class="form-select" multiple>
+                        <option value="h1">h1</option>
+                        <option value="h2">h2</option>
+                        <option value="h3">h3</option>
+                        <option value="h2c">h2c</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutReadBody" class="form-label">Read Body Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for reading the request body.</i></label>
+                    <input type="text" class="form-control" id="genTOutReadBody" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutReadHeader" class="form-label">Read Header Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for reading the request headers.</i></label>
+                    <input type="text" class="form-control" id="genTOutReadHeader" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutWrite" class="form-label">Write Timeout <i class="text-muted" style="font-size:0.9em;">(?) Duration to allow for writing the response.</i></label>
+                    <input type="text" class="form-control" id="genTOutWrite" placeholder="10s">
+                </div>
+                <div class="mb-3">
+                    <label for="genTOutIdle" class="form-label">Idle Timeout <i class="text-muted" style="font-size:0.9em;">(?) Maximum time to wait for the next request when keep-alives are enabled.</i></label>
+                    <input type="text" class="form-control" id="genTOutIdle" placeholder="10s">
+                </div>
+            </form>
+        </div>
+
+        <!-- Reverse Proxy Tab -->
+        <div class="tab-pane fade" id="reverse-proxy" role="tabpanel">
+            <!-- Sub Tabs for Reverse Proxy -->
+            <ul class="nav nav-pills mb-3" id="rpTabs" role="tablist">
+                <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#rp-domains">Domains</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-subdomains">Subdomains</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-handlers">Handlers</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-accesslists">Access Lists</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-basicauth">Basic Auth</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#rp-headers">Headers</a></li>
+            </ul>
+
+            <div class="tab-content border-0 p-0">
+                <!-- Domains -->
+                <div class="tab-pane fade show active" id="rp-domains">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Domains</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('domainModal')">+ Add Domain</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="domainsTable">
+                            <thead><tr><th>En</th><th>Domain</th><th>Port</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subdomains -->
+                <div class="tab-pane fade" id="rp-subdomains">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Subdomains</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('subdomainModal')">+ Add Subdomain</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="subdomainsTable">
+                            <thead><tr><th>En</th><th>Subdomain</th><th>Parent Domain</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Handlers -->
+                <div class="tab-pane fade" id="rp-handlers">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Handlers</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('handlerModal')">+ Add Handler</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="handlersTable">
+                            <thead><tr><th>En</th><th>Domain/Sub</th><th>Path</th><th>Upstream</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Access Lists -->
+                <div class="tab-pane fade" id="rp-accesslists">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Access Lists</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('accessListModal')">+ Add Access List</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="accessListsTable">
+                            <thead><tr><th>Name</th><th>Client IPs</th><th>Invert</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Basic Auth -->
+                <div class="tab-pane fade" id="rp-basicauth">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Basic Auth</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('basicAuthModal')">+ Add Basic Auth</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="basicAuthsTable">
+                            <thead><tr><th>User</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Headers -->
+                <div class="tab-pane fade" id="rp-headers">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>Headers</h4>
+                        <button class="btn btn-sm btn-success" onclick="app.ui.openModal('headerModal')">+ Add Header</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="headersTable">
+                            <thead><tr><th>Type</th><th>Header</th><th>Value</th><th>Replace</th><th>Desc</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Layer 4 Tab -->
+        <div class="tab-pane fade" id="layer4" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4>Layer 4 Routes</h4>
+                <button class="btn btn-sm btn-success" onclick="app.ui.openModal('layer4Modal')">+ Add Route</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="layer4Table">
+                    <thead><tr><th>En</th><th>Seq</th><th>Protocol</th><th>Listen Port</th><th>Matcher</th><th>SNI/Host</th><th>Upstream</th><th>Desc</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Certificates Tab -->
+        <div class="tab-pane fade" id="certs" role="tabpanel">
+            <h4>Custom Certificates</h4>
+            <p>Upload your <code>.pem</code> and <code>.key</code> files here. They will be available for selection in Domains.</p>
+            <div class="mb-3">
+                <input class="form-control" type="file" id="certUploadInput" aria-label="Certificate File Upload">
+                <button class="btn btn-primary mt-2" onclick="app.uploadCert(this)">Upload File</button>
+            </div>
+            <div id="certUploadStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
+            <div id="missingCertReferences" class="mb-3" role="status" aria-live="polite"></div>
+            <div id="certReferenceStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
+
+            <h4 class="mt-4">Caddy-managed ACME Certificates</h4>
+            <p>Enable Let's Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let's Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.</p>
+            <button class="btn btn-primary mt-2 me-2" onclick="app.requestLetsEncrypt(this)">Request Let's Encrypt Certificates</button>
+            <button class="btn btn-warning mt-2 me-2" onclick="app.renewAllManagedCertificatesAsRsa(this)">Renew all as RSA</button>
+            <a href="/api/certs/acme/download" class="btn btn-secondary mt-2">Download .tar.gz</a>
+            <div id="certAcmeStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
+            <h5>Existing Certificates</h5>
+            <div id="certificatePairsList" class="mb-2"></div>
+            <div id="certRenewStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
+
+            <h4 class="mt-4">Windows PFX Export</h4>
+            <p>Export a certificate and private key as a password-protected <code>.pfx</code> file for Windows import.</p>
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-md-5">
+                    <label for="pfxCertSelect" class="form-label">Certificate/key pair</label>
+                    <select id="pfxCertSelect" class="form-select"></select>
+                </div>
+                <div class="col-md-4">
+                    <label for="pfxPassword" class="form-label">PFX Password</label>
+                    <input type="password" id="pfxPassword" class="form-control" autocomplete="new-password">
+                </div>
+                <div class="col-md-3">
+                    <button id="pfxExportBtn" class="btn btn-primary w-100" onclick="app.downloadPfx(this)">Download PFX</button>
+                </div>
+            </div>
+            <div id="pfxExportStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
+
+            <h5>Available Files in ./certs/</h5>
+            <ul id="certsList" class="list-group"></ul>
+        </div>
+
+        <!-- Control Tab -->
+        <div class="tab-pane fade" id="control" role="tabpanel">
+            <h4>Process Control</h4>
+            <div class="mb-4">
+                <button class="btn btn-success" onclick="app.control('start', this)">Start</button>
+                <button class="btn btn-danger" onclick="app.control('stop', this)">Stop</button>
+                <button class="btn btn-warning" onclick="app.control('reload', this)">Reload</button>
+            </div>
+            <div id="controlStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h4 class="mb-0">Raw Caddyfile</h4>
+                <button class="btn btn-sm btn-outline-secondary" onclick="app.copyRawCaddyfile(this)">Copy to Clipboard</button>
+            </div>
+            <textarea id="rawCaddyfile" readonly class="form-control bg-dark text-light mb-2" aria-label="Raw Caddyfile Content"></textarea>
+
+            <h4 class="mt-4">Stats</h4>
+            <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
+            <pre id="statsOutput" class="status-box" style="display:block;"></pre>
+        </div>
+
+        <!-- Live Logs Tab -->
+        <div class="tab-pane fade" id="logs" role="tabpanel">
+            <h4>Live Log Viewer</h4>
+            <div class="row mb-3 mt-3">
+                <div class="col-md-4">
+                    <label for="logFileSelect" class="form-label">Log File</label>
+                    <select id="logFileSelect" class="form-select"></select>
+                </div>
+                <div class="col-md-8 d-flex align-items-end">
+                    <button class="btn btn-primary me-2" id="startTailBtn" onclick="app.startTailing()">Start Tailing</button>
+                    <button class="btn btn-danger me-2" id="stopTailBtn" onclick="app.stopTailing()" style="display:none;">Stop Tailing</button>
+                    <button class="btn btn-secondary" onclick="app.clearLogs()">Clear Output</button>
+                </div>
+            </div>
+
+            <div class="card bg-dark mb-3">
+                <div class="card-header text-white">Filters</div>
+                <div class="card-body row">
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterLevel" class="form-label text-white">Log Level</label>
+                        <select id="logFilterLevel" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option value="error">ERROR</option>
+                            <option value="warn">WARN</option>
+                            <option value="info">INFO</option>
+                            <option value="debug">DEBUG</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterStatus" class="form-label text-white">Status</label>
+                        <input type="text" id="logFilterStatus" class="form-control form-control-sm" placeholder="e.g. 404, 5xx">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterMethod" class="form-label text-white">Method</label>
+                        <select id="logFilterMethod" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="OPTIONS">OPTIONS</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterIp" class="form-label text-white">Client IP</label>
+                        <input type="text" id="logFilterIp" class="form-control form-control-sm" placeholder="e.g. 192.168.1.1">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterPath" class="form-label text-white">Path / URI</label>
+                        <input type="text" id="logFilterPath" class="form-control form-control-sm" placeholder="e.g. /api">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label for="logFilterText" class="form-label text-white">Free-text Search</label>
+                        <input type="text" id="logFilterText" class="form-control form-control-sm" placeholder="Keyword...">
+                    </div>
+                </div>
+            </div>
+
+            <pre id="logOutputArea" class="form-control bg-dark text-light" style="height: 600px; overflow-y: scroll; font-size: 0.85em; white-space: pre-wrap; font-family: monospace;"></pre>
+        </div>
+
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+
+<!-- Modals Container (Injected by JS) -->
+<div id="modalsContainer"></div>
+
+<!-- 2FA Modal -->
+<div class="modal fade" id="2faModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">2FA Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body">
+        <div id="2faStatus" class="mb-3" aria-live="polite">Status: <span id="2faStatusBadge" class="badge bg-secondary">Loading...</span></div>
+        <div id="2faSetupArea" style="display: none;">
+            <p>Scan this QR code with your authenticator app:</p>
+            <img id="2faQrCode" src="" alt="QR Code" class="img-fluid mb-3">
+            <div class="mb-3">
+                <label for="2faVerifyToken">Verification Code</label>
+                <input type="text" id="2faVerifyToken" class="form-control" placeholder="123456">
+                <input type="hidden" id="2faVerifySecret">
+            </div>
+            <button class="btn btn-success" onclick="app.verify2fa(this)">Enable 2FA</button>
+        </div>
+        <div id="2faDisableArea" style="display: none;">
+            <button class="btn btn-danger" onclick="app.disable2fa()">Disable 2FA</button>
+        </div>
+    </div>
+  </div></div>
+</div>
+
+</body>
+</html>

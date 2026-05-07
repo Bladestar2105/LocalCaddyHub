@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LocalCaddyHub — UI kit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="admin.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="Icons.jsx"></script>
+<script type="text/babel" src="Sidebar.jsx"></script>
+<script type="text/babel" src="Topbar.jsx"></script>
+<script type="text/babel" src="PageGeneral.jsx"></script>
+<script type="text/babel" src="PageReverseProxy.jsx"></script>
+<script type="text/babel" src="PageLayer4.jsx"></script>
+<script type="text/babel" src="PageCerts.jsx"></script>
+<script type="text/babel" src="PageControl.jsx"></script>
+<script type="text/babel" src="PageLogs.jsx"></script>
+<script type="text/babel" src="PageStats.jsx"></script>
+
+<script type="text/babel">
+const SAMPLE_CADDYFILE = `{
+  email admin@bw.tech
+  acme_ca https://acme-v02.api.letsencrypt.org/directory
+  log {
+    level INFO
+    output file /var/log/caddy/access.log {
+      roll_size 10MiB
+      roll_keep 7
+    }
+  }
+}
+
+bw.tech, www.bw.tech {
+  reverse_proxy 10.0.4.7:8080 {
+    transport http {
+      versions h2 h2c
+    }
+  }
+  header Strict-Transport-Security "max-age=31536000;"
+}
+
+helpdesk.bw-tech.de {
+  reverse_proxy 10.0.4.12:80 {
+    transport ntlm
+  }
+  @ipallow remote_ip 10.0.0.0/8 192.168.0.0/16
+  handle @ipallow {
+    reverse_proxy 10.0.4.12:80
+  }
+}
+
+# Layer 4
+:8443 {
+  @postgres tls sni postgres.bw.tech
+  route @postgres {
+    proxy 10.0.4.20:5432
+  }
+}`;
+
+const DATA = {
+  domains: [
+    { enabled:true,  domain:'bw.tech',              port:443,  tls:'le',     status:'running', desc:'Marketing site' },
+    { enabled:true,  domain:'helpdesk.bw-tech.de',  port:443,  tls:'le',     status:'reload',  desc:'Customer ticketing' },
+    { enabled:true,  domain:'docs.bw.tech',         port:443,  tls:'le',     status:'running', desc:'Public documentation' },
+    { enabled:false, domain:'staging.bw.tech',      port:8443, tls:'custom', status:'stopped', desc:'Internal staging' },
+    { enabled:true,  domain:'mail.bw-tech.de',      port:443,  tls:'custom', status:'running', desc:'Exchange front-end' },
+  ],
+  subdomains: [
+    { enabled:true, sub:'api.bw.tech',     parent:'bw.tech',     tls:'le', desc:'Public API gateway' },
+    { enabled:true, sub:'cdn.bw.tech',     parent:'bw.tech',     tls:'le', desc:'Static asset cache' },
+    { enabled:true, sub:'admin.helpdesk',  parent:'bw-tech.de',  tls:'le', desc:'Internal admin console' },
+  ],
+  handlers: [
+    { enabled:true, host:'bw.tech',             path:'/api/*',     upstream:'10.0.4.7:8080',  type:'http' },
+    { enabled:true, host:'bw.tech',             path:'/*',         upstream:'10.0.4.7:80',    type:'http' },
+    { enabled:true, host:'helpdesk.bw-tech.de', path:'/exchange/*',upstream:'10.0.4.12:80',   type:'ntlm' },
+    { enabled:true, host:'docs.bw.tech',        path:'/*',         upstream:'10.0.4.31:4000', type:'http' },
+  ],
+  accesslists: [
+    { name:'office-vpn',      ips:'10.10.0.0/16, 10.20.0.0/16',     invert:false, desc:'BW.Tech office network' },
+    { name:'block-tor-exits', ips:'see /etc/caddy/torexits.txt',     invert:true,  desc:'Inverted: deny tor exit nodes' },
+    { name:'partner-saar',    ips:'93.184.216.34, 198.51.100.0/24',  invert:false, desc:'Stadtwerke Saarbrücken' },
+  ],
+  basicauth: [
+    { user:'metrics',  hash:'$2a$14$kT9fH...',  desc:'Prometheus scraper' },
+    { user:'frank',    hash:'$2a$14$qX2pL...',  desc:'IT-Leitung Hohenstein' },
+  ],
+  headers: [
+    { type:'response', header:'Strict-Transport-Security', value:'max-age=31536000; includeSubDomains', replace:false, desc:'HSTS for all sites' },
+    { type:'response', header:'X-Frame-Options',           value:'DENY',                                replace:true,  desc:'Block embedding' },
+    { type:'request',  header:'X-Forwarded-Proto',         value:'https',                               replace:false, desc:'TLS termination hint' },
+  ],
+};
+
+const L4_ROWS = [
+  { enabled:true, seq:10, protocol:'TCP',  listen:':8443',  matcher:'TLS SNI', sni:'postgres.bw.tech', upstream:'10.0.4.20:5432', status:'running' },
+  { enabled:true, seq:20, protocol:'TCP',  listen:':5671',  matcher:'TLS',     sni:'mq.bw.tech',       upstream:'10.0.4.22:5671', status:'running' },
+  { enabled:true, seq:30, protocol:'UDP',  listen:':1194',  matcher:'any',     sni:'—',                 upstream:'10.0.4.30:1194', status:'running' },
+  { enabled:false,seq:40, protocol:'TCP',  listen:':25',    matcher:'STARTTLS',sni:'mail.bw-tech.de',  upstream:'10.0.4.40:25',   status:'stopped' },
+];
+
+const CERTS = [
+  { domain:'bw.tech',              issuer:"Let's Encrypt R3", key:'ECDSA P-256', expires:'2026-08-12', expiring:false },
+  { domain:'helpdesk.bw-tech.de',  issuer:"Let's Encrypt R3", key:'RSA 2048',    expires:'2026-06-04', expiring:true },
+  { domain:'docs.bw.tech',         issuer:"Let's Encrypt R3", key:'ECDSA P-256', expires:'2026-09-02', expiring:false },
+  { domain:'mail.bw-tech.de',      issuer:'DigiCert',          key:'RSA 4096',    expires:'2027-01-15', expiring:false },
+];
+
+const STATS = [
+  { label:'Requests / min', value:'1,247', delta: 12 },
+  { label:'5xx errors',     value:'3',     delta: -42 },
+  { label:'Avg latency',    value:'48ms',  delta: -8 },
+  { label:'Active conns',   value:'89',    delta: 4 },
+];
+
+const LOG_LINES = [
+  { ts:'14:21:08', lvl:'INFO',  method:'GET',  path:'/api/health',           status:200, ip:'10.10.4.18',   dur:'4ms' },
+  { ts:'14:21:08', lvl:'INFO',  method:'POST', path:'/api/contact',          status:201, ip:'93.184.216.34',dur:'42ms' },
+  { ts:'14:21:09', lvl:'INFO',  method:'GET',  path:'/loesungen/cloud-by-design',status:200, ip:'141.0.12.7',dur:'18ms' },
+  { ts:'14:21:09', lvl:'WARN',  method:'GET',  path:'/wp-admin',             status:403, ip:'185.220.101.4',dur:'2ms' },
+  { ts:'14:21:10', lvl:'INFO',  method:'GET',  path:'/api/tickets/874',      status:200, ip:'10.10.4.18',   dur:'31ms' },
+  { ts:'14:21:11', lvl:'ERROR', method:'POST', path:'/api/upload',           status:502, ip:'10.10.4.22',   dur:'1.2s' },
+  { ts:'14:21:11', lvl:'INFO',  method:'GET',  path:'/static/hero.png',      status:200, ip:'141.0.12.7',   dur:'7ms' },
+  { ts:'14:21:12', lvl:'DEBUG', method:'GET',  path:'/api/internal/metrics', status:200, ip:'127.0.0.1',    dur:'2ms' },
+  { ts:'14:21:12', lvl:'INFO',  method:'GET',  path:'/exchange/Microsoft-Server-ActiveSync', status:200, ip:'10.10.4.18', dur:'88ms' },
+  { ts:'14:21:13', lvl:'WARN',  method:'GET',  path:'/.env',                 status:404, ip:'45.155.205.91',dur:'1ms' },
+  { ts:'14:21:13', lvl:'INFO',  method:'GET',  path:'/',                     status:200, ip:'141.0.12.7',   dur:'12ms' },
+  { ts:'14:21:14', lvl:'INFO',  method:'GET',  path:'/aktuelles/',           status:200, ip:'141.0.12.7',   dur:'19ms' },
+];
+
+function App() {
+  const [authed, setAuthed] = React.useState(true);
+  const [page, setPage] = React.useState('rp');
+  const [lang, setLang] = React.useState('en');
+  const [modal, setModal] = React.useState(null);
+  const [applyState, setApplyState] = React.useState('pending');
+  const [generalState, setGeneralState] = React.useState({
+    enabled:true, l4:true, httpPort:'80', httpsPort:'443',
+    logLevel:'INFO', logCreds:false, rollSize:10, rollKeep:7,
+    tlsEmail:'admin@bw.tech', acmeCA:'le-prod', keyType:'p256', autoHttps:''
+  });
+
+  if (!authed) return <AuthScreen onLogin={() => setAuthed(true)}/>;
+
+  const counts = { rp: DATA.domains.length + DATA.subdomains.length, l4: L4_ROWS.length, certs: CERTS.length };
+
+  const crumbsMap = { general:'General', rp:'Reverse Proxy', layer4:'Layer 4', certs:'Certificates', control:'Control & Raw', logs:'Live Logs', stats:'Stats' };
+
+  return (
+    <div className="app">
+      <Sidebar active={page} onNav={setPage} counts={counts}/>
+      <div className="main">
+        <Topbar
+          crumbs={['LocalCaddyHub', crumbsMap[page]]}
+          lang={lang} setLang={setLang}
+          applyState={applyState}
+          onApply={() => setApplyState('applied')}
+          onValidate={() => alert('Validation OK — would call /api/validate')}
+        />
+        <div className="content">
+          {page === 'general'  && <PageGeneral state={generalState} setState={setGeneralState}/>}
+          {page === 'rp'       && <PageReverseProxy data={DATA} openModal={setModal}/>}
+          {page === 'layer4'   && <PageLayer4 rows={L4_ROWS} openModal={setModal}/>}
+          {page === 'certs'    && <PageCerts certs={CERTS}/>}
+          {page === 'control'  && <PageControl caddyfile={SAMPLE_CADDYFILE} running={true}/>}
+          {page === 'logs'     && <PageLogs lines={LOG_LINES}/>}
+          {page === 'stats'    && <PageStats stats={STATS}/>}
+        </div>
+      </div>
+      {modal && (
+        <Modal title={`Add ${modal}`} onClose={() => setModal(null)} onSave={() => setModal(null)}>
+          <div className="field"><div className="field-label">Name</div><input className="input" placeholder={modal === 'domains' ? 'example.com' : `New ${modal}`}/></div>
+          <div className="field"><div className="field-label">Description</div><input className="input" placeholder="Optional"/></div>
+          <div className="statusbox info"><IconAlert size={16} style={{color:'var(--blue-10)'}}/>Changes apply on next <strong>Apply Configuration</strong>.</div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

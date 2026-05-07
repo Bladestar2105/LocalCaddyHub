@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"><style>
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--gray-5)}
+.tab{font:500 13px var(--font-sans);padding:14px 18px;color:var(--fg-3);border-bottom:2px solid transparent;cursor:pointer;display:flex;gap:8px;align-items:center}
+.tab:hover{color:var(--fg-2)}
+.tab.active{color:var(--fg);border-bottom:2px solid #3D8BFF;background:linear-gradient(180deg,transparent 0%,rgba(61,139,255,.04) 100%)}
+.dot{width:6px;height:6px;border-radius:50%}
+</style></head><body>
+<div class="card">
+  <div class="tabs">
+    <div class="tab">General</div>
+    <div class="tab active">Reverse Proxy</div>
+    <div class="tab">Layer 4</div>
+    <div class="tab">Certificates <span class="dot" style="background:#F5A524"></span></div>
+    <div class="tab">Control &amp; Raw</div>
+    <div class="tab">Live Logs</div>
+  </div>
+</div>
+</body></html>
