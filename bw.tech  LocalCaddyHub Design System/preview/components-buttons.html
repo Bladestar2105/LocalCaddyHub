@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"><style>
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.btn{font:600 13px/1 var(--font-sans);padding:10px 16px;border-radius:4px;border:1px solid transparent;cursor:pointer;transition:all 120ms cubic-bezier(.2,0,0,1);display:inline-flex;gap:6px;align-items:center}
+.primary{background:#3D8BFF;color:#fff}
+.primary:hover{background:#6BA8FF}
+.secondary{background:transparent;color:var(--fg-2);border-color:var(--gray-6)}
+.secondary:hover{background:var(--gray-3)}
+.success{background:#2EBFA5;color:#0B1B2B}
+.danger{background:transparent;color:#FF7B7F;border-color:rgba(229,72,77,.3)}
+.danger:hover{background:rgba(229,72,77,.14)}
+.ghost{background:transparent;color:var(--fg-3);border:0;padding:10px 12px}
+.ghost:hover{background:var(--gray-3);color:var(--fg)}
+.btn-sm{padding:6px 10px;font-size:12px}
+</style></head><body>
+<div class="card">
+  <div class="row">
+    <button class="btn primary">Apply Configuration</button>
+    <button class="btn secondary">Validate</button>
+    <button class="btn success">+ Add Domain</button>
+    <button class="btn danger">Stop</button>
+    <button class="btn ghost">Cancel</button>
+  </div>
+  <div class="row">
+    <button class="btn primary btn-sm">Save</button>
+    <button class="btn secondary btn-sm">Reload</button>
+    <button class="btn primary btn-sm" disabled style="opacity:.4;cursor:not-allowed">Disabled</button>
+    <button class="btn primary btn-sm" style="outline:2px solid #3D8BFF;outline-offset:2px">Focused</button>
+  </div>
+</div>
+</body></html>

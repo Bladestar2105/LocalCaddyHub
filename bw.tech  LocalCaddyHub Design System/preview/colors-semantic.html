@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"><style>
+.row3{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tag{padding:8px 12px;border-radius:9999px;font:600 12px var(--font-sans);display:inline-flex;align-items:center;gap:6px;width:fit-content}
+.dot{width:8px;height:8px;border-radius:50%}
+.demo{padding:12px;border-radius:8px;border:1px solid var(--gray-5);background:var(--gray-3);display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.lbl{font:600 10px var(--font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted)}
+</style></head><body>
+<div class="card">
+  <div class="row3">
+    <div class="demo">
+      <div class="lbl">Info</div>
+      <div class="tag" style="background:rgba(61,139,255,.12);color:#6BA8FF"><span class="dot" style="background:#3D8BFF"></span>Pending</div>
+    </div>
+    <div class="demo">
+      <div class="lbl">Success</div>
+      <div class="tag" style="background:rgba(46,191,165,.14);color:#5BD3BD"><span class="dot" style="background:#2EBFA5"></span>Running</div>
+    </div>
+    <div class="demo">
+      <div class="lbl">Warning</div>
+      <div class="tag" style="background:rgba(245,165,36,.16);color:#F5A524"><span class="dot" style="background:#F5A524"></span>Reload needed</div>
+    </div>
+    <div class="demo">
+      <div class="lbl">Danger</div>
+      <div class="tag" style="background:rgba(229,72,77,.14);color:#FF7B7F"><span class="dot" style="background:#E5484D"></span>Stopped</div>
+    </div>
+  </div>
+</div>
+</body></html>

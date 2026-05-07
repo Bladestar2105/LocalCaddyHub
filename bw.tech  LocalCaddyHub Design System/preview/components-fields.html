@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"><style>
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl{font:600 11px/1 var(--font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
+.input{background:var(--gray-1);border:1px solid var(--gray-5);border-radius:4px;padding:10px 12px;color:var(--fg);font:400 14px var(--font-sans);outline:0}
+.input:focus{border-color:#3D8BFF;box-shadow:0 0 0 3px rgba(61,139,255,.2)}
+.help{font:400 12px var(--font-sans);color:var(--fg-muted);font-style:italic}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+</style></head><body>
+<div class="card">
+  <div class="row">
+    <div class="field"><div class="lbl">HTTP Port</div><input class="input" value="80"><div class="help">Default 80</div></div>
+    <div class="field"><div class="lbl">TLS Email</div><input class="input" value="admin@bw.tech" style="border-color:#3D8BFF;box-shadow:0 0 0 3px rgba(61,139,255,.2)"><div class="help">Used for ACME account</div></div>
+  </div>
+  <div class="row">
+    <div class="field"><div class="lbl">Log Level</div>
+      <select class="input"><option>INFO</option></select></div>
+    <div class="field"><div class="lbl">Read Timeout</div><input class="input" placeholder="10s" style="border-color:#E5484D"><div class="help" style="color:#FF7B7F">Required field</div></div>
+  </div>
+</div>
+</body></html>
