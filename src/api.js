@@ -392,11 +392,11 @@ const insertLayer4Stmt = db.prepare(`
   FROM json_each(?)
 `);
 
-const clearDomainCustomCertStmt = db.prepare('UPDATE domains SET customCert="" WHERE id=?');
-const clearDomainClientAuthTrustPoolStmt = db.prepare('UPDATE domains SET client_auth_trust_pool="" WHERE id=?');
-const clearSubdomainClientAuthTrustPoolStmt = db.prepare('UPDATE subdomains SET client_auth_trust_pool="" WHERE id=?');
-const clearHandlerTrustedCaStmt = db.prepare('UPDATE handlers SET http_tls_trusted_ca_certs="" WHERE id=?');
-const clearLayer4CustomCertStmt = db.prepare('UPDATE layer4 SET customCert="" WHERE id=?');
+const clearDomainCustomCertStmt = db.prepare("UPDATE domains SET customCert='' WHERE id=?");
+const clearDomainClientAuthTrustPoolStmt = db.prepare("UPDATE domains SET client_auth_trust_pool='' WHERE id=?");
+const clearSubdomainClientAuthTrustPoolStmt = db.prepare("UPDATE subdomains SET client_auth_trust_pool='' WHERE id=?");
+const clearHandlerTrustedCaStmt = db.prepare("UPDATE handlers SET http_tls_trusted_ca_certs='' WHERE id=?");
+const clearLayer4CustomCertStmt = db.prepare("UPDATE layer4 SET customCert='' WHERE id=?");
 const setGeneralTlsKeyTypeStmt = db.prepare('UPDATE general_config SET tls_key_type=? WHERE id=1');
 
 function keyNameForCustomCertificate(filename) {
