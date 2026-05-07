@@ -9,7 +9,7 @@ const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
 const { safeCompare } = require('./utils');
-const { loginRateLimiter, recordFailedAttempt, clearAttempts } = require('./rateLimiter');
+const { loginRateLimiter, recordFailedAttempt, clearAttempts, sensitiveActionLimiter } = require('./rateLimiter');
 const apiRoutes = require('./api');
 const appPaths = require('./paths');
 const { resolveCaddyBinary } = require('./caddyBinary');
@@ -143,7 +143,7 @@ app.use(authMiddleware);
 app.use(csrfMiddleware);
 
 // Setup & 2FA Routes (Protected, but some exceptions in API logic for setup)
-app.post('/api/setup', async (req, res) => {
+app.post('/api/setup', sensitiveActionLimiter, async (req, res) => {
   const { newUsername, newPassword } = req.body;
   if (!newUsername || !newPassword) return res.status(400).send('Missing fields');
   if (typeof newUsername !== 'string' || typeof newPassword !== 'string') return res.status(400).send('Invalid fields');
@@ -159,7 +159,7 @@ app.post('/api/setup', async (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/2fa/generate', async (req, res) => {
+app.post('/api/2fa/generate', sensitiveActionLimiter, async (req, res) => {
   const secret = generateSecret();
   const userRow = getUsernameStmt.get();
   const username = userRow ? userRow.username : process.env.ADMIN_USER;
@@ -170,7 +170,7 @@ app.post('/api/2fa/generate', async (req, res) => {
   res.json({ secret, qrCodeUrl: imageUrl });
 });
 
-app.post('/api/2fa/verify', (req, res) => {
+app.post('/api/2fa/verify', sensitiveActionLimiter, (req, res) => {
   const { token, secret } = req.body;
   let isValid = false;
   try {
@@ -187,7 +187,7 @@ app.post('/api/2fa/verify', (req, res) => {
   }
 });
 
-app.post('/api/2fa/disable', (req, res) => {
+app.post('/api/2fa/disable', sensitiveActionLimiter, (req, res) => {
   disableTotpStmt.run();
   res.json({ success: true });
 });

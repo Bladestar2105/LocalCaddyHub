@@ -62,14 +62,60 @@ function clearAttempts(ip) {
   loginAttempts.delete(ip);
 }
 
+// 🛡️ Sentinel: separate, slightly more permissive limiter for post-auth
+// sensitive actions (2FA enable/verify/disable, password change). The same
+// IP-based bucket would lock out legitimate operators who test 2FA repeatedly,
+// so we track a different counter with its own threshold and window.
+const SENSITIVE_MAX_ATTEMPTS = 10;
+const SENSITIVE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const sensitiveAttempts = new Map();
+
+const sensitiveEvictionInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of sensitiveAttempts.entries()) {
+    if (now - entry.firstAttempt > SENSITIVE_WINDOW_MS) {
+      sensitiveAttempts.delete(key);
+    }
+  }
+}, SENSITIVE_WINDOW_MS);
+
+function sensitiveActionLimiter(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+
+  let entry = sensitiveAttempts.get(ip);
+  if (entry && now - entry.firstAttempt > SENSITIVE_WINDOW_MS) {
+    sensitiveAttempts.delete(ip);
+    entry = null;
+  }
+
+  if (entry && entry.count >= SENSITIVE_MAX_ATTEMPTS) {
+    const retryAfterSec = Math.ceil((entry.firstAttempt + SENSITIVE_WINDOW_MS - now) / 1000);
+    res.setHeader('Retry-After', String(Math.max(retryAfterSec, 1)));
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+
+  if (entry) {
+    entry.count += 1;
+  } else {
+    sensitiveAttempts.set(ip, { count: 1, firstAttempt: now });
+  }
+  next();
+}
+
 module.exports = {
   loginRateLimiter,
   recordFailedAttempt,
   clearAttempts,
+  sensitiveActionLimiter,
   // Exported for testing
   loginAttempts,
+  sensitiveAttempts,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_LOCKOUT_TIME,
   LOGIN_EVICTION_TIME,
-  evictionInterval
+  SENSITIVE_MAX_ATTEMPTS,
+  SENSITIVE_WINDOW_MS,
+  evictionInterval,
+  sensitiveEvictionInterval
 };
