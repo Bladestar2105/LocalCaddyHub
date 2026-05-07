@@ -15,6 +15,7 @@ const router = express.Router();
 const certDir = appPaths.certsDir;
 
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
+const ALLOWED_CERT_EXTENSIONS = new Set(['.pem', '.crt', '.cer', '.key']);
 const allowedAcmeCaEndpoints = new Set([
   '',
   'https://acme-v02.api.letsencrypt.org/directory',
@@ -1627,13 +1628,21 @@ router.get('/certs', async (req, res) => {
 
 router.post('/certs', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).send('Failed to get file');
-  const safeName = path.basename(req.file.originalname);
+  // 🛡️ Sentinel: only allow certificate / key file types. Anything else
+  // (including extension-less files) is rejected and the temp upload removed.
+  const safeName = path.basename(req.file.originalname || '');
+  const ext = path.extname(safeName).toLowerCase();
+  if (!safeName || !ALLOWED_CERT_EXTENSIONS.has(ext)) {
+    fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(400).send('Only .pem, .crt, .cer, .key files are allowed');
+  }
   const dstPath = path.join(certDir, safeName);
   try {
     // ⚡ Bolt: Use asynchronous rename to prevent event loop blocking.
     await fs.promises.rename(req.file.path, dstPath);
     res.sendStatus(200);
   } catch (err) {
+    fs.promises.unlink(req.file.path).catch(() => {});
     res.status(500).send('Failed to write file');
   }
 });
