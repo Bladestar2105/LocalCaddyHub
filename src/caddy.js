@@ -2,6 +2,11 @@ const path = require('path');
 const net = require('net');
 const { formatDuration } = require('./utils');
 
+const allowedAcmeCaEndpoints = new Set([
+  'https://acme-v02.api.letsencrypt.org/directory',
+  'https://acme-staging-v02.api.letsencrypt.org/directory'
+]);
+
 function generateCaddyfile(config, certsDir = './certs') {
   let sb = '';
   const automaticCertsDisabled = ['off', 'disable_certs'].includes(config.general && config.general.auto_https);
@@ -36,6 +41,11 @@ function generateCaddyfile(config, certsDir = './certs') {
 
   if (config.general.tls_email) {
     sb += `\temail ${config.general.tls_email}\n`;
+  }
+
+  const acmeCa = String(config.general.acme_ca || '').trim();
+  if (allowedAcmeCaEndpoints.has(acmeCa)) {
+    sb += `\tacme_ca ${acmeCa}\n`;
   }
 
   if (config.general.http_versions || config.general.timeout_read_body || config.general.timeout_read_header || config.general.timeout_write || config.general.timeout_idle || config.general.log_credentials) {

@@ -34,6 +34,11 @@
             '(?) Max number of rotated log files to keep.': '(?) Maximale Anzahl rotierter Logdateien, die behalten werden.',
             'TLS Email': 'TLS-E-Mail',
             '(?) The email address to use for the ACME account.': '(?) Die E-Mail-Adresse für das ACME-Konto.',
+            'ACME CA': 'ACME-CA',
+            '(?) Select the public certificate authority Caddy should use for ACME issuance.': '(?) Wähle die öffentliche Zertifizierungsstelle, die Caddy für ACME-Ausstellung verwenden soll.',
+            'Caddy Default': 'Caddy-Standard',
+            'Let\'s Encrypt Production': 'Let\'s Encrypt Produktion',
+            'Let\'s Encrypt Staging': 'Let\'s Encrypt Staging',
             'Auto HTTPS': 'Auto HTTPS',
             '(?) Configures Caddy Automatic HTTPS. Off and Disable Certs prevent public ACME certificate issuance.': '(?) Konfiguriert Caddy Automatic HTTPS. Aus und Zertifikate deaktivieren verhindern öffentliche ACME-Zertifikate.',
             'On (Default)': 'Ein (Standard)',
@@ -94,6 +99,8 @@
             'Certificate File Upload': 'Zertifikatsdatei hochladen',
             'Upload File': 'Datei hochladen',
             'Caddy-managed ACME Certificates': 'Von Caddy verwaltete ACME-Zertifikate',
+            'Enable Let\'s Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let\'s Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.': 'Aktiviere Let\'s Encrypt auf einer Domain, Subdomain oder Layer-4-Route und stoße die Ausstellung dann hier an. Caddy muss für HTTP/TLS-Challenges von Let\'s Encrypt auf Port 80 und/oder 443 erreichbar sein.',
+            'Request Let\'s Encrypt Certificates': 'Let\'s-Encrypt-Zertifikate abrufen',
             'Download Caddy-managed ACME certificate storage, including private keys. Handle this archive securely.': 'Lade den von Caddy verwalteten ACME-Zertifikatsspeicher inklusive privater Schlüssel herunter. Behandle dieses Archiv vertraulich.',
             'Download .tar.gz': '.tar.gz herunterladen',
             'Available Files in ./certs/': 'Verfügbare Dateien in ./certs/',
@@ -137,6 +144,9 @@
             'Loading...': 'Lädt...',
             'Uploading...': 'Lädt hoch...',
             'Verifying...': 'Prüft...',
+            'Requesting...': 'Fordert an...',
+            'Saving configuration before requesting certificates...': 'Speichere Konfiguration vor dem Zertifikatsabruf...',
+            'Enable Let\'s Encrypt on at least one enabled Domain, Subdomain, or Layer 4 route first.': 'Aktiviere Let\'s Encrypt zuerst auf mindestens einer aktivierten Domain, Subdomain oder Layer-4-Route.',
             'Saved successfully!': 'Erfolgreich gespeichert!',
             'Failed to save config.': 'Konfiguration konnte nicht gespeichert werden.',
             'Configuration is valid!': 'Konfiguration ist gültig!',
@@ -179,8 +189,8 @@
             'Description': 'Beschreibung',
             'Enable Access Log': 'Access-Log aktivieren',
             'Disable TLS (HTTP only)': 'TLS deaktivieren (nur HTTP)',
-            'Use Caddy-managed public ACME certificate': 'Von Caddy verwaltetes öffentliches ACME-Zertifikat verwenden',
-            'Uses Caddy Automatic HTTPS with a public ACME issuer such as Let\'s Encrypt or ZeroSSL. Overrides custom certificate when enabled.': 'Verwendet Caddy Automatic HTTPS mit einem öffentlichen ACME-Issuer wie Let\'s Encrypt oder ZeroSSL. Überschreibt ein benutzerdefiniertes Zertifikat, wenn aktiviert.',
+            'Use Let\'s Encrypt public certificate': 'Öffentliches Let\'s-Encrypt-Zertifikat verwenden',
+            'Uses Caddy Automatic HTTPS with Let\'s Encrypt. Overrides custom certificate when enabled.': 'Verwendet Caddy Automatic HTTPS mit Let\'s Encrypt. Überschreibt ein benutzerdefiniertes Zertifikat, wenn aktiviert.',
             'Unavailable because global Auto HTTPS is set to Off or Disable Certs.': 'Nicht verfügbar, weil Auto HTTPS global auf Aus oder Zertifikate deaktivieren steht.',
             'Unavailable for HTTP-only domains.': 'Nicht verfügbar für reine HTTP-Domains.',
             'Custom Certificate': 'Benutzerdefiniertes Zertifikat',
@@ -322,7 +332,9 @@
             'Caddy started successfully.': 'Caddy wurde erfolgreich gestartet.',
             'Caddy start command executed.': 'Caddy-Startbefehl wurde ausgeführt.',
             'Caddy stopped successfully.': 'Caddy wurde erfolgreich gestoppt.',
-            'Caddy reloaded successfully.': 'Caddy wurde erfolgreich neu geladen.'
+            'Caddy reloaded successfully.': 'Caddy wurde erfolgreich neu geladen.',
+            'Caddy reloaded successfully. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.': 'Caddy wurde erfolgreich neu geladen. Die Let\'s-Encrypt-Ausstellung wurde für konfigurierte ACME-Domains angestoßen.',
+            'Caddy start command executed. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.': 'Caddy-Startbefehl wurde ausgeführt. Die Let\'s-Encrypt-Ausstellung wurde für konfigurierte ACME-Domains angestoßen.'
         }
     };
 

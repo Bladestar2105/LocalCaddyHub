@@ -14,6 +14,11 @@ const router = express.Router();
 const certDir = appPaths.certsDir;
 
 const upload = multer({ dest: certDir, limits: { fileSize: 10 * 1024 * 1024 } });
+const allowedAcmeCaEndpoints = new Set([
+  '',
+  'https://acme-v02.api.letsencrypt.org/directory',
+  'https://acme-staging-v02.api.letsencrypt.org/directory'
+]);
 
 function toStringArray(value) {
   if (Array.isArray(value)) return value;
@@ -28,6 +33,11 @@ function autoHttpsDisablesAcme(general = {}) {
   return ['off', 'disable_certs'].includes(general.auto_https || '');
 }
 
+function normalizeAcmeCa(value) {
+  const endpoint = typeof value === 'string' ? value.trim() : '';
+  return allowedAcmeCaEndpoints.has(endpoint) ? endpoint : '';
+}
+
 function normalizeAcmeConfig(input) {
   const config = {
     ...input,
@@ -36,6 +46,7 @@ function normalizeAcmeConfig(input) {
     subdomains: (input.subdomains || []).map(s => ({ ...s })),
     layer4: (input.layer4 || []).map(l => ({ ...l }))
   };
+  config.general.acme_ca = normalizeAcmeCa(config.general.acme_ca);
   const acmeDisabled = autoHttpsDisablesAcme(config.general);
   const domainsById = new Map();
 
@@ -104,7 +115,7 @@ const getLayer4Stmt = db.prepare('SELECT * FROM layer4');
 // /api/config/structured
 router.get('/config/structured', (req, res) => {
   try {
-    const general = getGeneralStmt.get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO' };
+    const general = getGeneralStmt.get() || { enabled: 0, enable_layer4: 0, http_port: '80', https_port: '443', log_level: 'INFO', acme_ca: '' };
 
     const domainsRows = getDomainsStmt.all();
     const subdomainsRows = getSubdomainsStmt.all();
@@ -122,6 +133,7 @@ router.get('/config/structured', (req, res) => {
         https_port: general.https_port || '',
         log_level: general.log_level || '',
         tls_email: general.tls_email || '',
+        acme_ca: normalizeAcmeCa(general.acme_ca),
         http_versions: general.http_versions || '',
         timeout_read_body: general.timeout_read_body || '',
         timeout_read_header: general.timeout_read_header || '',
@@ -204,7 +216,7 @@ router.get('/config/structured', (req, res) => {
   }
 });
 
-const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
+const updateGeneralStmt = db.prepare('UPDATE general_config SET enabled=?, enable_layer4=?, http_port=?, https_port=?, log_level=?, tls_email=?, acme_ca=?, http_versions=?, timeout_read_body=?, timeout_read_header=?, timeout_write=?, timeout_idle=?, log_credentials=?, auto_https=?, log_roll_size_mb=?, log_roll_keep=? WHERE id=1');
 
 const deleteDomainsStmt = db.prepare('DELETE FROM domains');
 const insertDomainStmt = db.prepare(`
@@ -431,7 +443,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
       // General
       if (config.general) {
         const http_versions = Array.isArray(config.general.http_versions) ? config.general.http_versions.join(' ') : (config.general.http_versions || '');
-        updateGeneralStmt.run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
+        updateGeneralStmt.run(config.general.enabled ? 1 : 0, config.general.enable_layer4 ? 1 : 0, config.general.http_port, config.general.https_port, config.general.log_level, config.general.tls_email, config.general.acme_ca, http_versions, config.general.timeout_read_body, config.general.timeout_read_header, config.general.timeout_write, config.general.timeout_idle, config.general.log_credentials ? 1 : 0, config.general.auto_https, config.general.log_roll_size_mb, config.general.log_roll_keep);
       }
 
       deleteDomainsStmt.run();
@@ -546,6 +558,80 @@ function execCaddy(cmdArgs, res) {
   });
 }
 
+function execCaddyPromise(cmdArgs) {
+  return new Promise((resolve, reject) => {
+    execFile(resolveCaddyBinary(), cmdArgs, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function isCaddyAdminReady() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  try {
+    const apiRes = await fetch('http://localhost:2019/config/', {
+      headers: { 'Origin': 'http://localhost:2019' },
+      signal: controller.signal
+    });
+    return apiRes.ok;
+  } catch (e) {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function loadCaddyfileThroughAdmin() {
+  const caddyfileContent = await fs.promises.readFile(appPaths.caddyfile, 'utf-8');
+  const apiRes = await fetch('http://localhost:2019/load', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/caddyfile',
+      'Cache-Control': 'no-cache',
+      'Origin': 'http://localhost:2019'
+    },
+    body: caddyfileContent
+  });
+  if (!apiRes.ok) {
+    const errText = await apiRes.text();
+    const err = new Error(`Failed to reload: ${apiRes.statusText}`);
+    err.stderr = errText;
+    throw err;
+  }
+}
+
+function startCaddyDetached() {
+  return new Promise((resolve, reject) => {
+    const cp = spawn(resolveCaddyBinary(), ['run', '--config', appPaths.caddyfile], {
+      detached: true,
+      stdio: 'ignore'
+    });
+
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
+
+    cp.unref();
+    cp.on('error', (err) => finish(reject, err));
+    cp.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        finish(reject, new Error(`Caddy exited with code ${code}`));
+      }
+    });
+    setTimeout(() => finish(resolve), 500);
+  });
+}
+
 router.post('/validate', (req, res) => execCaddy(['validate', '--config', appPaths.caddyfile], res));
 
 router.post('/start', async (req, res) => {
@@ -616,27 +702,8 @@ router.post('/stop', async (req, res) => {
 
 router.post('/reload', async (req, res) => {
   try {
-    let caddyfileContent = '';
-    try {
-      caddyfileContent = await fs.promises.readFile(appPaths.caddyfile, 'utf-8');
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
-    const apiRes = await fetch('http://localhost:2019/load', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/caddyfile',
-        'Cache-Control': 'no-cache',
-        'Origin': 'http://localhost:2019'
-      },
-      body: caddyfileContent
-    });
-    if (apiRes.ok) {
-      return res.json({ output: 'Caddy reloaded successfully.', stderr: '', error: undefined });
-    } else {
-      const errText = await apiRes.text();
-      return res.json({ output: '', stderr: errText, error: `Failed to reload: ${apiRes.statusText}` });
-    }
+    await loadCaddyfileThroughAdmin();
+    return res.json({ output: 'Caddy reloaded successfully.', stderr: '', error: undefined });
   } catch (e) {
     // If we cannot connect to API, fallback to CLI
     execCaddy(['reload', '--config', appPaths.caddyfile], res);
@@ -662,6 +729,35 @@ router.get('/stats', (req, res) => {
 
 // Certs
 let cachedAppDataDir = null;
+
+router.post('/certs/letsencrypt/request', async (req, res) => {
+  try {
+    await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
+    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
+
+    if (await isCaddyAdminReady()) {
+      await loadCaddyfileThroughAdmin();
+      return res.json({
+        output: 'Caddy reloaded successfully. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.',
+        stderr: '',
+        error: undefined
+      });
+    }
+
+    await startCaddyDetached();
+    res.json({
+      output: 'Caddy start command executed. Let\'s Encrypt certificate issuance has been requested for configured ACME domains.',
+      stderr: '',
+      error: undefined
+    });
+  } catch (err) {
+    res.json({
+      output: err.stdout || '',
+      stderr: err.stderr || '',
+      error: err.message
+    });
+  }
+});
 
 router.get('/certs/acme/download', async (req, res) => {
   if (cachedAppDataDir) {

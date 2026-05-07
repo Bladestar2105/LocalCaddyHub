@@ -12,7 +12,7 @@ function uuidv4() {
 
 const app = {
     config: {
-        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false, log_roll_size_mb: 10, log_roll_keep: 7 },
+        general: { enabled: false, enable_layer4: false, http_port: "", https_port: "", log_level: "", tls_email: "", acme_ca: "", auto_https: "", http_versions: "", timeout_read_body: "", timeout_read_header: "", timeout_write: "", timeout_idle: "", log_credentials: false, log_roll_size_mb: 10, log_roll_keep: 7 },
         domains: [],
         subdomains: [],
         handlers: [],
@@ -88,19 +88,15 @@ const app = {
         }
     },
 
-    saveStructuredConfig: async function() {
-        const btn = $('#applyConfigBtn');
-        const originalText = btn.html();
-        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Saving...'));
-
+    collectGeneralConfigFromForm: function() {
         this.config.general.enabled = $('#genEnabled').is(':checked');
         this.config.general.enable_layer4 = $('#genEnableLayer4').is(':checked');
         this.config.general.http_port = $('#genHttpPort').val();
         this.config.general.https_port = $('#genHttpsPort').val();
         this.config.general.log_level = $('#genLogLevel').val();
         this.config.general.tls_email = $('#genTlsEmail').val();
+        this.config.general.acme_ca = $('#genAcmeCA').val();
         this.config.general.auto_https = $('#genAutoHttps').val();
-        this.ui.normalizeAcmeSettings();
         let httpVer = $('#genHttpVersions').val();
         this.config.general.http_versions = Array.isArray(httpVer) ? httpVer.join(' ') : (httpVer || '');
         this.config.general.timeout_read_body = $('#genTOutReadBody').val();
@@ -110,6 +106,15 @@ const app = {
         this.config.general.log_credentials = $('#genLogCreds').is(':checked');
         this.config.general.log_roll_size_mb = parseInt($('#genLogRollSize').val()) || 10;
         this.config.general.log_roll_keep = parseInt($('#genLogRollKeep').val()) || 7;
+        this.ui.normalizeAcmeSettings();
+    },
+
+    saveStructuredConfig: async function() {
+        const btn = $('#applyConfigBtn');
+        const originalText = btn.html();
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Saving...'));
+
+        this.collectGeneralConfigFromForm();
 
         try {
             const res = await fetch('/api/config/structured', {
@@ -119,12 +124,15 @@ const app = {
             });
             if (res.ok) {
                 this.showStatus('Saved successfully!', 'success');
-                this.loadConfig(); // Refresh raw caddyfile
+                await this.loadConfig(); // Refresh raw caddyfile
+                return true;
             } else {
                 this.showStatus('Failed to save config.', 'danger');
+                return false;
             }
         } catch (e) {
             this.showStatus('Error: ' + e.message, 'danger');
+            return false;
         } finally {
             btn.prop('disabled', false).html(originalText);
         }
@@ -154,6 +162,55 @@ const app = {
         const box = $('#globalStatus');
         box.text(this.t(msg)).removeClass('text-success text-danger').addClass('text-' + type).fadeIn();
         setTimeout(() => box.fadeOut(), 5000);
+    },
+
+    requestLetsEncrypt: async function(btnElement) {
+        this.collectGeneralConfigFromForm();
+        if (!this.ui.hasAcmeTargets()) {
+            this.showStatus('Enable Let\'s Encrypt on at least one enabled Domain, Subdomain, or Layer 4 route first.', 'danger');
+            return;
+        }
+
+        const btn = btnElement ? $(btnElement) : null;
+        const originalText = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Requesting...'));
+        }
+
+        const status = $('#certAcmeStatus');
+        status.text(this.t('Saving configuration before requesting certificates...'))
+            .removeClass('text-success text-danger')
+            .addClass('text-info')
+            .show();
+
+        try {
+            const saved = await this.saveStructuredConfig();
+            if (!saved) {
+                status.text(this.t('Failed to save config.')).removeClass('text-info text-success').addClass('text-danger').show();
+                return;
+            }
+
+            const res = await fetch('/api/certs/letsencrypt/request', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            const message = [data.output, data.stderr, data.error ? this.t('Error: ') + data.error : ''].filter(Boolean).join('\n');
+            status.text(this.t(message || 'Success'))
+                .removeClass('text-info text-success text-danger')
+                .addClass(data.error ? 'text-danger' : 'text-success')
+                .show();
+            this.fetchLogFiles();
+        } catch (e) {
+            status.text(this.t('Error: ') + e.message)
+                .removeClass('text-info text-success')
+                .addClass('text-danger')
+                .show();
+        } finally {
+            if (btn) {
+                btn.prop('disabled', false).html(originalText);
+            }
+        }
     },
 
     control: async function(action, btnElement) {
@@ -597,6 +654,27 @@ const app = {
             });
         },
 
+        hasAcmeTargets: function() {
+            if (this.acmeBlockedByAutoHttps()) return false;
+
+            const domainsById = {};
+            const domainTarget = (app.config.domains || []).some(domain => {
+                domainsById[domain.id] = domain;
+                return Boolean(domain.enabled && domain.acme && !domain.disableTls);
+            });
+            if (domainTarget) return true;
+
+            const subdomainTarget = (app.config.subdomains || []).some(subdomain => {
+                const parent = domainsById[subdomain.reverse] || (app.config.domains || []).find(domain => domain.id === subdomain.reverse);
+                return Boolean(subdomain.enabled && parent && parent.enabled && !parent.disableTls && (subdomain.acme || parent.acme));
+            });
+            if (subdomainTarget) return true;
+
+            return (app.config.layer4 || []).some(route => {
+                return Boolean(route.enabled && route.acme && (route.terminateTls || route.starttls));
+            });
+        },
+
         syncAcmeControls: function() {
             this.syncDomainTlsControls();
             this.syncSubdomainTlsControls();
@@ -618,7 +696,7 @@ const app = {
 
             $('#d_cc').prop('disabled', httpOnly || $acme.is(':checked'));
 
-            let note = app.t('Uses Caddy Automatic HTTPS with a public ACME issuer such as Let\'s Encrypt or ZeroSSL. Overrides custom certificate when enabled.');
+            let note = app.t('Uses Caddy Automatic HTTPS with Let\'s Encrypt. Overrides custom certificate when enabled.');
             if (acmeBlocked) {
                 note = app.t('Unavailable because global Auto HTTPS is set to Off or Disable Certs.');
             } else if (httpOnly) {
@@ -693,6 +771,7 @@ const app = {
             $('#genHttpsPort').val(app.config.general.https_port);
             $('#genLogLevel').val(app.config.general.log_level);
             $('#genTlsEmail').val(app.config.general.tls_email);
+            $('#genAcmeCA').val(app.config.general.acme_ca);
             $('#genAutoHttps').val(app.config.general.auto_https);
             let hv = app.config.general.http_versions;
             $('#genHttpVersions').val(hv ? hv.split(' ').filter(v => v) : []);
@@ -1022,7 +1101,7 @@ const app = {
                         <div class="mb-2"><label for="d_desc">Description</label><input type="text" id="d_desc" name="description" class="form-control"></div>
                         <div class="mb-2"><input type="checkbox" name="accessLog" id="d_al"> <label for="d_al">Enable Access Log</label></div>
                         <div class="mb-2"><input type="checkbox" name="disableTls" id="d_dtls"> <label for="d_dtls">Disable TLS (HTTP only)</label></div>
-                        <div class="mb-2"><input type="checkbox" name="acme" id="d_acme"> <label for="d_acme">Use Caddy-managed public ACME certificate</label> <small id="d_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS with a public ACME issuer such as Let's Encrypt or ZeroSSL. Overrides custom certificate when enabled.</small></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="d_acme"> <label for="d_acme">Use Let's Encrypt public certificate</label> <small id="d_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS with Let's Encrypt. Overrides custom certificate when enabled.</small></div>
                         <div class="mb-2"><label for="d_cc">Custom Certificate</label><select id="d_cc" name="customCert" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="d_cam">Client Auth Mode</label><select id="d_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="d_catp">Client Auth Trust Pool (CA Cert)</label><select id="d_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
@@ -1042,7 +1121,7 @@ const app = {
                         <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
                         <div class="mb-2"><label for="sd_rev">Parent Domain</label><select id="sd_rev" name="reverse" class="form-select domain-select" required></select></div>
                         <div class="mb-2"><label for="sd_desc">Description</label><input type="text" id="sd_desc" name="description" class="form-control"></div>
-                        <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Use Caddy-managed public ACME certificate</label> <small id="sd_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.</small></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="sd_acme"> <label for="sd_acme">Use Let's Encrypt public certificate</label> <small id="sd_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for this subdomain. Parent domain ACME is inherited.</small></div>
                         <div class="mb-2"><label for="sd_cam">Client Auth Mode</label><select id="sd_cam" name="client_auth_mode" class="form-select"><option value="">None</option><option value="request">request</option><option value="require">require</option><option value="verify_if_given">verify_if_given</option><option value="require_and_verify">require_and_verify</option></select></div>
                         <div class="mb-2"><label for="sd_catp">Client Auth Trust Pool (CA Cert)</label><select id="sd_catp" name="client_auth_trust_pool" class="form-select cert-select"></select></div>
                         <div class="mb-2"><label for="sd_ac">Access Lists</label><select id="sd_ac" name="accesslist" class="form-select al-select" multiple></select></div>
@@ -1216,7 +1295,7 @@ const app = {
                         <div class="mb-2"><input type="checkbox" name="starttls" id="l4_starttls"> <label for="l4_starttls">STARTTLS (SMTP Port 587)</label></div>
                         <div class="mb-2"><input type="checkbox" name="terminateTls" id="l4_ttls"> <label for="l4_ttls">Terminate TLS</label></div>
                         <div class="mb-2"><label for="l4_cc">Custom Certificate (Terminate)</label><select id="l4_cc" name="customCert" class="form-select cert-select"></select></div>
-                        <div class="mb-2"><input type="checkbox" name="acme" id="l4_acme"> <label for="l4_acme">Use Caddy-managed public ACME certificate</label> <small id="l4_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for Layer 4 TLS termination.</small></div>
+                        <div class="mb-2"><input type="checkbox" name="acme" id="l4_acme"> <label for="l4_acme">Use Let's Encrypt public certificate</label> <small id="l4_acme_note" class="text-muted d-block">Uses Caddy Automatic HTTPS for Layer 4 TLS termination.</small></div>
                         <div class="mb-2"><label for="l4_default_sni">Default SNI <span class="text-muted">(?)</span></label><input type="text" id="l4_default_sni" name="default_sni" class="form-control"><small class="text-muted d-block">Fallback SNI if client (e.g., SMTP) does not provide one during TLS termination.</small></div>
                         <div class="mb-2"><label for="l4_otls">Originate TLS to Upstream</label><select id="l4_otls" name="originate_tls" class="form-select" onchange="app.ui.toggleLayer4UpstreamOptions()"><option value="">Off</option><option value="tls">TLS (Verify)</option><option value="tls_insecure_skip_verify">TLS (Skip Verification)</option><option value="starttls">STARTTLS (Verify)</option><option value="starttls_insecure_skip_verify">STARTTLS (Skip Verification)</option></select></div>
                         <div class="mb-2"><label for="l4_upstream_tls_sni">Upstream TLS Server Name (SNI)</label><input type="text" id="l4_upstream_tls_sni" name="upstream_tls_server_name" class="form-control"></div>
