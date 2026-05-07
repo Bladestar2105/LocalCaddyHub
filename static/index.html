@@ -112,6 +112,14 @@
                     <input type="email" class="form-control" id="genTlsEmail" placeholder="admin@example.com">
                 </div>
                 <div class="mb-3">
+                    <label for="genAcmeCA" class="form-label">ACME CA <i class="text-muted" style="font-size:0.9em;">(?) Select the public certificate authority Caddy should use for ACME issuance.</i></label>
+                    <select class="form-select" id="genAcmeCA">
+                        <option value="">Caddy Default</option>
+                        <option value="https://acme-v02.api.letsencrypt.org/directory">Let's Encrypt Production</option>
+                        <option value="https://acme-staging-v02.api.letsencrypt.org/directory">Let's Encrypt Staging</option>
+                    </select>
+                </div>
+                <div class="mb-3">
                     <label for="genAutoHttps" class="form-label">Auto HTTPS <i class="text-muted" style="font-size:0.9em;">(?) Configures Caddy Automatic HTTPS. Off and Disable Certs prevent public ACME certificate issuance.</i></label>
                     <select class="form-select" id="genAutoHttps">
                         <option value="">On (Default)</option>
@@ -274,8 +282,10 @@
             <div id="certUploadStatus" class="status-box mb-3" role="status" aria-live="polite"></div>
 
             <h4 class="mt-4">Caddy-managed ACME Certificates</h4>
-            <p>Download Caddy-managed ACME certificate storage, including private keys. Handle this archive securely.</p>
-            <a href="/api/certs/acme/download" class="btn btn-secondary mt-2 mb-4">Download .tar.gz</a>
+            <p>Enable Let's Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let's Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.</p>
+            <button class="btn btn-primary mt-2 me-2" onclick="app.requestLetsEncrypt(this)">Request Let's Encrypt Certificates</button>
+            <a href="/api/certs/acme/download" class="btn btn-secondary mt-2">Download .tar.gz</a>
+            <div id="certAcmeStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
 
             <h5>Available Files in ./certs/</h5>
             <ul id="certsList" class="list-group"></ul>

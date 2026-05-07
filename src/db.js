@@ -16,6 +16,7 @@ const SCHEMA_SQL = `
       https_port TEXT,
       log_level TEXT,
       tls_email TEXT,
+      acme_ca TEXT,
       http_versions TEXT,
       timeout_read_body TEXT,
       timeout_read_header TEXT,
@@ -189,6 +190,7 @@ function runMigrations() {
   // Perform schema migrations for existing databases
   const migrations = [
     { table: 'general_config', column: 'tls_email', def: 'TEXT' },
+    { table: 'general_config', column: 'acme_ca', def: 'TEXT' },
     { table: 'general_config', column: 'http_versions', def: 'TEXT' },
     { table: 'general_config', column: 'timeout_read_body', def: 'TEXT' },
     { table: 'general_config', column: 'timeout_read_header', def: 'TEXT' },

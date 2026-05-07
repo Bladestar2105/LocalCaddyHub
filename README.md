@@ -212,6 +212,6 @@ You can now access LocalCaddyHub at `http://<your-server-ip>:8090`.
 *   **Relational UI**: Manage your Caddy reverse proxies using an intuitive web interface instead of writing a Caddyfile by hand. It supports Domains, Subdomains, Handlers, Headers, Access Lists, Layer 4 proxying, and Basic Auth.
 *   **Database Storage**: Configurations are persistently stored in a local SQLite database (`caddyhub.db`).
 *   **Dynamic Caddyfile Generation**: LocalCaddyHub automatically generates your `Caddyfile` based on the configuration in the database.
-*   **Custom SSL Certificates**: Securely upload and manage your own custom certificates instead of relying solely on ACME/SSL automation.
+*   **TLS Certificates**: Request Let's Encrypt certificates through Caddy Automatic HTTPS, download Caddy-managed ACME storage, or upload custom certificate/key files.
 *   **Control & Validate**: Validate your configuration syntax, and Start, Stop, or Reload the Caddy process directly from the UI.
 *   **Stats**: View runtime metrics from Caddy's admin API.

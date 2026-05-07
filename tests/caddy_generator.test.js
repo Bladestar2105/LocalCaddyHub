@@ -147,6 +147,45 @@ describe('generateCaddyfile UI parity', () => {
     assert.doesNotMatch(domainBlock, /custom\.pem/);
   });
 
+  test('emits selected Lets Encrypt ACME CA endpoint', () => {
+    const config = generateCaddyfile({
+      general: {
+        enabled: true,
+        tls_email: 'admin@example.com',
+        acme_ca: 'https://acme-v02.api.letsencrypt.org/directory'
+      },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        acme: true
+      }],
+      handlers: []
+    }, '/certs');
+
+    assert.match(config, /\temail admin@example\.com/);
+    assert.match(config, /\tacme_ca https:\/\/acme-v02\.api\.letsencrypt\.org\/directory/);
+  });
+
+  test('ignores unsupported ACME CA endpoints', () => {
+    const config = generateCaddyfile({
+      general: {
+        enabled: true,
+        acme_ca: 'https://example.com/acme\nemail attacker@example.com'
+      },
+      domains: [{
+        id: 'd1',
+        enabled: true,
+        fromDomain: 'example.com',
+        acme: true
+      }],
+      handlers: []
+    }, '/certs');
+
+    assert.doesNotMatch(config, /acme_ca/);
+    assert.doesNotMatch(config, /attacker@example\.com/);
+  });
+
   test('falls back to explicit TLS when automatic certificate management is disabled', () => {
     const config = generateCaddyfile({
       general: { enabled: true, auto_https: 'disable_certs' },
@@ -313,6 +352,20 @@ describe('generateCaddyfile UI parity', () => {
       assert.ok(persistedFields.has(field), `${field} is present in the Layer4 UI but not persisted`);
       assert.ok(schemaColumns.has(field), `${field} is present in the Layer4 UI but missing from the DB schema`);
     }
+  });
+
+  test('persists ACME CA general setting through UI and API schema', () => {
+    const indexHtml = fs.readFileSync('static/index.html', 'utf8');
+    const appJs = fs.readFileSync('static/app.js', 'utf8');
+    const apiJs = fs.readFileSync('src/api.js', 'utf8');
+    const dbJs = fs.readFileSync('src/db.js', 'utf8');
+
+    assert.match(indexHtml, /id="genAcmeCA"/);
+    assert.match(appJs, /general: \{[^}]*acme_ca:/);
+    assert.match(appJs, /config\.general\.acme_ca = \$\('#genAcmeCA'\)\.val\(\)/);
+    assert.match(apiJs, /acme_ca: normalizeAcmeCa\(general\.acme_ca\)/);
+    assert.match(apiJs, /UPDATE general_config SET[^']*acme_ca=\?/);
+    assert.match(dbJs, /acme_ca TEXT/);
   });
 
   test('infers host matcher when layer4 host values are present', () => {
