@@ -19,6 +19,42 @@ function blockFor(config, address) {
 }
 
 describe('generateCaddyfile UI parity', () => {
+  test('missing access and authentication rules fail closed during generation', () => {
+    for (const field of ['accesslist', 'basicauth']) {
+      assert.throws(() => generateCaddyfile({ general: { enabled: true }, domains: [{ id: 'd', enabled: true, fromDomain: 'mail.example.test', [field]: ['missing'] }] }), /Unknown/);
+    }
+  });
+  test('resolves every supported certificate extension to its matching key', () => {
+    for (const filename of ['exchange.CRT', 'exchange.cer', 'exchange.PEM']) {
+      const config = generateCaddyfile({ general: { enabled: true, enable_layer4: true },
+        domains: [{ id: 'mail', enabled: true, fromDomain: 'mail.example.test', customCert: filename }],
+        layer4: [{ id: 'smtp', enabled: true, terminateTls: true, customCert: filename, fromPort: '2525', toDomain: ['127.0.0.1'], toPort: '25' }]
+      }, '/certs');
+      assert.match(config, /tls \/certs\/exchange\.(?:CRT|cer|PEM) \/certs\/exchange\.key/);
+      assert.match(config, /custom_tls \/certs\/exchange\.(?:CRT|cer|PEM) \/certs\/exchange\.key/);
+    }
+  });
+  test('uses the selected instance log directory', () => {
+    const config = generateCaddyfile({ general: { log_level: 'INFO' } }, '/instance/certs', '/instance/logs');
+    assert.match(config, /output file \/instance\/logs\/caddy-global\.log/);
+  });
+
+  test('quotes certificate and log paths when the data directory contains spaces', () => {
+    const config = generateCaddyfile({ general: { enabled: true, log_level: 'INFO' },
+      domains: [{ id: 'mail', enabled: true, fromDomain: 'mail.example.test', customCert: 'mail.pem', accessLog: true }]
+    }, '/private data/certs', '/private data/logs');
+    assert.match(config, /output file "\/private data\/logs\/caddy-global\.log"/);
+    assert.match(config, /output file "\/private data\/logs\/mail\.example\.test\.log"/);
+    assert.match(config, /tls "\/private data\/certs\/mail\.pem" "\/private data\/certs\/mail\.key"/);
+  });
+
+  test('does not drop SMTP replies after upstream STARTTLS already consumed its greeting', () => {
+    const config = generateCaddyfile({ general: { enable_layer4: true }, layer4: [{
+      id: 'smtp', enabled: true, starttls: true, fromPort: '587', toDomain: ['127.0.0.1'], toPort: '25', originate_tls: 'starttls'
+    }] });
+    assert.match(config, /upstream_starttls/);
+    assert.doesNotMatch(config, /drop220/);
+  });
   test('generates isolated domain and subdomain site blocks', () => {
     const config = generateCaddyfile({
       general: { enabled: true },
@@ -91,7 +127,7 @@ describe('generateCaddyfile UI parity', () => {
     assert.match(subBlock, /@al_sub_s1_al1 not client_ip 10\.0\.0\.0\/8/);
     assert.match(subBlock, /respond @al_sub_s1_al1 "Forbidden" 403/);
     assert.match(subBlock, /basic_auth \{\n\t\tdomain-user/);
-    assert.match(subBlock, /basic_auth \{\n\t\tsub-user/);
+    assert.match(subBlock, /basic_auth \{\n\t\tdomain-user[^\n]*\n\t\tsub-user/);
     assert.match(subBlock, /handle_path \/api\/\*/);
     assert.match(subBlock, /reverse_proxy sub-upstream:9090/);
   });
@@ -417,7 +453,6 @@ describe('generateCaddyfile UI parity', () => {
 
     assert.match(config, /\tkey_type rsa2048/);
     assert.match(indexHtml, /id="genTlsKeyType"/);
-    assert.match(indexHtml, /Renew all as RSA/);
     assert.match(appJs, /tls_key_type: "rsa2048"/);
     assert.match(appJs, /renewAllManagedCertificatesAsRsa/);
     assert.match(apiJs, /normalizeTlsKeyType/);

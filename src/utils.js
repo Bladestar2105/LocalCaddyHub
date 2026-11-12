@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 
+const asyncHandler = handler => (req, res, next) => Promise.resolve().then(() => handler(req, res, next)).catch(next);
+
 /**
  * Helper for timing-safe comparison to prevent timing attacks.
  * Uses HMAC to ensure both buffers have the same length (32 bytes for SHA256)
@@ -62,6 +64,7 @@ function isSafeFilename(filename) {
 }
 
 module.exports = {
+  asyncHandler,
   safeCompare,
   formatDuration,
   parseJSON,

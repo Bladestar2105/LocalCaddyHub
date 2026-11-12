@@ -1,4 +1,4 @@
-const { test, describe, beforeEach } = require('node:test');
+const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const nodeModule = require('module');
@@ -20,10 +20,16 @@ nodeModule.prototype.require = function(name) {
 };
 
 describe('paths.js', () => {
+  const originalDataDir = process.env.LCH_DATA_DIR;
+  afterEach(() => {
+    if (originalDataDir === undefined) delete process.env.LCH_DATA_DIR;
+    else process.env.LCH_DATA_DIR = originalDataDir;
+  });
   beforeEach(() => {
     mockFs = {
       existsSync: () => false,
       mkdirSync: () => {},
+      chmodSync: () => {},
       writeFileSync: () => {},
       copyFileSync: () => {}
     };
@@ -50,7 +56,18 @@ describe('paths.js', () => {
     assert.strictEqual(paths.isLegacy, true);
     assert.strictEqual(paths.db, legacyDbPath);
     assert.strictEqual(paths.certsDir, legacyCertsDir);
-    assert.deepStrictEqual(mkdirCalledWith, [{ p: legacyCertsDir, options: { recursive: true } }]);
+    assert.deepStrictEqual(mkdirCalledWith, [{ p: legacyCertsDir, options: { recursive: true, mode: 0o700 } }]);
+  });
+
+  test('explicit data directory isolates an instance even when a legacy database exists', () => {
+    process.env.LCH_DATA_DIR = '/tmp/lch-isolated-instance';
+    mockFs.existsSync = () => true;
+    const paths = require('../src/paths');
+    assert.strictEqual(paths.isLegacy, false);
+    assert.strictEqual(paths.db, '/tmp/lch-isolated-instance/caddyhub.db');
+    assert.strictEqual(paths.caddyfile, '/tmp/lch-isolated-instance/Caddyfile');
+    assert.strictEqual(paths.certsDir, '/tmp/lch-isolated-instance/certs');
+    assert.strictEqual(paths.logsDir, '/tmp/lch-isolated-instance/logs');
   });
 
   test('uses new paths and initializes data dir if legacy database does not exist', () => {

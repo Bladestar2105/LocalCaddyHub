@@ -9,6 +9,10 @@ server.log
 
 # Node dependencies
 node_modules/
+.DS_Store
+.env
+.env.*
+!.env.example
 
 # Test/verification
 verification/

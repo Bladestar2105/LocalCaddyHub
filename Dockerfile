@@ -1,44 +1,24 @@
-# Stage 1: Build Custom Caddy with NTLM Support
-FROM caddy:builder AS caddy-builder
+FROM caddy:2.11.9-builder AS caddy-builder
+WORKDIR /build/localcaddyhub
+COPY src/modules/caddystarttls ./src/modules/caddystarttls
+COPY scripts/build-caddy.sh ./scripts/build-caddy.sh
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7 \
+    && ./scripts/build-caddy.sh /caddy
 
-COPY src/modules/caddystarttls /build/src/modules/caddystarttls
-
-# xcaddy is pre-installed in caddy:builder
-RUN xcaddy build \
-    --with github.com/caddyserver/ntlm-transport \
-    --with github.com/mholt/caddy-l4 \
-    --with github.com/corazawaf/coraza-caddy/v2 \
-    --with github.com/ssakalis/localcaddyhub/modules/caddystarttls=/build/src/modules/caddystarttls \
-    --output /caddy
-
-# Stage 2: Node Application setup
-FROM node:22-bookworm-slim
-
+FROM node:24.22.3-bookworm-slim
 WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    openssl \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy Caddy binary from builder
 COPY --from=caddy-builder /caddy /usr/bin/caddy
-
-# Ensure execution permissions (just in case)
-RUN chmod +x /usr/bin/caddy
-
-# Copy package.json and install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
-
-# Copy source code, static assets and default configuration
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY static ./static
 COPY Caddyfile ./Caddyfile
-
-# Expose necessary ports
-EXPOSE 8090 80 443
-
-# Start the Node.js application
-CMD ["npm", "start"]
+COPY examples ./examples
+# Match the official Caddy storage layout; all three volumes must persist.
+ENV NODE_ENV=production LCH_DATA_DIR=/app/data XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config
+VOLUME ["/app/data", "/data", "/config"]
+EXPOSE 8090 80 443 443/udp
+CMD ["node", "src/index.js"]

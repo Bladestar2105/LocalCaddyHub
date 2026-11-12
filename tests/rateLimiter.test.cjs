@@ -111,6 +111,21 @@ describe('rateLimiter module', () => {
     loginRateLimiter(req, res, next);
 
     assert.strictEqual(next.isCalled(), true);
-    assert.strictEqual(loginAttempts.has(ip), false); // Should have been cleared
+    assert.strictEqual(loginAttempts.get(ip).count, 1); // New attempt starts a fresh window.
+  });
+
+  test('limits concurrent admitted requests before password comparisons finish', () => {
+    const ip = '127.0.0.6';
+    loginAttempts.delete(ip);
+    for (let i = 0; i < LOGIN_MAX_ATTEMPTS; i++) {
+      const next = mockNext();
+      loginRateLimiter({ ip }, mockRes(), next);
+      assert.equal(next.isCalled(), true);
+    }
+    const res = mockRes();
+    const next = mockNext();
+    loginRateLimiter({ ip }, res, next);
+    assert.equal(res.statusCode, 429);
+    assert.equal(next.isCalled(), false);
   });
 });

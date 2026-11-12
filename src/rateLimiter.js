@@ -18,6 +18,7 @@ const evictionInterval = setInterval(() => {
     }
   }
 }, LOGIN_EVICTION_TIME);
+evictionInterval.unref();
 
 /**
  * Middleware for IP-based rate limiting of login attempts.
@@ -37,6 +38,8 @@ function loginRateLimiter(req, res, next) {
   }
 
   req.loginAttemptsInfo = { ip, attempts };
+  // Reserve each attempt before asynchronous password checks, so parallel requests cannot bypass the limit.
+  recordFailedAttempt(ip);
   next();
 }
 

@@ -21,6 +21,7 @@ const app = {
         headers: [],
         layer4: []
     },
+    configLoaded: false,
     certs: [],
     pfxCertificates: [],
     missingCertReferences: [],
@@ -82,15 +83,24 @@ const app = {
             if (res.ok) {
                 const data = await res.json();
                 this.config = Object.assign(this.config, data);
+                this.configLoaded = true;
+                $('#applyConfigBtn').prop('disabled', false);
+                this.ui.renderGeneral();
                 // load raw caddyfile too
                 const rawRes = await fetch('/api/config');
                 if (rawRes.ok) {
                     const rawData = await rawRes.json();
                     $('#rawCaddyfile').val(rawData.content);
                 }
+            } else {
+                throw new Error('HTTP ' + res.status);
             }
         } catch (e) {
             console.error("Failed to load config", e);
+            if (!this.configLoaded) {
+                $('#applyConfigBtn').prop('disabled', true);
+                $('#configLoadError').text(this.t('Configuration could not be loaded. Reload the page to retry.')).show();
+            }
         }
     },
 
@@ -117,6 +127,16 @@ const app = {
     },
 
     saveStructuredConfig: async function() {
+        if (!this.configLoaded) {
+            this.showStatus('Configuration could not be loaded. Reload the page to retry.', 'danger');
+            return false;
+        }
+        const generalForm = document.getElementById('generalForm');
+        if (generalForm && !generalForm.checkValidity()) {
+            bootstrap.Tab.getOrCreateInstance(document.getElementById('general-tab')).show();
+            generalForm.reportValidity();
+            return false;
+        }
         const btn = $('#applyConfigBtn');
         const originalText = btn.html();
         btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Saving...'));
@@ -524,12 +544,12 @@ const app = {
     renewManagedCertificate: async function(certId, btnElement) {
         const cert = (this.pfxCertificates || []).find(item => item.id === certId);
         if (!cert || !cert.renewable) return;
-        if (!confirm(this.t('Delete the stored certificate assets and restart Caddy to request a new certificate for {name}?', { name: cert.name }))) return;
+        if (!confirm(this.t('Reload certificate management for {name}? Existing certificates are preserved; Caddy renews automatically when due.', { name: cert.name }))) return;
 
         const btn = btnElement ? $(btnElement) : null;
         const originalText = btn ? btn.html() : '';
         if (btn) {
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Renewing...'));
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Checking...'));
         }
 
         try {
@@ -543,7 +563,7 @@ const app = {
                 throw new Error(data.error || data.stderr || this.t('Renewal failed.'));
             }
             const message = [data.output, data.stderr].filter(Boolean).join('\n');
-            $('#certRenewStatus').text(this.t(message || 'Renewal requested.')).removeClass('text-danger').addClass('text-success').show();
+            $('#certRenewStatus').text(this.t(message || 'Automatic renewal checked.')).removeClass('text-danger').addClass('text-success').show();
             await this.loadPfxCertificates();
             this.pollLetsEncryptStatus(0, message);
         } catch (e) {
@@ -556,17 +576,15 @@ const app = {
     },
 
     renewAllManagedCertificatesAsRsa: async function(btnElement) {
-        if (!confirm(this.t('Set certificate key type to RSA 2048, delete stored Caddy-managed ACME certificates, and restart Caddy to request new RSA certificates?'))) return;
+        if (!confirm(this.t('Use RSA 2048 for future issuances and automatic renewals? Existing certificates will not be replaced.'))) return;
 
         const btn = btnElement ? $(btnElement) : null;
         const originalText = btn ? btn.html() : '';
         if (btn) {
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Renewing...'));
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + this.t('Checking...'));
         }
 
         try {
-            $('#genTlsKeyType').val('rsa2048');
-            this.config.general.tls_key_type = 'rsa2048';
             const res = await fetch('/api/certs/letsencrypt/renew-all-rsa', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -577,7 +595,7 @@ const app = {
                 throw new Error(data.error || data.stderr || this.t('Renewal failed.'));
             }
             const message = [data.output, data.stderr].filter(Boolean).join('\n');
-            $('#certRenewStatus').text(this.t(message || 'Renewal requested.')).removeClass('text-danger').addClass('text-success').show();
+            $('#certRenewStatus').text(this.t(message || 'Automatic renewal checked.')).removeClass('text-danger').addClass('text-success').show();
             await this.loadConfig();
             await this.loadPfxCertificates();
             this.pollLetsEncryptStatus(0, message);
@@ -715,7 +733,7 @@ const app = {
             if (res.ok) {
                 const files = await res.json();
                 const select = $('#logFileSelect').empty();
-                files.forEach(f => select.append(new Option(f, f)));
+                files.forEach(f => select.append(app.ui.dataOption(f, f)));
             }
         } catch (e) {
             console.error("Failed to load log files", e);
@@ -740,7 +758,8 @@ const app = {
 
             try {
                 lineData = JSON.parse(lineStr);
-                isJson = true;
+                isJson = Boolean(lineData && typeof lineData === 'object' && !Array.isArray(lineData));
+                if (!isJson) lineData = null;
             } catch (e) {
                 // Not JSON, just plain text line
             }
@@ -778,13 +797,13 @@ const app = {
         if (fText && !rawLower.includes(fText)) return false;
 
         if (lineData) {
-            if (fLevel && lineData.level && lineData.level.toLowerCase() !== fLevel) return false;
+            if (fLevel && lineData.level && (typeof lineData.level !== 'string' || lineData.level.toLowerCase() !== fLevel)) return false;
 
             const req = lineData.request;
             if (req) {
-                 if (fMethod && req.method && req.method.toUpperCase() !== fMethod) return false;
-                 if (fIp && req.remote_ip && !req.remote_ip.toLowerCase().includes(fIp)) return false;
-                 if (fPath && req.uri && !req.uri.toLowerCase().includes(fPath)) return false;
+                 if (fMethod && req.method && (typeof req.method !== 'string' || req.method.toUpperCase() !== fMethod)) return false;
+                 if (fIp && req.remote_ip && (typeof req.remote_ip !== 'string' || !req.remote_ip.toLowerCase().includes(fIp))) return false;
+                 if (fPath && req.uri && (typeof req.uri !== 'string' || !req.uri.toLowerCase().includes(fPath))) return false;
             }
 
             if (fStatus && lineData.status !== undefined) {
@@ -802,7 +821,8 @@ const app = {
     },
 
     escapeHtml: function(unsafe) {
-        return (unsafe || '').toString()
+        const text = unsafe && typeof unsafe === 'object' ? JSON.stringify(unsafe) : String(unsafe ?? '');
+        return text
              .replace(/&/g, "&amp;")
              .replace(/</g, "&lt;")
              .replace(/>/g, "&gt;")
@@ -901,6 +921,12 @@ const app = {
     },
 
     deleteItem: function(type, id) {
+        const field = { accessLists: 'accesslist', basicAuths: 'basicauth', headers: 'header' }[type];
+        if (field && [...this.config.domains, ...this.config.subdomains, ...this.config.handlers].some(item =>
+            (item[field] || []).includes(id) || (type === 'headers' && (item.health_headers || []).includes(id)))) {
+            this.showStatus(this.t('This item is used by the configuration. Remove its references before deleting.'), true);
+            return;
+        }
         if (confirm(this.t('Are you sure you want to delete this item?'))) {
             if (type === 'domains') {
                 const subdomainsToDelete = this.config.subdomains.filter(s => s.reverse === id).map(s => s.id);
@@ -1079,7 +1105,7 @@ const app = {
                 .toggleClass('text-muted', !acmeUnavailable);
         },
 
-        renderAll: function() {
+        renderGeneral: function() {
             // General
             $('#genEnabled').prop('checked', app.config.general.enabled);
             $('#genEnableLayer4').prop('checked', app.config.general.enable_layer4);
@@ -1099,7 +1125,9 @@ const app = {
             $('#genLogCreds').prop('checked', app.config.general.log_credentials);
             $('#genLogRollSize').val(app.config.general.log_roll_size_mb);
             $('#genLogRollKeep').val(app.config.general.log_roll_keep);
+        },
 
+        renderAll: function() {
             this.renderTable('domains', 'domainsTable', ['enabled', 'fromDomain', 'fromPort', 'description']);
             this.renderTable('subdomains', 'subdomainsTable', ['enabled', 'fromDomain', 'reverse', 'description']);
             this.renderTable('handlers', 'handlersTable', ['enabled', 'reverse', 'handlePath', 'toDomain', 'description']);
@@ -1153,14 +1181,16 @@ const app = {
                          val = dom ? dom.fromDomain : '';
                     }
 
-                    tr.append($('<td>').text(val || ''));
+                    const cell = $('<td>').text(val == null ? '' : val);
+                    if (col !== 'enabled' && col !== 'invert') cell.attr('translate', 'no');
+                    tr.append(cell);
                 });
 
                 let actions = $('<td>').addClass('action-btns');
-                let upBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8593;').attr('title', app.t('Move Up')).attr('aria-label', app.t('Move Up')).click(() => app.moveItem(configKey, item.id, 'up'));
+                let upBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6M12 6v14"/></svg>').attr('title', app.t('Move Up')).attr('aria-label', app.t('Move Up')).click(() => app.moveItem(configKey, item.id, 'up'));
                 if (index === 0) upBtn.prop('disabled', true);
 
-                let downBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('&#8595;').attr('title', app.t('Move Down')).attr('aria-label', app.t('Move Down')).click(() => app.moveItem(configKey, item.id, 'down'));
+                let downBtn = $('<button>').addClass('btn btn-sm btn-outline-secondary').html('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6 6 6-6M12 18V4"/></svg>').attr('title', app.t('Move Down')).attr('aria-label', app.t('Move Down')).click(() => app.moveItem(configKey, item.id, 'down'));
                 if (index === items.length - 1) downBtn.prop('disabled', true);
 
                 let editBtn = $('<button>').addClass('btn btn-sm btn-outline-primary').text(app.t('Edit')).attr('title', app.t('Edit')).attr('aria-label', app.t('Edit')).click(() => this.editItem(configKey, item.id));
@@ -1248,7 +1278,7 @@ const app = {
             $('#pfxExportBtn').prop('disabled', false);
             certificates.forEach(cert => {
                 const label = [cert.name, cert.source, cert.issuer, app.formatCertificateExpiry(cert)].filter(Boolean).join(' - ');
-                select.append(new Option(label, cert.id));
+                select.append(app.ui.dataOption(label, cert.id));
             });
 
             const table = $('<table>').addClass('table table-sm table-striped align-middle mb-0');
@@ -1268,7 +1298,7 @@ const app = {
                     renewCell.append(
                         $('<button>')
                             .addClass('btn btn-sm btn-outline-warning')
-                            .text(app.t('Renew now'))
+                            .text(app.t('Check automatic renewal'))
                             .click(function() { app.renewManagedCertificate(cert.id, this); })
                     );
                 } else {
@@ -1291,13 +1321,23 @@ const app = {
             app.applyI18n(tableContainer[0]);
         },
 
+        dataOption: function(label, value) {
+            const option = new Option(label, value);
+            option.translate = false;
+            return option;
+        },
+
         populateSelects: function() {
+            const selections = [];
+            $('.al-select, .ba-select, .header-select, .cert-select, .domain-select, .subdomain-select').each(function() {
+                selections.push([this, $(this).val()]);
+            });
             // Update multi-selects in modals
             const alSelects = $('.al-select').empty();
-            app.config.accessLists.forEach(al => alSelects.append(new Option(al.accesslistName, al.id)));
+            app.config.accessLists.forEach(al => alSelects.append(app.ui.dataOption(al.accesslistName, al.id)));
 
             const baSelects = $('.ba-select').empty();
-            app.config.basicAuths.forEach(ba => baSelects.append(new Option(ba.basicauthuser, ba.id)));
+            app.config.basicAuths.forEach(ba => baSelects.append(app.ui.dataOption(ba.basicauthuser, ba.id)));
 
             const headerSelects = $('.header-select').empty();
             app.config.headers.forEach(h => {
@@ -1309,21 +1349,24 @@ const app = {
                 }
                 label += ` (${h.headerUpDown})`;
                 if (h.description) label += ` - ${h.description}`;
-                headerSelects.append(new Option(label, h.id));
+                headerSelects.append(app.ui.dataOption(label, h.id));
             });
 
             const certSelects = $('.cert-select').empty().append(new Option(app.t('Caddy-managed / Internal'), ""));
             (app.certs || [])
                 .map(c => app.certName(c))
-                .filter(c => c.endsWith('.pem'))
-                .forEach(c => certSelects.append(new Option(c, c)));
+                .filter(c => /\.(pem|crt|cer)$/i.test(c))
+                .forEach(c => certSelects.append(app.ui.dataOption(c, c)));
 
             // Handlers and Subdomains need Domain selects
             const domainSelects = $('.domain-select').empty().append(new Option(app.t('Select Domain'), ""));
-            app.config.domains.forEach(d => domainSelects.append(new Option(d.fromDomain, d.id)));
+            app.config.domains.forEach(d => domainSelects.append(app.ui.dataOption(d.fromDomain, d.id)));
 
             const subDomainSelects = $('.subdomain-select').empty().append(new Option(app.t('None / Match All'), ""));
-            app.config.subdomains.forEach(s => subDomainSelects.append(new Option(s.fromDomain, s.id)));
+            app.config.subdomains.forEach(s => subDomainSelects.append(app.ui.dataOption(s.fromDomain, s.id)));
+            selections.forEach(([element, value]) => {
+                if (value !== null) $(element).val(value);
+            });
         },
 
         openModal: function(modalId, item = null) {
@@ -1342,7 +1385,7 @@ const app = {
             $form.find('input[type="checkbox"]').prop('checked', false);
 
             if (item) {
-                $(`#${modalId} .modal-title`).text(app.t('Edit Item'));
+                $(`#${modalId} .modal-title`).text('Edit Item');
                 // Auto-fill form
                 Object.keys(item).forEach(key => {
                     const el = $(form.elements[key]);
@@ -1367,7 +1410,7 @@ const app = {
                 });
                 $(`#${modalId}`).data('edit-id', item.id);
             } else {
-                $(`#${modalId} .modal-title`).text(app.t('Add Item'));
+                $(`#${modalId} .modal-title`).text('Add Item');
                 $(`#${modalId}`).removeData('edit-id');
             }
 
@@ -1377,6 +1420,7 @@ const app = {
             // Trigger change events to update dynamic UI fields
             if (modalId === 'handlerModal') {
                 $('#h_hd').trigger('change');
+                this.syncHandlerNtlmPolicy();
             } else if (modalId === 'layer4Modal') {
                 this.toggleLayer4UpstreamOptions();
             } else if (modalId === 'domainModal') {
@@ -1406,6 +1450,16 @@ const app = {
         saveModal: function(modalId, configKey) {
             const form = document.getElementById(modalId + 'Form');
             if (!form) return;
+            if (!form.checkValidity()) {
+                const invalid = form.querySelector(':invalid');
+                const pane = invalid && invalid.closest('.tab-pane');
+                if (pane && !pane.classList.contains('active')) {
+                    const tab = document.querySelector(`[href="#${pane.id}"], [data-bs-target="#${pane.id}"]`);
+                    if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+                }
+                form.reportValidity();
+                return;
+            }
             const $form = $(form);
             const data = new FormData(form);
             const obj = {};
@@ -1424,7 +1478,7 @@ const app = {
                  } else if (el.attr('type') !== 'checkbox') {
                       // Number cast if needed
                       if (el.attr('type') === 'number') {
-                          obj[key] = parseInt(value) || 0;
+                          obj[key] = key === 'waf_body_limit_mb' && value === '' ? '' : (parseInt(value) || 0);
                       } else {
                           obj[key] = value;
                       }
@@ -1476,6 +1530,9 @@ const app = {
                     obj.acme = false;
                 }
             }
+            if (modalId === 'handlerModal' && obj.ntlm && obj.handleDirective === 'reverse_proxy' && Array.isArray(obj.toDomain) && obj.toDomain.length > 1) {
+                obj.lb_policy = 'ip_hash';
+            }
             if (editId) {
                 const idx = app.config[configKey].findIndex(i => i.id === editId);
                 obj.id = editId;
@@ -1488,6 +1545,14 @@ const app = {
             this.normalizeAcmeSettings();
             bootstrap.Modal.getInstance(document.getElementById(modalId)).hide();
             this.renderAll();
+        },
+
+        syncHandlerNtlmPolicy: function() {
+            const upstreams = String($('#h_td').val() || '').split(',').map(host => host.trim()).filter(Boolean);
+            const affinity = $('#h_hd').val() === 'reverse_proxy' && $('#h_ntlm').is(':checked') && upstreams.length > 1;
+            $('#h_lb').prop('disabled', affinity);
+            if (affinity) $('#h_lb').val('ip_hash');
+            $('#h_ntlm_note').toggle(affinity);
         },
 
         toggleLayer4UpstreamOptions: function() {
@@ -1503,9 +1568,9 @@ const app = {
         initModals: function() {
             const modalHTML = `
 	                <!-- Domain Modal -->
-                <div class="modal fade" id="domainModal" tabindex="-1">
+                <div class="modal fade" id="domainModal" tabindex="-1" aria-labelledby="domainModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="domainModalTitle">Domain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="domainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="d_en"> <label for="d_en">Enabled</label></div>
 	                        <div class="mb-2"><label for="d_fd">Domain</label><input type="text" id="d_fd" name="fromDomain" class="form-control" required placeholder="example.com"></div>
@@ -1526,9 +1591,9 @@ const app = {
                 </div>
 
                 <!-- Subdomain Modal -->
-                <div class="modal fade" id="subdomainModal" tabindex="-1">
+                <div class="modal fade" id="subdomainModal" tabindex="-1" aria-labelledby="subdomainModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="subdomainModalTitle">Subdomain</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="subdomainModalForm">
                         <div class="mb-2"><input type="checkbox" name="enabled" id="sd_en"> <label for="sd_en">Enabled</label></div>
 	                        <div class="mb-2"><label for="sd_fd">Subdomain (e.g. 'api' for api.example.com)</label><input type="text" id="sd_fd" name="fromDomain" class="form-control" required></div>
@@ -1548,9 +1613,9 @@ const app = {
                 <!-- Handler Modal -->
 
                 <!-- Handler Modal -->
-                <div class="modal fade" id="handlerModal" tabindex="-1">
+                <div class="modal fade" id="handlerModal" tabindex="-1" aria-labelledby="handlerModalTitle">
                   <div class="modal-dialog modal-lg"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Handler</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="handlerModalTitle">Handler</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="handlerModalForm">
 
                         <ul class="nav nav-tabs mb-3" id="handlerTabs" role="tablist">
@@ -1573,19 +1638,21 @@ const app = {
                             <div class="tab-pane fade show active" id="h-general" role="tabpanel">
                                 <div class="mb-2"><input type="checkbox" name="enabled" id="h_en"> <label for="h_en">Enabled</label></div>
                                 <div class="mb-2"><input type="checkbox" name="waf_enabled" id="h_waf"> <label for="h_waf">Enable WAF (Coraza OWASP CRS)</label></div>
+                                <div class="mb-2"><label for="h_waf_profile">WAF Profile</label><select id="h_waf_profile" name="waf_profile" class="form-select" aria-describedby="h_waf_profile_help"><option value="generic">Generic web application</option><option value="exchange">Microsoft Exchange</option></select><small id="h_waf_profile_help" class="text-muted d-block">The Exchange profile allows protocol content types on Exchange service paths while retaining attack checks.</small></div>
+                                <div class="mb-2"><label for="h_waf_body_limit">WAF Request Body Limit (MiB)</label><input type="number" id="h_waf_body_limit" name="waf_body_limit_mb" class="form-control" min="1" max="1024" step="1" placeholder="Profile default" aria-describedby="h_waf_body_help"><small id="h_waf_body_help" class="text-muted d-block">Optional, 1–1024 MiB. Leave empty for the profile default: Generic 12.5 MiB, Exchange 128 MiB. Used when WAF is enabled.</small></div>
                                 <div class="mb-2"><label for="h_rev">Domain</label><select id="h_rev" name="reverse" class="form-select domain-select" required></select></div>
                                 <div class="mb-2"><label for="h_sub">Subdomain Filter</label><select id="h_sub" name="subdomain" class="form-select subdomain-select"></select></div>
                                 <div class="mb-2"><label for="h_ht">Handle Type</label><select id="h_ht" name="handleType" class="form-select"><option value="handle">Handle</option><option value="handle_path">Handle Path (Strips prefix)</option></select></div>
                                 <div class="mb-2"><label for="h_hp">Path Matcher (e.g. /api/*)</label><input type="text" id="h_hp" name="handlePath" class="form-control"></div>
                                 <div class="mb-2"><label for="h_hd">Directive</label><select id="h_hd" name="handleDirective" class="form-select" onchange="if (this.value === 'reverse_proxy') { $('.directive-rp').show(); $('.directive-redir').hide(); $('#h_td').prop('disabled', false); $('#h_rtarg').prop('disabled', true); } else { $('.directive-rp').hide(); $('.directive-redir').show(); $('#h_td').prop('disabled', true); $('#h_rtarg').prop('disabled', false); $('#h-general-tab').tab('show'); }"><option value="reverse_proxy">Reverse Proxy</option><option value="redir">Redirect</option></select></div>
                                 <div class="mb-2"><label for="h_desc">Description</label><input type="text" id="h_desc" name="description" class="form-control"></div>
-                                <div class="mb-2 directive-redir" style="display:none;"><label for="h_rtarg">Redirect Target URL</label><input type="text" id="h_rtarg" name="toDomain" class="form-control array-input" placeholder="https://example.com" disabled></div>
+                                <div class="mb-2 directive-redir" style="display:none;"><label for="h_rtarg">Redirect Target URL</label><input type="text" id="h_rtarg" name="toDomain" class="form-control array-input" required placeholder="https://example.com" disabled></div>
                                 <div class="mb-2 directive-redir" style="display:none;"><label for="h_rstat">Redirect Status Code</label><select id="h_rstat" name="redir_status" class="form-select"><option value="301" selected>301 (Moved Permanently)</option><option value="302">302 (Found / Temporary)</option><option value="303">303 (See Other)</option><option value="307">307 (Temporary Redirect)</option><option value="308">308 (Permanent Redirect)</option><option value="html">html (HTML Document)</option></select></div>
                             </div>
 
                             <!-- Upstream Tab -->
                             <div class="tab-pane fade" id="h-upstream" role="tabpanel">
-                                <div class="mb-2 directive-rp"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input"></div>
+                                <div class="mb-2 directive-rp"><label for="h_td">Upstream Domains/IPs (comma separated)</label><input type="text" id="h_td" name="toDomain" class="form-control array-input" required></div>
                                 <div class="mb-2"><label for="h_tp">Upstream Port</label><input type="text" id="h_tp" name="toPort" class="form-control"></div>
                                 <div class="mb-2 directive-rp"><label for="h_tpath">Upstream Rewrite Path</label><input type="text" id="h_tpath" name="to_path" class="form-control" placeholder="/new-path"></div>
                                 <div class="mb-2"><input type="checkbox" name="httpTls" id="h_tls"> <label for="h_tls">Upstream TLS (HTTPS)</label></div>
@@ -1594,7 +1661,7 @@ const app = {
                                 <div class="mb-2"><label for="h_tls_ca">Upstream TLS Trusted CA Cert</label><select id="h_tls_ca" name="http_tls_trusted_ca_certs" class="form-select cert-select"></select></div>
                                 <div class="mb-2"><label for="h_hver">HTTP Versions</label><select id="h_hver" name="http_version" class="form-select" multiple><option value="1.1">HTTP/1.1</option><option value="2">HTTP/2</option><option value="3">HTTP/3</option><option value="h2c">h2c</option></select></div>
                                 <div class="mb-2"><label for="h_hka">HTTP Keepalive (seconds)</label><input type="number" id="h_hka" name="http_keepalive" class="form-control"></div>
-                                <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label></div>
+                                <div class="mb-2"><input type="checkbox" name="ntlm" id="h_ntlm"> <label for="h_ntlm">NTLM Transport</label><small id="h_ntlm_note" class="text-muted" style="display:none;">Multiple NTLM backends use IP affinity to preserve authentication.</small></div>
                                 <div class="mb-2"><label for="h_lb">LB Policy</label><select id="h_lb" name="lb_policy" class="form-select"><option value="">Default (Random/RoundRobin)</option><option value="round_robin">Round Robin</option><option value="ip_hash">IP Hash</option><option value="least_conn">Least Conn</option><option value="client_ip_hash">Client IP Hash</option></select></div>
                                 <div class="mb-2"><label for="h_lb_retries">LB Retries <i class="text-muted" style="font-size:0.9em;">(?) Number of retries.</i></label><input type="number" id="h_lb_retries" name="lb_retries" class="form-control"></div>
                                 <div class="mb-2"><label for="h_lb_try_duration">LB Try Duration <i class="text-muted" style="font-size:0.9em;">(?) How long to try selecting upstream (e.g. 5s).</i></label><input type="text" id="h_lb_try_duration" name="lb_try_duration" class="form-control" placeholder="5s"></div>
@@ -1641,9 +1708,9 @@ const app = {
 
 
                 <!-- Access List Modal -->
-                <div class="modal fade" id="accessListModal" tabindex="-1">
+                <div class="modal fade" id="accessListModal" tabindex="-1" aria-labelledby="accessListModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Access List</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="accessListModalTitle">Access List</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="accessListModalForm">
                         <div class="mb-2"><label for="al_name">Name</label><input type="text" id="al_name" name="accesslistName" class="form-control" required></div>
                         <div class="mb-2"><label for="al_match">Request Matcher</label><select id="al_match" name="request_matcher" class="form-select"><option value="client_ip">Client IP</option><option value="remote_ip">Remote IP</option></select></div>
@@ -1658,9 +1725,9 @@ const app = {
                 </div>
 
                 <!-- Basic Auth Modal -->
-                <div class="modal fade" id="basicAuthModal" tabindex="-1">
+                <div class="modal fade" id="basicAuthModal" tabindex="-1" aria-labelledby="basicAuthModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Basic Auth</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="basicAuthModalTitle">Basic Auth</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="basicAuthModalForm">
                         <div class="mb-2"><label for="ba_user">Username</label><input type="text" id="ba_user" name="basicauthuser" class="form-control" required></div>
                         <div class="mb-2"><label for="ba_pass">Password (BCrypt Hash in Caddyfile)</label><input type="password" id="ba_pass" name="basicauthpass" class="form-control" required></div>
@@ -1671,9 +1738,9 @@ const app = {
                 </div>
 
                 <!-- Header Modal -->
-                <div class="modal fade" id="headerModal" tabindex="-1">
+                <div class="modal fade" id="headerModal" tabindex="-1" aria-labelledby="headerModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="headerModalTitle">Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="headerModalForm">
                         <div class="mb-2"><label for="hd_dir">Direction</label><select id="hd_dir" name="headerUpDown" class="form-select"><option value="header_up">Request (Up)</option><option value="header_down">Response (Down)</option></select></div>
                         <div class="mb-2"><label for="hd_name">Header Name</label><input type="text" id="hd_name" name="headerType" class="form-control" required placeholder="X-Forwarded-For"></div>
@@ -1686,9 +1753,9 @@ const app = {
                 </div>
 
                 <!-- Layer 4 Modal -->
-                <div class="modal fade" id="layer4Modal" tabindex="-1">
+                <div class="modal fade" id="layer4Modal" tabindex="-1" aria-labelledby="layer4ModalTitle">
                   <div class="modal-dialog"><div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-header"><h5 class="modal-title" id="layer4ModalTitle">Layer 4 Route</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
                     <div class="modal-body"><form id="layer4ModalForm">
 
                         <div class="mb-2"><input type="checkbox" name="enabled" id="l4_en"> <label for="l4_en">Enabled</label></div>
@@ -1730,6 +1797,7 @@ const app = {
                 </div>
             `;
             $('#modalsContainer').html(modalHTML);
+            $('#h_ntlm, #h_td, #h_hd').on('input change', () => app.ui.syncHandlerNtlmPolicy());
             $('#genAutoHttps').on('change', () => app.ui.syncAcmeControls());
             $('#d_dtls, #d_acme').on('change', () => app.ui.syncDomainTlsControls());
             $('#sd_rev, #sd_acme').on('change', () => app.ui.syncSubdomainTlsControls());
