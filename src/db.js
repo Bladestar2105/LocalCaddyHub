@@ -171,6 +171,18 @@ const SCHEMA_SQL = `
       token TEXT PRIMARY KEY,
       expires_at INTEGER NOT NULL
     );
+
+    -- 🛡️ Sentinel: rejects TOTP replay within the otplib acceptance window.
+    -- secret_hash is sha256(secret) to avoid plaintext duplication of the
+    -- TOTP seed in this audit table. used_at is unix-millis of the verify call;
+    -- old rows are pruned on each verify (no scheduler needed).
+    CREATE TABLE IF NOT EXISTS totp_used (
+      secret_hash TEXT NOT NULL,
+      code TEXT NOT NULL,
+      used_at INTEGER NOT NULL,
+      PRIMARY KEY (secret_hash, code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_totp_used_used_at ON totp_used (used_at);
 `;
 
 // Initialize database schema
