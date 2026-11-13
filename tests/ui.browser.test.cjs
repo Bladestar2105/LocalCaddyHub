@@ -1,0 +1,130 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { chromium } = require('playwright');
+
+// Exercise the shipped assets in a real browser; backend contract tests run separately.
+test('served interface preserves edits, validates forms and renders untrusted values as text', async () => {
+    const staticRoot = path.resolve(__dirname, '../static');
+    const server = http.createServer(async (req, res) => {
+        if (req.url.startsWith('/api/')) {
+            const data = req.url === '/api/config/structured' ? {} : req.url === '/api/config' ? { content: '# Test Caddyfile' } : [];
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(data));
+            return;
+        }
+        try {
+            const pathname = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+            const file = path.join(staticRoot, pathname);
+            if (!file.startsWith(staticRoot + path.sep)) throw new Error('unsafe path');
+            const ext = path.extname(file);
+            res.setHeader('Content-Type', { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.ttf': 'font/ttf' }[ext] || 'text/plain');
+            res.end(await fs.readFile(file));
+        } catch { res.writeHead(404).end(); }
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    let browser;
+    try {
+        browser = await chromium.launch();
+        const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+        const errors = [];
+        const external = [];
+        page.on('pageerror', e => errors.push(e.message));
+        page.on('request', req => { if (!req.url().startsWith(origin) && !req.url().startsWith('data:')) external.push(req.url()); });
+        await page.goto(origin);
+        await page.waitForFunction(() => window.app?.configLoaded && document.querySelector('#domainModal'));
+        await page.evaluate(() => { app.certs = ['server.CRT', 'server.cer', 'server.pem', 'server.key']; app.ui.populateSelects(); });
+        assert.equal(await page.locator('#d_cc option[value="server.CRT"]').count(), 1);
+        assert.equal(await page.locator('#d_cc option[value="server.cer"]').count(), 1);
+        assert.equal(await page.locator('#d_cc option[value="server.key"]').count(), 0);
+        await page.selectOption('#languageSelect', 'en');
+        const shots = process.env.UI_SCREENSHOTS;
+        if (shots) { await fs.mkdir(shots, { recursive: true }); await page.screenshot({ animations: 'disabled', path: path.join(shots, 'general-desktop.png'), fullPage: true }); }
+        await page.fill('#genHttpPort', '9080');
+        await page.click('#reverse-proxy-tab');
+        await page.click('button[onclick="app.ui.openModal(\'domainModal\')"]');
+        await page.click('#domainModal .modal-footer button');
+        assert.equal(await page.locator('#domainModal').isVisible(), true);
+        await page.fill('#d_fd', 'mail.example.test');
+        await page.fill('#d_desc', '<img src=x onerror="window.xssExecuted=1">');
+        await page.selectOption('#languageSelect', 'de', { force: true });
+        assert.equal(await page.inputValue('#d_fd'), 'mail.example.test');
+        await page.click('#domainModal .modal-footer button');
+        await page.waitForSelector('#domainModal', { state: 'hidden' });
+        assert.equal(await page.inputValue('#genHttpPort'), '9080');
+        assert.equal(await page.locator('#domainsTable tbody img').count(), 0);
+        assert.equal(await page.evaluate(() => window.xssExecuted), undefined);
+        await page.evaluate(() => { app.config.domains[0].description = 'No'; app.ui.renderAll(); });
+        assert.equal(await page.locator('#domainsTable tbody tr td').nth(3).innerText(), 'No');
+        await page.waitForSelector('.modal-backdrop', { state: 'detached' });
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'domains-desktop.png'), fullPage: true });
+        await page.evaluate(() => { app.config.basicAuths = [{ id: 'account-id', basicauthuser: 'No' }]; app.ui.renderAll(); });
+        assert.equal(await page.locator('#h_ba option').innerText(), 'No');
+        await page.selectOption('#languageSelect', 'en');
+        assert.equal(await page.locator('#domainsTable tbody tr td').first().innerText(), 'No');
+        await page.click('a[href="#rp-handlers"]');
+        await page.click('button[onclick="app.ui.openModal(\'handlerModal\')"]');
+        assert.equal(await page.locator('#h_waf_profile').count(), 1);
+        await page.check('#h_waf');
+        await page.selectOption('#h_waf_profile', 'exchange');
+        await page.fill('#h_waf_body_limit', '1025');
+        assert.equal(await page.locator('#h_waf_body_limit').evaluate(el => el.checkValidity()), false);
+        await page.fill('#h_waf_body_limit', '128');
+        await page.selectOption('#h_rev', { label: 'mail.example.test' });
+        await page.selectOption('#languageSelect', 'de', { force: true });
+        assert.equal(await page.locator('#h_rev').inputValue(), await page.evaluate(() => app.config.domains[0].id));
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'handler-waf.png') });
+        await page.click('#handlerModal .modal-footer button');
+        assert.equal(await page.locator('#h-upstream').evaluate(el => el.classList.contains('active')), true);
+        await page.waitForSelector('#h-upstream.show');
+        await page.fill('#h_td', 'exchange01.internal, exchange02.internal');
+        await page.fill('#h_tp', '443');
+        await page.check('#h_ntlm');
+        assert.equal(await page.inputValue('#h_lb'), 'ip_hash');
+        assert.equal(await page.locator('#h_lb').isDisabled(), true);
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'handler-modal.png') });
+        await page.click('#handlerModal .modal-footer button');
+        await page.waitForSelector('#handlerModal', { state: 'hidden' });
+        assert.equal(await page.evaluate(() => app.config.handlers.length), 1);
+        assert.deepEqual(await page.evaluate(() => app.config.handlers[0].toDomain), ['exchange01.internal', 'exchange02.internal']);
+        assert.equal(await page.evaluate(() => app.config.handlers[0].lb_policy), 'ip_hash');
+        assert.equal(await page.evaluate(() => app.config.handlers[0].waf_profile), 'exchange');
+        assert.equal(await page.evaluate(() => app.config.handlers[0].waf_body_limit_mb), 128);
+        await page.waitForSelector('.modal-backdrop', { state: 'detached' });
+        await page.click('#handlersTable .btn-outline-primary');
+        await page.click('#h-general-tab');
+        await page.waitForSelector('#h-general.show');
+        assert.equal(await page.inputValue('#h_waf_profile'), 'exchange');
+        assert.equal(await page.inputValue('#h_waf_body_limit'), '128');
+        await page.fill('#h_waf_body_limit', '');
+        await page.click('#handlerModal .modal-footer button');
+        await page.waitForSelector('#handlerModal', { state: 'hidden' });
+        assert.equal(await page.evaluate(() => app.config.handlers[0].waf_body_limit_mb), '');
+        await page.evaluate(() => { document.getElementById('genTlsEmail').value = 'invalid-email'; });
+        await page.click('#applyConfigBtn');
+        assert.equal(await page.locator('#general').evaluate(el => el.classList.contains('active')), true);
+        await page.fill('#genTlsEmail', '');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.waitForSelector('.modal-backdrop', { state: 'detached' });
+        await page.click('#general-tab');
+        await page.waitForSelector('#general.show');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'general-mobile.png'), fullPage: true });
+        await page.goto(origin + '/login.html');
+        assert.equal(await page.locator('.auth-card').isVisible(), true);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'login-mobile.png'), fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.goto(origin + '/setup.html');
+        assert.equal(await page.locator('#newPassword').getAttribute('minlength'), '12');
+        if (shots) await page.screenshot({ animations: 'disabled', path: path.join(shots, 'setup-desktop.png'), fullPage: true });
+        assert.deepEqual(errors, []);
+        assert.deepEqual(external, []);
+    } finally {
+        if (browser) await browser.close();
+        await new Promise(resolve => server.close(resolve));
+    }
+});

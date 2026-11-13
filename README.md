@@ -1,217 +1,171 @@
-# LocalCaddyHub with NTLM Support
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="bw.tech%20%20LocalCaddyHub%20Design%20System/assets/localcaddyhub-mark.svg">
+    <img src="bw.tech%20%20LocalCaddyHub%20Design%20System/assets/localcaddyhub-mark-light.svg" alt="LocalCaddyHub by BW.Tech" width="420">
+  </picture>
 
-This is a web interface to manage a Caddy server instance with NTLM authentication support and layer4 proxying.
-It features a relational UI to manage Caddy configurations (Domains, Subdomains, Handlers, Access Lists, etc.), stores configuration in a SQLite database (`caddyhub.db`), and dynamically generates your `Caddyfile`.
+# Reverse proxy management, in one place
 
-## Prerequisites
+Manage a custom Caddy proxy through a web interface, with local SQLite persistence.
+Built for HTTP services, Exchange-like workloads and SMTP/TCP routing.
 
-*   Node.js (v22 or later recommended)
-*   npm
-*   Go (1.20 or later) and `xcaddy` (if building the custom Caddy binary manually)
-*   Docker (optional, for containerized deployment)
+[![Verify and build](https://github.com/Ssakalis/LocalCaddyHub/actions/workflows/docker-build.yml/badge.svg)](https://github.com/Ssakalis/LocalCaddyHub/actions/workflows/docker-build.yml)
+[![Node 24 LTS](https://img.shields.io/badge/Node-24_LTS-2EBFA5)](https://nodejs.org/en/about/previous-releases)
+[![Caddy 2.11.9](https://img.shields.io/badge/Caddy-2.11.9-3D8BFF)](https://caddyserver.com/)
 
-## Building Caddy with NTLM and Layer4 Support
+[Quick start](#quick-start) · [Exchange guide](docs/exchange.md) · [Configuration](#configuration) · [Development](#development-and-verification)
 
-To use the NTLM transport and layer4 proxying in your `Caddyfile`, you need a custom Caddy build that includes the `github.com/caddyserver/ntlm-transport` and `github.com/mholt/caddy-l4` modules.
+</div>
 
-1.  **Install xcaddy:**
+## What you can manage
 
-    ```bash
-    go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-    ```
+| Capability | Included |
+| --- | --- |
+| HTTP routing | Domains, upstream pools, load balancing and active health checks |
+| Exchange traffic | NTLM connection isolation, verified HTTPS bridging and per-virtual-directory routing |
+| Traffic protection | Coraza WAF, access lists, Basic Auth and custom headers |
+| TCP and mail | Layer 4 proxying and SMTP STARTTLS handlers |
+| Certificates | Automatic Caddy certificates and uploaded certificate/key management |
+| Administration | Local administrator account, control-plane TOTP, raw or structured configuration |
 
-2.  **Build Caddy:**
+Exchange deployment requires its own acceptance testing. Read the [Exchange guide](docs/exchange.md) for Extended Protection, certificate parity, WAF profiles and body limits. TOTP protects the management account; an OWA preauthentication/MFA portal is a design concept, not an implemented feature.
 
-    Run the following command from the root of the cloned `localcaddyhub` repository:
+## Quick start
 
-    ```bash
-    xcaddy build \
-      --with github.com/caddyserver/ntlm-transport \
-      --with github.com/mholt/caddy-l4 \
-      --with github.com/corazawaf/coraza-caddy/v2 \
-      --with github.com/ssakalis/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
-    ```
+Clone the [canonical repository](https://github.com/Ssakalis/LocalCaddyHub):
 
-    This will produce a `caddy` binary in your current directory. Make sure to place it in your system PATH or in the same directory where you run LocalCaddyHub.
-
-## Running Locally
-
-1.  **Install Dependencies:**
-
-    ```bash
-    npm install
-    ```
-
-2.  **Run:**
-
-    Ensure the `caddy` binary you built in the previous step is in your system PATH.
-
-    ```bash
-    npm start
-    ```
-
-    For development with auto-restart, use `npm run dev`.
-
-3.  **Access:**
-
-    Open your browser and navigate to `http://localhost:8090`.
-
-    **Default Login:**
-    *   **Username:** `admin`
-    *   **Password:** `admin`
-
-    (You can override these by setting `ADMIN_USER` and `ADMIN_PASS` environment variables).
-
-## Docker Deployment
-
-A `Dockerfile` is provided to build a multi-stage container image that compiles the custom Caddy binary and runs the Node.js application.
-
-### Using Docker Compose (Recommended)
-
-1.  Create `docker-compose.yml`:
-
-    ```yaml
-    services:
-      localcaddyhub:
-        image: ghcr.io/ssakalis/localcaddyhub:latest
-        container_name: localcaddyhub
-        restart: unless-stopped
-        ports:
-          - "8090:8090"
-          - "80:80"
-          - "443:443"
-        volumes:
-          - ./data:/app/data
-    ```
-
-2.  Run `docker-compose up -d`.
-
-3.  Access at `http://localhost:8090` (Login: `admin` / `admin`).
-
-
-### Using Pre-built Image from GitHub Actions or Building Locally
-
-If using `docker run` directly:
-
-1.  **Run the Container:**
-
-    ```bash
-    docker run -d \
-      --name localcaddyhub \
-      -p 8090:8090 \
-      -p 80:80 \
-      -p 443:443 \
-      -v $(pwd)/data:/app/data \
-      ghcr.io/ssakalis/localcaddyhub:latest
-    ```
-    *(Replace the image tag with `localcaddyhub` if you built the image locally via `docker build -t localcaddyhub .`)*
-
-## Native Setup on Ubuntu 24.04 / Debian 12+
-
-For a native production-like deployment on a modern Linux system without Docker, follow these steps to install LocalCaddyHub and configure it to run as a system service.
-
-### 1. Install Dependencies
-
-Install Go (for building Caddy) and Node.js 22 (for running the backend):
-
-```bash
-# Install Go and build dependencies
-sudo apt update
-sudo apt install -y golang git libcap2-bin
-
-# Install Node.js 22 via NodeSource
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
+```sh
+git clone https://github.com/Ssakalis/LocalCaddyHub.git
+cd LocalCaddyHub
 ```
 
-### 2. Setup LocalCaddyHub
+There is **no default login**. Set both `ADMIN_USER` and `ADMIN_PASS` in your environment or a protected `.env` file. Use a strong bootstrap password; the account setup password must be at least 12 characters and no more than 72 UTF-8 bytes.
 
-Clone the repository and install the application dependencies:
+Build and run the checkout with Docker Compose:
 
-```bash
-# Clone the repository to /opt
-sudo git clone https://github.com/ssakalis/localcaddyhub.git /opt/localcaddyhub
-cd /opt/localcaddyhub
-
-# Install npm dependencies
-sudo npm install
+```sh
+docker compose up -d --build --pull never
 ```
 
-### 3. Build Custom Caddy
+Open [http://localhost:8090](http://localhost:8090), sign in with the bootstrap credentials and complete account setup. The saved database account replaces bootstrap credentials for subsequent logins. Keep the management listener behind a trusted management network, SSH tunnel or authenticated HTTPS gateway; it uses plain HTTP by default.
 
-Build the custom Caddy binary with NTLM, Layer4, and WAF support from the repository root, and move it to your system PATH:
+The package target is [`ghcr.io/ssakalis/localcaddyhub:latest`](https://github.com/Ssakalis/LocalCaddyHub/pkgs/container/localcaddyhub). After a verified image has been published and is accessible to your Docker client, use:
 
-```bash
-# Install xcaddy
-go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-
-# Build the custom Caddy binary
-~/go/bin/xcaddy build \
-  --with github.com/caddyserver/ntlm-transport \
-  --with github.com/mholt/caddy-l4 \
-  --with github.com/corazawaf/coraza-caddy/v2 \
-  --with github.com/ssakalis/localcaddyhub/modules/caddystarttls=./src/modules/caddystarttls
-
-# Move to a system-wide location and grant privileges to bind to low ports (80/443)
-sudo mv caddy /usr/local/bin/
-sudo setcap cap_net_bind_service=+ep /usr/local/bin/caddy
+```sh
+docker compose pull
+docker compose up -d --no-build
 ```
 
-### 4. Automatic Setup (Recommended)
+Repository ownership and a local build do not publish a registry image. The `--build --pull never` route works directly from this checkout without requiring a populated GHCR package.
 
-LocalCaddyHub provides a `setup.sh` script to automate dependencies, building, and service creation:
+## Docker persistence
 
-```bash
+To build and run directly without Compose:
+
+```sh
+docker build -t localcaddyhub:local .
+docker run -d --name localcaddyhub \
+  -e ADMIN_USER -e ADMIN_PASS \
+  -p 127.0.0.1:8090:8090 -p 80:80 -p 443:443 -p 443:443/udp \
+  -v "$PWD/data:/app/data" \
+  -v localcaddyhub_caddy_data:/data \
+  -v localcaddyhub_caddy_config:/config \
+  localcaddyhub:local
+```
+
+Persist **all three** locations:
+
+| Location | Contents |
+| --- | --- |
+| `/app/data` | SQLite database, generated Caddyfile, app configuration, uploaded certificates, logs |
+| `/data` | Caddy ACME accounts, certificates, private keys and local CA storage |
+| `/config` | Caddy autosaved configuration |
+
+Back up the database and its WAL consistently by stopping the container before taking a filesystem backup (or use SQLite's online backup API). Back up all three volumes and protect their private keys. Do not use `docker compose down -v` when retaining certificates/accounts. Restore matching app configuration and certificate storage together.
+
+The image exposes 80/TCP, 443/TCP and 443/UDP. Publish additional ports explicitly for configured Layer 4/SMTP listeners. Caddy's admin API on 2019 stays internal; never expose it publicly.
+
+<details>
+<summary>Upgrading a legacy Docker installation</summary>
+
+Existing deployments mounting `/app/caddyhub.db` retain their legacy database/account, `/app/Caddyfile`, `/app/config.json` and `/app/certs` paths at startup. An explicitly set `LCH_DATA_DIR` overrides that detection. Fresh installations use `/app/data`.
+
+Atomic configuration replacement cannot replace an individually bind-mounted `/app/Caddyfile` (`EBUSY`). Migrate legacy file mounts before editing configuration:
+
+1. Record the old mounts and Caddy storage locations, then stop the old container so SQLite and Caddy have no active writers.
+2. Keep an offline backup of `caddyhub.db` **and any `-wal`/`-shm` sidecars**, `config.json`, `Caddyfile`, the complete `certs` directory/private keys, and Caddy's ACME data/configuration. Copy state stored only in the container layer out before removing that container.
+3. Copy the complete app state into a host directory mounted at `/app/data`, and remove the old individual `/app` file/certificate mounts. Retain existing Caddy `/data` and `/config` volumes. If an older image kept Caddy state under `/root/.local/share/caddy` or `/root/.config/caddy`, migrate those Caddy-directory contents to `/data/caddy` and `/config/caddy` in the new volumes. Use the old deployment's actual storage paths if customized. Mount the state directory rather than the whole `/app`, which would hide the new application and dependencies. Before starting Caddy, update absolute certificate/TLS, import and log paths in the copied Caddyfile (and applicable configuration references) to the new mount locations. Alternatively, run the management app with `CADDY_AUTOSTART=0` and regenerate/validate from the saved structured configuration. Raw Caddyfile users must adjust those paths explicitly.
+4. Start the new image and verify the saved login, intended raw or structured configuration and certificate selection, including a successful configuration save, before traffic cutover. Retain the offline backup and old stopped container until recovery has been verified.
+
+</details>
+
+## Native installation and updates
+
+For a development checkout, install the Node runtime and custom Caddy described below, set `ADMIN_USER` and `ADMIN_PASS`, then run `npm start`. Preserve the database to retain the saved account and TOTP configuration.
+
+On Ubuntu 24.04 or Debian 12+, run the installer from a reviewed checkout:
+
+```sh
 sudo ./setup.sh
 ```
 
-During the setup process, you will be prompted to create your secure admin credentials for the initial login.
+It installs Node 24, a checksum-verified private Go 1.27.4 toolchain under `/opt/localcaddyhub-tools`, locked npm dependencies and the custom Caddy binary. It prompts for bootstrap credentials without a default password, stores them in root-readable `/etc/localcaddyhub.env`, and creates a systemd service. Existing installations must use the updater; setup refuses to replace an existing service.
 
-### 5. Manual Service Creation
+Native service persistence is `/opt/localcaddyhub/data`, `/var/lib/localcaddyhub/caddy-data` and `/var/lib/localcaddyhub/caddy-config`. Preserve all of them plus `/etc/localcaddyhub.env`. Older installations with `caddyhub.db` in the application root retain their legacy paths unless `LCH_DATA_DIR` explicitly selects a data directory. Move legacy state deliberately before enabling a new data directory.
 
-If you prefer to set up the systemd service manually instead of using `setup.sh`:
+For updates, keep the checkout clean and tracking its upstream branch:
 
-```bash
-sudo nano /etc/systemd/system/localcaddyhub.service
+```sh
+sudo ./update.sh
 ```
 
-Add the following configuration, replacing `admin` and `admin` with your desired secure credentials:
+The updater reads the running service environment (or delegates EnvironmentFiles to systemd when stopped), so service-only data directories and management ports are honored. It aborts before downtime if these settings cannot be resolved safely or if the running and configured service use different state paths/ports. The updater fetches a fast-forward revision, installs dependencies, builds Caddy and runs the real SQLite/HTTP and proxy/WAF runtime checks in a temporary staging directory while the existing service continues running. It then stops the service, resolves the service environment and saves a private rollback backup of the old runtime, actual app state and Caddy storage, activates the new revision and checks both management HTTP and the Caddy admin API startup. Failed activation restores the old revision, dependencies, Caddy binary and saved application state and restarts a previously active service. If a failed service cannot be stopped or its backup cannot be restored, the updater reports the retained backup and avoids restarting against uncertain state. Backups remain next to the install directory; remove old backups only after verifying recovery. Keep an independent backup of certificate storage. Updates have a short service interruption and are not a substitute for a tested full-host restore. Existing service units retain their configured environment; upgrade old Node runtimes before updating.
 
-```ini
-[Unit]
-Description=LocalCaddyHub Service
-After=network.target
+## Configuration
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/localcaddyhub
-ExecStart=/usr/bin/npm start
-Environment=NODE_ENV=production
-Environment=ADMIN_USER=admin
-Environment=ADMIN_PASS=admin
-Restart=on-failure
-RestartSec=5
+| Setting | Purpose / default |
+| --- | --- |
+| `ADMIN_USER` / `ADMIN_PASS` | Required bootstrap credentials while no database account exists |
+| `PORT` | Management HTTP listener: `8090` |
+| `LCH_DATA_DIR` | Explicit app state directory; overrides legacy-path detection |
+| `CADDY_BIN` | Custom Caddy executable path; use an absolute path outside `PATH` |
+| `CADDY_AUTOSTART` | Set `0` for isolated checks or an externally managed Caddy process |
+| `XDG_DATA_HOME` / `XDG_CONFIG_HOME` | Caddy persistence roots; image defaults: `/data` and `/config` |
 
-[Install]
-WantedBy=multi-user.target
+The generic WAF body limit defaults to **12.5 MiB**; the Exchange profile defaults to **128 MiB**, with a per-handler limit of 1–1024 MiB. See the [Exchange guide](docs/exchange.md) for MIME handling and attachment inspection limits. WAF inspection does not replace antivirus or validate real Exchange authentication.
+
+Saving configuration requires a working custom Caddy binary; invalid changes preserve the previous database and Caddyfile. State directories and private files are restricted to the application account; run the application and its Caddy process as the same OS user (including externally managed Caddy). Changes saved in the UI generate/validate configuration; apply/reload it through the process controls. Coraza WAF rules require application-specific acceptance testing, especially for Exchange request bodies and long-lived connections. A healthy HTTP process or a successful generic proxy smoke test does not demonstrate Outlook, Extended Protection or DAG failover compatibility.
+
+## Exchange and redundant proxies
+
+For a KEMP replacement in front of Exchange mailbox servers, read the [Exchange deployment guide](docs/exchange.md) before configuring upstreams. It covers virtual-directory health checks, NTLM, HTTPS bridging and Extended Protection prerequisites.
+
+A single LocalCaddyHub instance is one proxy/control-plane node. A redundant pair needs an external VIP/failover mechanism or a load balancer that checks both proxies. Give each node **independent local SQLite and Caddy storage**. Apply and validate equivalent configuration and secrets on each node, keep certificates synchronized using a controlled deployment process, and test both nodes directly before changing the VIP. Exchange's DAG replicates mailbox databases; it does not replicate LocalCaddyHub configuration or elect a proxy leader. Do not put SQLite on shared network storage or mount one live database into multiple nodes.
+
+Independent ACME clients may coordinate poorly with HTTP challenges through a VIP. Choose one certificate issuance/distribution owner, or deliberately configure shared Caddy certificate storage using a supported external storage module and appropriate distributed locking (not included in the default build). For Exchange Extended Protection with HTTPS bridging, the front-end and Exchange IIS certificate must match; independent automatic certificate issuance on each proxy does not satisfy this requirement.
+
+## Development and verification
+
+Use Node **24.22.3** (see `.nvmrc`) and npm. Native `better-sqlite3` must be installed using the same Node major that runs the application; after switching Node versions, run `npm ci` again. Node 24 is a [supported LTS release](https://nodejs.org/en/about/previous-releases).
+
+```sh
+npm ci
+npm test
+npm audit --omit=dev
 ```
 
-Reload the systemd daemon, enable the service to start on boot, and start it immediately:
+`npm test` includes real SQLite/HTTP bootstrap, setup and restart tests in isolated temporary directories. `npm run dev` uses Node's built-in watch mode. The separate `npm run test:proxy` gate requires the real custom Caddy binary (no skip/fallback). It checks WAF block/pass behavior, TLS trust/name failures, per-service health and failover, and NTLM backend/socket affinity using synthetic Exchange-like traffic. CI runs this gate inside the built image. Browser checks use the development-only Playwright package; install a browser with `npx playwright install chromium`.
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable localcaddyhub
-sudo systemctl start localcaddyhub
+For a native custom Caddy build, install **Go 1.26.9 or newer** and run:
+
+```sh
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
+export PATH="$(go env GOPATH)/bin:$PATH"
+./scripts/build-caddy.sh ./caddy
+./caddy version
+export CADDY_BIN="$PWD/caddy"
+npm run test:proxy
+(cd src/modules/caddystarttls && go test -mod=readonly -race ./... && go vet -mod=readonly ./...)
 ```
 
-You can now access LocalCaddyHub at `http://<your-server-ip>:8090`.
-
-## Features
-
-*   **Relational UI**: Manage your Caddy reverse proxies using an intuitive web interface instead of writing a Caddyfile by hand. It supports Domains, Subdomains, Handlers, Headers, Access Lists, Layer 4 proxying, and Basic Auth.
-*   **Database Storage**: Configurations are persistently stored in a local SQLite database (`caddyhub.db`).
-*   **Dynamic Caddyfile Generation**: LocalCaddyHub automatically generates your `Caddyfile` based on the configuration in the database.
-*   **TLS Certificates**: Request Let's Encrypt certificates through Caddy Automatic HTTPS, download Caddy-managed ACME storage, or upload custom certificate/key files.
-*   **Control & Validate**: Validate your configuration syntax, and Start, Stop, or Reload the Caddy process directly from the UI.
-*   **Stats**: View runtime metrics from Caddy's admin API.
+The shared build script pins Caddy 2.11.9, the local NTLM transport, caddy-l4 0.1.3 and Coraza-Caddy 2.6.2, and includes this repository's SMTP modules. The NTLM transport is derived from Apache-2.0-licensed caddyserver/ntlm-transport v0.1.2, with local fixes for authenticated connection cleanup, reload safety and client connection isolation. Docker and the native installer use the same script. Set `CADDY_BIN` to an absolute path when the binary is outside PATH.

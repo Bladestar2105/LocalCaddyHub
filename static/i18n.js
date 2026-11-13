@@ -6,6 +6,29 @@
 
     const translations = {
         de: {
+            'WAF Profile': 'WAF-Profil',
+            'Generic web application': 'Allgemeine Webanwendung',
+            'Microsoft Exchange': 'Microsoft Exchange',
+            'The Exchange profile allows protocol content types on Exchange service paths while retaining attack checks.': 'Das Exchange-Profil erlaubt Protokoll-Inhaltstypen auf Exchange-Dienstpfaden und behält die Angriffsprüfung bei.',
+            'WAF Request Body Limit (MiB)': 'WAF-Limit für Request-Body (MiB)',
+            'Profile default': 'Profilvorgabe',
+            'Optional, 1–1024 MiB. Leave empty for the profile default: Generic 12.5 MiB, Exchange 128 MiB. Used when WAF is enabled.': 'Optional, 1–1024 MiB. Leer lassen für die Profilvorgabe: Allgemein 12.5 MiB, Exchange 128 MiB. Gilt bei aktivierter WAF.',
+
+            'Use at least 12 characters.': 'Verwenden Sie mindestens 12 Zeichen.',
+            'Multiple NTLM backends use IP affinity to preserve authentication.': 'Mehrere NTLM-Backends verwenden IP-Affinität, damit die Authentifizierung erhalten bleibt.',
+            'Welcome back': 'Willkommen zurück',
+            'Sign in to manage your Caddy workspace.': 'Melden Sie sich an, um Ihre Caddy-Umgebung zu verwalten.',
+            'Configuration': 'Konfiguration',
+            'CADDY / ADMINISTRATION': 'CADDY / VERWALTUNG',
+            'WORKSPACE': 'ARBEITSBEREICH',
+            'Workspace': 'Arbeitsbereich',
+            'Main navigation': 'Hauptnavigation',
+            'Skip to content': 'Zum Inhalt springen',
+            'Local infrastructure. Full control.': 'Lokale Infrastruktur. Volle Kontrolle.',
+            'Manage routing, certificates, and services from one workspace.': 'Routing, Zertifikate und Dienste zentral verwalten.',
+            'Core services, certificate defaults, and connection settings.': 'Basisdienste, Zertifikatvorgaben und Verbindungseinstellungen.',
+            'Configuration could not be loaded. Reload the page to retry.': 'Die Konfiguration konnte nicht geladen werden. Laden Sie die Seite erneut.',
+
             'Login - LocalCaddyHub': 'Anmeldung - LocalCaddyHub',
             'Setup - LocalCaddyHub': 'Einrichtung - LocalCaddyHub',
             'Apply Configuration': 'Konfiguration anwenden',
@@ -110,7 +133,7 @@
             'Caddy-managed ACME Certificates': 'Von Caddy verwaltete ACME-Zertifikate',
             'Enable Let\'s Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let\'s Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.': 'Aktiviere Let\'s Encrypt auf einer Domain, Subdomain oder Layer-4-Route und stoße die Ausstellung dann hier an. Caddy muss für HTTP/TLS-Challenges von Let\'s Encrypt auf Port 80 und/oder 443 erreichbar sein.',
             'Request Let\'s Encrypt Certificates': 'Let\'s-Encrypt-Zertifikate abrufen',
-            'Renew all as RSA': 'Alle als RSA erneuern',
+            'Use RSA for future certificates': 'RSA für künftige Zertifikate verwenden',
             'Download Caddy-managed ACME certificate storage, including private keys. Handle this archive securely.': 'Lade den von Caddy verwalteten ACME-Zertifikatsspeicher inklusive privater Schlüssel herunter. Behandle dieses Archiv vertraulich.',
             'Download .tar.gz': '.tar.gz herunterladen',
             'Existing Certificates': 'Vorhandene Zertifikate',
@@ -163,7 +186,7 @@
             'Verifying...': 'Prüft...',
             'Requesting...': 'Fordert an...',
             'Exporting...': 'Exportiert...',
-            'Renewing...': 'Erneuert...',
+            'Checking...': 'Prüft...',
             'Cleaning...': 'Bereinigt...',
             'Saving configuration before requesting certificates...': 'Speichere Konfiguration vor dem Zertifikatsabruf...',
             'Enable Let\'s Encrypt on at least one enabled Domain, Subdomain, or Layer 4 route first.': 'Aktiviere Let\'s Encrypt zuerst auf mindestens einer aktivierten Domain, Subdomain oder Layer-4-Route.',
@@ -179,12 +202,13 @@
             '{days} days left': '{days} Tage verbleibend',
             'Issuer': 'Aussteller',
             'Source': 'Quelle',
-            'Renew now': 'Jetzt erneuern',
+            'Check automatic renewal': 'Automatische Erneuerung prüfen',
             'Not renewable': 'Nicht erneuerbar',
+            'This item is used by the configuration. Remove its references before deleting.': 'Dieser Eintrag wird von der Konfiguration verwendet. Entfernen Sie seine Referenzen vor dem Löschen.',
             'Renewal failed.': 'Erneuerung fehlgeschlagen.',
-            'Renewal requested.': 'Erneuerung angefordert.',
-            'Delete the stored certificate assets and restart Caddy to request a new certificate for {name}?': 'Gespeicherte Zertifikatsdateien löschen und Caddy neu starten, um ein neues Zertifikat für {name} anzufordern?',
-            'Set certificate key type to RSA 2048, delete stored Caddy-managed ACME certificates, and restart Caddy to request new RSA certificates?': 'Zertifikats-Schlüsseltyp auf RSA 2048 setzen, gespeicherte Caddy-ACME-Zertifikate löschen und Caddy neu starten, um neue RSA-Zertifikate anzufordern?',
+            'Automatic renewal checked.': 'Automatische Erneuerung geprüft.',
+            'Reload certificate management for {name}? Existing certificates are preserved; Caddy renews automatically when due.': 'Zertifikatsverwaltung für {name} neu laden? Bestehende Zertifikate bleiben erhalten; Caddy erneuert automatisch, wenn die Erneuerung fällig ist.',
+            'Use RSA 2048 for future issuances and automatic renewals? Existing certificates will not be replaced.': 'RSA 2048 für künftige Ausstellungen und automatische Erneuerungen verwenden? Bestehende Zertifikate werden nicht ersetzt.',
             'Missing certificate references found.': 'Fehlende Zertifikatsreferenzen gefunden.',
             'Remove missing references': 'Fehlende Referenzen entfernen',
             'Remove all missing certificate references from the configuration?': 'Alle fehlenden Zertifikatsreferenzen aus der Konfiguration entfernen?',
@@ -468,7 +492,7 @@
     function shouldSkipNode(node) {
         const parent = node.parentElement;
         if (!parent) return true;
-        return ['SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName);
+        return ['SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName) || Boolean(parent.closest('[translate="no"]'));
     }
 
     function translateTextNode(node) {
@@ -500,7 +524,7 @@
     }
 
     function translateAttribute(element, attr) {
-        if (!element.hasAttribute(attr)) return;
+        if (!element.hasAttribute(attr) || element.closest('[translate="no"]')) return;
         const store = attrStore(element);
         let source = store[attr];
         const current = element.getAttribute(attr);

@@ -8,7 +8,7 @@ const allowedAcmeCaEndpoints = new Set([
 ]);
 const allowedTlsKeyTypes = new Set(['rsa2048', 'rsa4096', 'p256', 'p384', 'ed25519']);
 
-function generateCaddyfile(config, certsDir = './certs') {
+function generateCaddyfile(config, certsDir = './certs', instanceLogsDir = path.join(process.cwd(), 'data', 'logs')) {
   let sb = '';
   const automaticCertsDisabled = ['off', 'disable_certs'].includes(config.general && config.general.auto_https);
   const layer4ManagedCertificateHosts = new Set();
@@ -24,11 +24,11 @@ function generateCaddyfile(config, certsDir = './certs') {
   }
   const rollSize = config.general.log_roll_size_mb || 10;
   const rollKeep = config.general.log_roll_keep || 7;
-  const logsDir = path.join(process.cwd(), 'data', 'logs').replace(/\\/g, '/');
+  const logsDir = instanceLogsDir.replace(/\\/g, '/');
 
   if (config.general.log_level) {
     sb += '\tlog {\n';
-    sb += `\t\toutput file ${logsDir}/caddy-global.log {\n`;
+    sb += `\t\toutput file ${fileToken(`${logsDir}/caddy-global.log`)} {\n`;
     sb += `\t\t\troll_size ${rollSize}MiB\n`;
     sb += `\t\t\troll_keep ${rollKeep}\n`;
     sb += '\t\t}\n';
@@ -261,9 +261,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
       if (l4.terminateTls || l4.starttls) {
         if (l4.customCert && !layer4UsesManagedCertificate(l4)) {
-          const certPath = path.join(certsDir, l4.customCert).replace(/\\/g, '/');
-          const keyPath = path.join(certsDir, l4.customCert.replace(/\.pem$/, '') + '.key').replace(/\\/g, '/');
-          sb += `${indent}custom_tls ${certPath} ${keyPath} {\n`;
+          sb += `${indent}custom_tls ${certPath(l4.customCert)} ${keyPathForCert(l4.customCert)} {\n`;
           if (l4.default_sni) {
             sb += `${indent}\tdefault_sni ${l4.default_sni}\n`;
           }
@@ -275,8 +273,6 @@ function generateCaddyfile(config, certsDir = './certs') {
             sb += `${indent}${tlsString} {\n`;
             sb += `${indent}\tconnection_policy {\n`;
             sb += `${indent}\t\tdefault_sni ${l4.default_sni}\n`;
-            // Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
-            sb += `${indent}\t\tciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA\n`;
             sb += `${indent}\t}\n`;
             sb += `${indent}}\n`;
           } else {
@@ -285,7 +281,7 @@ function generateCaddyfile(config, certsDir = './certs') {
         }
       }
 
-      if (l4.starttls) {
+      if (l4.starttls && !['starttls', 'starttls_insecure_skip_verify'].includes(l4.originate_tls)) {
         sb += `${indent}drop220\n`;
       }
 
@@ -402,12 +398,16 @@ function generateCaddyfile(config, certsDir = './certs') {
     return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
 
+  function fileToken(value) {
+    return /[\s"`#{}]/.test(value) ? caddyQuote(value) : value;
+  }
+
   function certPath(filename) {
-    return path.join(certsDir, filename).replace(/\\/g, '/');
+    return fileToken(path.join(certsDir, filename).replace(/\\/g, '/'));
   }
 
   function keyPathForCert(filename) {
-    return certPath(filename.replace(/\.pem$/, '') + '.key');
+    return certPath(filename.replace(/\.(pem|crt|cer)$/i, '') + '.key');
   }
 
   function writeClientAuth(settings, indent) {
@@ -463,7 +463,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
     for (const alID of accessIds) {
       const al = accessLists[alID];
-      if (!al || !al.clientIps || al.clientIps.length === 0) continue;
+      if (!al || !Array.isArray(al.clientIps) || al.clientIps.length === 0) throw new Error(`Unknown or empty access list: ${alID}`);
 
       const matcherName = `@${prefix}_${al.id}`;
       const matcherType = al.request_matcher === 'remote_ip' ? 'remote_ip' : 'client_ip';
@@ -488,13 +488,13 @@ function generateCaddyfile(config, certsDir = './certs') {
   function writeBasicAuths(authIds, indent) {
     if (!Array.isArray(authIds) || authIds.length === 0) return;
 
+    sb += `${indent}basic_auth {\n`;
     for (const baID of authIds) {
       const ba = basicAuths[baID];
-      if (!ba) continue;
-      sb += `${indent}basic_auth {\n`;
+      if (!ba) throw new Error(`Unknown basic authentication entry: ${baID}`);
       sb += `${indent}\t${ba.basicauthuser} ${ba.basicauthpass}\n`;
-      sb += `${indent}}\n`;
     }
+    sb += `${indent}}\n`;
   }
 
   function mergeIdLists(baseIds, extraIds) {
@@ -585,7 +585,24 @@ function generateCaddyfile(config, certsDir = './certs') {
         sb += '\t\t\tload_owasp_crs\n';
         sb += '\t\t\tdirectives `\n';
         sb += '\t\t\t\tInclude @coraza.conf-recommended\n';
+          const bodyLimit = Number(handler.waf_body_limit_mb) || (handler.waf_profile === 'exchange' ? 128 : 0);
+          if (bodyLimit) sb += `\t\t\t\tSecRequestBodyLimit ${bodyLimit * 1024 * 1024}\n`;
         sb += '\t\t\t\tInclude @crs-setup.conf.example\n';
+          if (handler.waf_profile === 'exchange') {
+            sb += '\t\t\t\tSecRule REQUEST_URI "@rx (?i)^/EWS/Exchange[.]asmx(?:\\?|$)" "id:1001010,phase:1,pass,nolog,chain"\n';
+            sb += '\t\t\t\tSecRule REQUEST_HEADERS:Content-Type "@rx (?i)^(?:text/xml|application/(?:xml|soap\\+xml))(?:\\s*;|$)" "ctl:requestBodyProcessor=EXCHANGE_XML"\n';
+            // Keep CRS inspection; allow protocol MIME types only on their matching Exchange paths.
+            for (const [endpoint, mime] of [
+              ['mapi', 'mapi-http'], ['Microsoft-Server-ActiveSync', 'vnd\\.ms-sync\\.wbxml'], ['rpc', 'rpc']
+            ]) {
+              const ruleId = 1001000 + ['mapi', 'Microsoft-Server-ActiveSync', 'rpc'].indexOf(endpoint);
+              const route = endpoint === 'rpc' ? 'rpc/rpcproxy[.]dll' : endpoint;
+              sb += `\t\t\t\tSecRule REQUEST_URI "@rx (?i)^/${route}(?:/|\\?|$)" "id:${ruleId},phase:1,pass,nolog,chain"\n`;
+              const rpc = endpoint === 'rpc';
+              sb += `\t\t\t\tSecRule REQUEST_HEADERS:Content-Type "@rx (?i)^application/${mime}(?:\\s*;|$)" "ctl:ruleRemoveById=920420,ctl:requestBodyProcessor=RAW${rpc ? ',ctl:ruleRemoveById=920440,chain' : ''}"\n`;
+              if (rpc) sb += '\t\t\t\tSecRule REQUEST_METHOD "@rx ^RPC_(?:IN|OUT)_DATA$" "ctl:ruleRemoveById=911100"\n';
+            }
+          }
         sb += '\t\t\t\tInclude @owasp_crs/*.conf\n';
         sb += '\t\t\t\tSecRuleEngine On\n';
         sb += '\t\t\t`\n';
@@ -616,7 +633,8 @@ function generateCaddyfile(config, certsDir = './certs') {
 
         writeProxyTransport(handler);
 
-        if (handler.lb_policy) sb += `\t\t\tlb_policy ${handler.lb_policy}\n`;
+        const lbPolicy = handler.ntlm && handler.toDomain && handler.toDomain.length > 1 ? 'ip_hash' : handler.lb_policy;
+        if (lbPolicy) sb += `\t\t\tlb_policy ${lbPolicy}\n`;
         if (handler.lb_retries) sb += `\t\t\tlb_retries ${parseInt(handler.lb_retries, 10)}\n`;
         if (handler.lb_try_duration) sb += `\t\t\tlb_try_duration ${formatDuration(handler.lb_try_duration)}\n`;
         if (handler.lb_try_interval) sb += `\t\t\tlb_try_interval ${formatDuration(handler.lb_try_interval)}\n`;
@@ -720,7 +738,7 @@ function generateCaddyfile(config, certsDir = './certs') {
 
     if (site === domain && domain.accessLog) {
       sb += '\tlog {\n';
-      sb += `\t\toutput file ${logsDir}/${domain.fromDomain}.log {\n`;
+      sb += `\t\toutput file ${fileToken(`${logsDir}/${domain.fromDomain}.log`)} {\n`;
       sb += `\t\t\troll_size ${rollSize}MiB\n`;
       sb += `\t\t\troll_keep ${rollKeep}\n`;
       sb += '\t\t}\n';

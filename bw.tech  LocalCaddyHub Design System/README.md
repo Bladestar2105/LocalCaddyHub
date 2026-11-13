@@ -6,9 +6,9 @@ This system replaces the existing Bootswatch-Darkly look with a fresh, brand-coh
 
 ## Sources
 
-- **Codebase:** [github.com/ssakalis/LocalCaddyHub](https://github.com/ssakalis/LocalCaddyHub) — files imported into `static/` (index.html, login.html, setup.html, app.js).
+- **Codebase:** [github.com/Ssakalis/LocalCaddyHub](https://github.com/Ssakalis/LocalCaddyHub) — files imported into `static/` (index.html, login.html, setup.html, app.js).
 - **Marketing site:** [bw.tech](https://bw.tech) — content scraped (German), brand imagery is hotlink-protected; we work from descriptions and placeholders.
-- **Product README:** [github.com/ssakalis/LocalCaddyHub/blob/main/README.md](https://github.com/ssakalis/LocalCaddyHub/blob/main/README.md)
+- **Product README:** [github.com/Ssakalis/LocalCaddyHub/blob/main/README.md](https://github.com/Ssakalis/LocalCaddyHub/blob/main/README.md)
 
 ## Products covered
 

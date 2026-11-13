@@ -4,36 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalCaddyHub</title>
-    <!-- Bootstrap CSS (Darkly) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --bs-primary: #008080; /* Caddy tealish color */
-            --bs-primary-rgb: 0,128,128;
-        }
-        .btn-primary { background-color: var(--bs-primary); border-color: var(--bs-primary); }
-        .btn-primary:hover { background-color: #006666; border-color: #006666; }
-        body { font-family: sans-serif; padding: 20px; }
-        .tab-content { padding: 20px; border: 1px solid #444; border-top: none; background: #222; border-radius: 0 0 5px 5px; }
-        .nav-tabs .nav-link { border: 1px solid transparent; color: #adb5bd; }
-        .nav-tabs .nav-link.active { background-color: #222; border-color: #444 #444 transparent; color: #fff; }
-        textarea { width: 100%; height: 300px; font-family: monospace; }
-        .status-box { margin-top: 20px; padding: 15px; border-radius: 5px; background-color: #333; color: #fff; white-space: pre-wrap; display: none; }
-        .text-muted { color: #adb5bd !important; }
-        .table-responsive { margin-top: 20px; }
-        .action-btns button { margin-right: 5px; }
-
-        .table { --bs-table-bg: transparent; --bs-table-color: #fff; --bs-table-striped-bg: rgba(255,255,255,0.05); --bs-table-striped-color: #fff; --bs-table-hover-color: #fff; }
-    </style>
+    <link href="/vendor/bootstrap.min.css" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/assets/lch-icon.svg">
 </head>
-<body>
+<body class="admin-shell">
+<a class="skip-link" href="#mainContent">Skip to content</a>
 
-<div class="container-fluid">
-    <h1 class="mb-4">LocalCaddyHub</h1>
+<aside class="sidebar" aria-label="Workspace"><div class="sidebar-brand"><img src="/assets/lch-icon.svg" width="34" height="34" alt=""><div><span class="brand-name">LocalCaddyHub</span><span class="brand-byline">by <strong>BW.Tech</strong></span></div></div><div class="nav-eyebrow">WORKSPACE</div>    <!-- Main Tabs -->
+    <ul class="nav nav-tabs sidebar-nav" id="mainTabs" role="tablist" aria-label="Main navigation" aria-orientation="vertical">
+        <li class="nav-item"><a class="nav-link active" id="general-tab" data-bs-toggle="tab" href="#general" role="tab" aria-label="General"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M12 8v8m-4-4h8"/><circle cx="12" cy="12" r="9"/></svg><span class="nav-label">General</span></a></li>
+        <li class="nav-item"><a class="nav-link" id="reverse-proxy-tab" data-bs-toggle="tab" href="#reverse-proxy" role="tab" aria-label="Reverse Proxy"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M8 3 4 7l4 4M4 7h16M16 13l4 4-4 4M20 17H4"/></svg><span class="nav-label">Reverse Proxy</span></a></li>
+        <li class="nav-item"><a class="nav-link" id="layer4-tab" data-bs-toggle="tab" href="#layer4" role="tab" aria-label="Layer 4"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><rect x="8" y="3" width="8" height="6" rx="1"/><rect x="2" y="15" width="8" height="6" rx="1"/><rect x="14" y="15" width="8" height="6" rx="1"/><path d="M12 9v3H6v3m6-3h6v3"/></svg><span class="nav-label">Layer 4</span></a></li>
+        <li class="nav-item"><a class="nav-link" id="certs-tab" data-bs-toggle="tab" href="#certs" role="tab" aria-label="Certificates"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span class="nav-label">Certificates</span></a></li>
+        <li class="nav-item"><a class="nav-link" id="control-tab" data-bs-toggle="tab" href="#control" role="tab" aria-label="Control & Raw"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="m4 6 6 6-6 6m9 0h7"/></svg><span class="nav-label">Control & Raw</span></a></li>
+        <li class="nav-item"><a class="nav-link" id="logs-tab" data-bs-toggle="tab" href="#logs" role="tab" aria-label="Live Logs"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M8 3h12v15a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3h5zM8 7h8M8 11h8M8 15h6"/></svg><span class="nav-label">Live Logs</span></a></li>
+    </ul>
 
-    <div class="d-flex justify-content-between mb-3 gap-3 flex-wrap">
-        <div>
-            <button id="applyConfigBtn" class="btn btn-primary" onclick="app.saveStructuredConfig()">Apply Configuration</button>
+<div class="sidebar-footer"><span class="brand-dot"></span><span>Local infrastructure. Full control.</span></div></aside>
+<div class="workspace">
+    <header class="topbar">
+
+    <div class="topbar-inner">
+        <div class="topbar-actions">
+            <button id="applyConfigBtn" disabled class="btn btn-primary" onclick="app.saveStructuredConfig()">Apply Configuration</button>
             <button id="validateConfigBtn" class="btn btn-secondary" onclick="app.validateConfig()">Validate Configuration</button>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -41,28 +35,22 @@
                 <option value="en">English</option>
                 <option value="de">Deutsch</option>
             </select>
-            <div id="globalStatus" class="status-box" style="margin-top:0; padding: 8px 15px; display:inline-block; font-weight: bold; margin-right: 15px;" role="status" aria-live="polite"></div>
+            <div id="globalStatus" class="status-box global-status" role="status" aria-live="polite"></div>
             <button class="btn btn-outline-info" onclick="app.ui.openModal('2faModal')">2FA Settings</button>
             <a href="/logout" class="btn btn-outline-danger">Logout</a>
         </div>
     </div>
 
-    <!-- Main Tabs -->
-    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
-        <li class="nav-item"><a class="nav-link active" id="general-tab" data-bs-toggle="tab" href="#general" role="tab">General</a></li>
-        <li class="nav-item"><a class="nav-link" id="reverse-proxy-tab" data-bs-toggle="tab" href="#reverse-proxy" role="tab">Reverse Proxy</a></li>
-        <li class="nav-item"><a class="nav-link" id="layer4-tab" data-bs-toggle="tab" href="#layer4" role="tab">Layer 4</a></li>
-        <li class="nav-item"><a class="nav-link" id="certs-tab" data-bs-toggle="tab" href="#certs" role="tab">Certificates</a></li>
-        <li class="nav-item"><a class="nav-link" id="control-tab" data-bs-toggle="tab" href="#control" role="tab">Control & Raw</a></li>
-        <li class="nav-item"><a class="nav-link" id="logs-tab" data-bs-toggle="tab" href="#logs" role="tab">Live Logs</a></li>
-    </ul>
-
+    </header>
+    <main id="mainContent" tabindex="-1">
+    <div class="page-heading"><div><p class="eyebrow">CADDY / ADMINISTRATION</p><h1>Configuration</h1><p class="page-description">Manage routing, certificates, and services from one workspace.</p></div><span class="workspace-tag">LocalCaddyHub</span></div>
+    <div id="configLoadError" class="alert alert-danger" role="alert" style="display:none"></div>
     <!-- Tab Content -->
     <div class="tab-content" id="mainTabsContent">
 
         <!-- General Tab -->
         <div class="tab-pane fade show active" id="general" role="tabpanel">
-            <h3>General Settings</h3>
+            <div class="section-heading"><h2>General Settings</h2><p>Core services, certificate defaults, and connection settings.</p></div>
             <form id="generalForm">
                 <div class="mb-3 form-check">
                     <input type="checkbox" class="form-check-input" id="genEnabled">
@@ -296,7 +284,7 @@
             <h4 class="mt-4">Caddy-managed ACME Certificates</h4>
             <p>Enable Let's Encrypt on a Domain, Subdomain, or Layer 4 route, then request issuance here. Caddy must be reachable from Let's Encrypt on ports 80 and/or 443 for HTTP/TLS challenges.</p>
             <button class="btn btn-primary mt-2 me-2" onclick="app.requestLetsEncrypt(this)">Request Let's Encrypt Certificates</button>
-            <button class="btn btn-warning mt-2 me-2" onclick="app.renewAllManagedCertificatesAsRsa(this)">Renew all as RSA</button>
+            <button class="btn btn-warning mt-2 me-2" onclick="app.renewAllManagedCertificatesAsRsa(this)">Use RSA for future certificates</button>
             <a href="/api/certs/acme/download" class="btn btn-secondary mt-2">Download .tar.gz</a>
             <div id="certAcmeStatus" class="status-box mb-4" role="status" aria-live="polite"></div>
             <h5>Existing Certificates</h5>
@@ -342,7 +330,7 @@
 
             <h4 class="mt-4">Stats</h4>
             <button class="btn btn-info btn-sm mb-2" onclick="app.fetchStats()">Refresh Stats</button>
-            <pre id="statsOutput" class="status-box" style="display:block;"></pre>
+            <pre translate="no" id="statsOutput" class="status-box" style="display:block;"></pre>
         </div>
 
         <!-- Live Logs Tab -->
@@ -404,15 +392,16 @@
                 </div>
             </div>
 
-            <pre id="logOutputArea" class="form-control bg-dark text-light" style="height: 600px; overflow-y: scroll; font-size: 0.85em; white-space: pre-wrap; font-family: monospace;"></pre>
+            <pre translate="no" id="logOutputArea" class="form-control bg-dark text-light" style="height: 600px; overflow-y: scroll; font-size: 0.85em; white-space: pre-wrap; font-family: monospace;"></pre>
         </div>
 
     </div>
+    </main>
 </div>
 
 <!-- Scripts -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/vendor/jquery.min.js"></script>
+<script src="/vendor/bootstrap.bundle.min.js"></script>
 <script src="/i18n.js"></script>
 <script src="/app.js"></script>
 
@@ -420,9 +409,9 @@
 <div id="modalsContainer"></div>
 
 <!-- 2FA Modal -->
-<div class="modal fade" id="2faModal" tabindex="-1">
+<div class="modal fade" id="2faModal" tabindex="-1" aria-labelledby="twoFactorTitle">
   <div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">2FA Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-header"><h5 class="modal-title" id="twoFactorTitle">2FA Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
     <div class="modal-body">
         <div id="2faStatus" class="mb-3" aria-live="polite">Status: <span id="2faStatusBadge" class="badge bg-secondary">Loading...</span></div>
         <div id="2faSetupArea" style="display: none;">
@@ -430,7 +419,7 @@
             <img id="2faQrCode" src="" alt="QR Code" class="img-fluid mb-3">
             <div class="mb-3">
                 <label for="2faVerifyToken">Verification Code</label>
-                <input type="text" id="2faVerifyToken" class="form-control" placeholder="123456">
+                <input type="text" id="2faVerifyToken" class="form-control" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
                 <input type="hidden" id="2faVerifySecret">
             </div>
             <button class="btn btn-success" onclick="app.verify2fa(this)">Enable 2FA</button>

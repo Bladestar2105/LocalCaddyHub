@@ -22,7 +22,7 @@ type CustomTLS struct {
 	// Path to the key file
 	KeyPath string `json:"key_path,omitempty"`
 
-	// Optional default SNI if needed
+	// Accepted for Caddyfile compatibility; the configured certificate also serves clients without SNI.
 	DefaultSNI string `json:"default_sni,omitempty"`
 
 	logger    *zap.Logger
@@ -50,9 +50,15 @@ func (c *CustomTLS) Provision(ctx caddy.Context) error {
 		return fmt.Errorf("loading key pair: %v", err)
 	}
 
-	c.tlsConfig = &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		// Explicitly allow TLS 1.2 and CBC ciphers to support older SMTP clients like checktls.com
+	c.tlsConfig = modernTLSConfig()
+	c.tlsConfig.Certificates = []tls.Certificate{cert}
+
+	return nil
+}
+
+func modernTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -60,15 +66,8 @@ func (c *CustomTLS) Provision(ctx caddy.Context) error {
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 		},
-		MinVersion: tls.VersionTLS12,
 	}
-
-	return nil
 }
 
 func (c *CustomTLS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
@@ -84,20 +83,17 @@ func (c *CustomTLS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		for d.NextBlock(0) {
 			switch d.Val() {
 			case "cert_path":
-				if !d.NextArg() {
+				if !d.AllArgs(&c.CertPath) {
 					return d.ArgErr()
 				}
-				c.CertPath = d.Val()
 			case "key_path":
-				if !d.NextArg() {
+				if !d.AllArgs(&c.KeyPath) {
 					return d.ArgErr()
 				}
-				c.KeyPath = d.Val()
 			case "default_sni":
-				if !d.NextArg() {
+				if !d.AllArgs(&c.DefaultSNI) {
 					return d.ArgErr()
 				}
-				c.DefaultSNI = d.Val()
 			default:
 				return d.Errf("unrecognized subdirective: %s", d.Val())
 			}
@@ -107,7 +103,12 @@ func (c *CustomTLS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 }
 
 func (c *CustomTLS) Handle(cx *layer4.Connection, next layer4.Handler) error {
-	tlsConn := tls.Server(cx, c.tlsConfig)
+	finish, err := negotiationDeadline(cx, cx.Context)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	tlsConn := tls.Server(takeTransport(cx), c.tlsConfig)
 
 	// Perform handshake explicitly to catch errors early,
 	// otherwise it happens lazily on first read/write.
@@ -117,6 +118,7 @@ func (c *CustomTLS) Handle(cx *layer4.Connection, next layer4.Handler) error {
 	}
 
 	c.logger.Debug("TLS handshake successful", zap.String("remote", cx.Conn.RemoteAddr().String()))
+	finish()
 
 	// Preserve any Layer4 context while replacing the transport with TLS.
 	newCx := cx.Wrap(tlsConn)

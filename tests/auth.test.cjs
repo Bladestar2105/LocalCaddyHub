@@ -2,20 +2,15 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const nodeModule = require('module');
 
-// Mock better-sqlite3 before requiring src/auth.js
+// Keep authentication unit tests from initializing real application storage.
 const originalRequire = nodeModule.prototype.require;
 nodeModule.prototype.require = function(name) {
-  if (name === 'better-sqlite3') {
-    return function() {
-      return {
-        pragma: () => {},
-        prepare: () => ({
-          get: () => ({}),
-          run: () => ({}),
-          all: () => []
-        }),
-        exec: () => {}
-      };
+  if (name === './db') {
+    return {
+      prepare: () => ({
+        get: () => ({}),
+        run: () => ({})
+      })
     };
   }
   return originalRequire.apply(this, arguments);
@@ -50,6 +45,14 @@ const mockNext = () => {
 };
 
 describe('authMiddleware', () => {
+  test('allows branded login assets before authentication', () => {
+    for (const asset of ['/theme.css', '/assets/logo.svg', '/vendor/jquery.min.js']) {
+      const next = mockNext();
+      const res = mockRes();
+      authMiddleware({ path: asset, cookies: {} }, res, next);
+      assert.strictEqual(next.isCalled(), true, asset);
+    }
+  });
   test('allows unauthenticated login support script', () => {
     const req = {
       path: '/i18n.js',

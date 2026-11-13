@@ -1,3 +1,10 @@
+if (process.argv.includes('-h') || process.argv.includes('--help')) {
+  console.log('Usage: node src/index.js [options]');
+  process.exit(0);
+}
+
+process.umask(0o077);
+
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
@@ -8,29 +15,43 @@ const bcrypt = require('bcrypt');
 const { generateSecret, verifySync, generateURI } = require('otplib');
 const qrcode = require('qrcode');
 const { generateSessionToken, authMiddleware, csrfMiddleware } = require('./auth');
-const { safeCompare } = require('./utils');
-const { loginRateLimiter, recordFailedAttempt, clearAttempts } = require('./rateLimiter');
+const { safeCompare, asyncHandler } = require('./utils');
+const { loginRateLimiter, clearAttempts } = require('./rateLimiter');
 const apiRoutes = require('./api');
 const appPaths = require('./paths');
 const { resolveCaddyBinary } = require('./caddyBinary');
 const fs = require('fs');
 
-// Handle --help or -h flags for CI compatibility
-if (process.argv.includes('-h') || process.argv.includes('--help')) {
-  console.log('Usage: node src/index.js [options]');
-  process.exit(0);
-}
-
 // ⚡ Bolt: Cache prepared SQL statements at module level to eliminate parsing overhead on every request
 const getUserStmt = db.prepare('SELECT * FROM users WHERE id = 1');
 const insertSessionStmt = db.prepare('INSERT INTO sessions (token, expires_at) VALUES (?, ?)');
 const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token = ?');
+const deleteAllSessionsStmt = db.prepare('DELETE FROM sessions');
+const getSessionStmt = db.prepare('SELECT expires_at FROM sessions WHERE token = ?');
 const updateUserAuthStmt = db.prepare('UPDATE users SET username=?, password_hash=? WHERE id=1');
 const insertUserAuthStmt = db.prepare('INSERT INTO users (id, username, password_hash) VALUES (1, ?, ?)');
 const getUsernameStmt = db.prepare('SELECT username FROM users WHERE id = 1');
 const updateTotpSecretStmt = db.prepare('UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=1');
 const disableTotpStmt = db.prepare('UPDATE users SET totp_secret=NULL, totp_enabled=0 WHERE id=1');
 const getTotpEnabledStmt = db.prepare('SELECT totp_enabled FROM users WHERE id = 1');
+
+function setSessionCookie(res, token) {
+  res.cookie('session', token, { path: '/', httpOnly: true, sameSite: 'strict', maxAge: 86400000 });
+}
+
+const updateAuthentication = db.transaction((currentToken, update) => {
+  const session = getSessionStmt.get(currentToken);
+  if (!session || Date.now() >= session.expires_at) {
+    const error = new Error('Unauthorized');
+    error.status = 401;
+    throw error;
+  }
+  update();
+  deleteAllSessionsStmt.run();
+  const token = generateSessionToken();
+  insertSessionStmt.run(token, Date.now() + 86400000);
+  return token;
+});
 
 const app = express();
 const port = process.env.PORT || 8090;
@@ -49,13 +70,16 @@ app.use((req, res, next) => {
 });
 
 // Authentication Routes (unprotected)
-app.post('/login', loginRateLimiter, async (req, res) => {
+app.post('/login', loginRateLimiter, asyncHandler(async (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
   const tokenInput = req.body.totp;
+  const rejectLogin = (error = 'unauthorized') => {
+    return res.status(401).json({ error });
+  };
 
   if (typeof username !== 'string' || typeof password !== 'string') {
-    return res.status(401).json({ error: 'unauthorized' });
+    return rejectLogin();
   }
 
   const expectedUserEnv = process.env.ADMIN_USER;
@@ -75,7 +99,7 @@ app.post('/login', loginRateLimiter, async (req, res) => {
     if (userMatch && passMatch) {
       if (userRow.totp_enabled) {
         if (!tokenInput) {
-           return res.status(401).json({ error: 'invalid_totp' });
+           return rejectLogin('invalid_totp');
         }
         let isValid = false;
         try {
@@ -84,7 +108,7 @@ app.post('/login', loginRateLimiter, async (req, res) => {
           // Ignore format errors etc and treat as invalid
         }
         if (!isValid) {
-          return res.status(401).json({ error: 'invalid_totp' });
+          return rejectLogin('invalid_totp');
         }
       }
       validLogin = true;
@@ -101,17 +125,18 @@ app.post('/login', loginRateLimiter, async (req, res) => {
   }
 
   if (validLogin) {
+    // A password/MFA change may have revoked these credentials during the bcrypt check.
+    const currentUser = getUserStmt.get();
+    if (Boolean(currentUser) !== Boolean(userRow) || (userRow &&
+      ['username', 'password_hash', 'totp_secret', 'totp_enabled'].some(field => currentUser[field] !== userRow[field]))) {
+      return rejectLogin();
+    }
     const sessionToken = generateSessionToken();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     insertSessionStmt.run(sessionToken, expiresAt);
 
-    res.cookie('session', sessionToken, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'strict', // 🛡️ Sentinel: Prevent CSRF by not sending cookie cross-site
-      maxAge: 86400000 // 24 hours in milliseconds
-    });
+    setSessionCookie(res, sessionToken);
 
     // Clear failed attempts on successful login
     if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
@@ -120,13 +145,8 @@ app.post('/login', loginRateLimiter, async (req, res) => {
     return res.json({ success: true, needsSetup });
   }
 
-  // Record failed attempt
-  if (req.loginAttemptsInfo && req.loginAttemptsInfo.ip) {
-    recordFailedAttempt(req.loginAttemptsInfo.ip);
-  }
-
-  res.status(401).json({ error: 'unauthorized' });
-});
+  rejectLogin();
+}));
 
 app.get('/logout', (req, res) => {
   const token = req.cookies.session;
@@ -143,23 +163,24 @@ app.use(authMiddleware);
 app.use(csrfMiddleware);
 
 // Setup & 2FA Routes (Protected, but some exceptions in API logic for setup)
-app.post('/api/setup', async (req, res) => {
+app.post('/api/setup', asyncHandler(async (req, res) => {
   const { newUsername, newPassword } = req.body;
   if (!newUsername || !newPassword) return res.status(400).send('Missing fields');
   if (typeof newUsername !== 'string' || typeof newPassword !== 'string') return res.status(400).send('Invalid fields');
-
-  const userRow = getUserStmt.get();
-  if (userRow) {
-    const hash = await bcrypt.hash(newPassword, 10);
-    updateUserAuthStmt.run(newUsername, hash);
-  } else {
-    const hash = await bcrypt.hash(newPassword, 10);
-    insertUserAuthStmt.run(newUsername, hash);
+  if (!newUsername.trim() || newUsername.length > 128 || newPassword.length < 12 || Buffer.byteLength(newPassword, 'utf8') > 72) {
+    return res.status(400).send('Use a username of 1–128 characters and a password of at least 12 characters and at most 72 UTF-8 bytes');
   }
-  res.json({ success: true });
-});
 
-app.post('/api/2fa/generate', async (req, res) => {
+  const hash = await bcrypt.hash(newPassword, 10);
+  const token = updateAuthentication(req.cookies.session, () => {
+    if (getUserStmt.get()) updateUserAuthStmt.run(newUsername, hash);
+    else insertUserAuthStmt.run(newUsername, hash);
+  });
+  setSessionCookie(res, token);
+  res.json({ success: true });
+}));
+
+app.post('/api/2fa/generate', asyncHandler(async (req, res) => {
   const secret = generateSecret();
   const userRow = getUsernameStmt.get();
   const username = userRow ? userRow.username : process.env.ADMIN_USER;
@@ -168,7 +189,7 @@ app.post('/api/2fa/generate', async (req, res) => {
   const imageUrl = await qrcode.toDataURL(otpauth);
 
   res.json({ secret, qrCodeUrl: imageUrl });
-});
+}));
 
 app.post('/api/2fa/verify', (req, res) => {
   const { token, secret } = req.body;
@@ -180,7 +201,8 @@ app.post('/api/2fa/verify', (req, res) => {
   }
 
   if (isValid) {
-    updateTotpSecretStmt.run(secret);
+    const sessionToken = updateAuthentication(req.cookies.session, () => updateTotpSecretStmt.run(secret));
+    setSessionCookie(res, sessionToken);
     res.json({ success: true });
   } else {
     res.status(400).json({ error: 'Invalid token' });
@@ -188,7 +210,8 @@ app.post('/api/2fa/verify', (req, res) => {
 });
 
 app.post('/api/2fa/disable', (req, res) => {
-  disableTotpStmt.run();
+  const token = updateAuthentication(req.cookies.session, () => disableTotpStmt.run());
+  setSessionCookie(res, token);
   res.json({ success: true });
 });
 
@@ -203,10 +226,17 @@ app.use('/api', apiRoutes);
 // Static frontend files
 app.use(express.static(path.join(__dirname, '..', 'static')));
 
+app.use((err, req, res, next) => {
+  console.error(err.message);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.status && err.status < 500 ? err.message : 'Internal server error' });
+});
+
 // Start server
 app.listen(port, () => {
+  console.log(`LocalCaddyHub listening on port ${port}`);
   // Auto-start Caddy if a Caddyfile exists
-  if (fs.existsSync(appPaths.caddyfile)) {
+  if (process.env.CADDY_AUTOSTART !== '0' && fs.existsSync(appPaths.caddyfile)) {
     const { spawn } = require('child_process');
     const cp = spawn(resolveCaddyBinary(), ['start', '--config', appPaths.caddyfile], {
       detached: true,

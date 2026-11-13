@@ -11,8 +11,8 @@ function generateSessionToken() {
 }
 
 function authMiddleware(req, res, next) {
-  const allowList = ['/login', '/login.html', '/setup.html', '/i18n.js'];
-  if (allowList.includes(req.path)) {
+  const allowList = ['/login', '/login.html', '/setup.html', '/i18n.js', '/theme.css'];
+  if (allowList.includes(req.path) || req.path.startsWith('/assets/') || req.path.startsWith('/vendor/')) {
     return next();
   }
 

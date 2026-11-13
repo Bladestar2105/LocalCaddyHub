@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 const db = require('./db');
-const { parseJSON, isSafeFilename } = require('./utils');
+const { parseJSON, isSafeFilename, asyncHandler } = require('./utils');
 const { generateCaddyfile } = require('./caddy');
 const appPaths = require('./paths');
 const { resolveCaddyBinary } = require('./caddyBinary');
@@ -21,6 +21,91 @@ const allowedAcmeCaEndpoints = new Set([
   'https://acme-staging-v02.api.letsencrypt.org/directory'
 ]);
 const allowedTlsKeyTypes = new Set(['', 'rsa2048', 'rsa4096', 'p256', 'p384', 'ed25519']);
+
+let configWrite = Promise.resolve();
+function serializeConfigWrite(operation) {
+  const result = configWrite.then(operation);
+  configWrite = result.catch(() => {});
+  return result;
+}
+const configHandler = handler => (req, res, next) => serializeConfigWrite(() => handler(req, res, next)).catch(next);
+
+async function persistCaddyfile(content, commit = install => install()) {
+  const destination = appPaths.caddyfile;
+  const staged = `${destination}.${crypto.randomUUID()}.tmp`;
+  let previous;
+  let installed = false;
+  try {
+    try { previous = await fs.promises.readFile(destination); }
+    catch (err) { if (err.code !== 'ENOENT') throw err; }
+    await fs.promises.writeFile(staged, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    try {
+      await execCaddyPromise(['validate', '--adapter', 'caddyfile', '--config', staged]);
+    } catch (err) {
+      err.status = err.code === 'ENOENT' ? 503 : 400;
+      throw err;
+    }
+    commit(() => {
+      fs.renameSync(staged, destination);
+      installed = true;
+    });
+  } catch (err) {
+    if (installed) {
+      if (previous === undefined) await fs.promises.unlink(destination);
+      else {
+        await fs.promises.writeFile(staged, previous, { mode: 0o600 });
+        await fs.promises.rename(staged, destination);
+      }
+    }
+    throw err;
+  } finally {
+    await fs.promises.rm(staged, { force: true });
+  }
+}
+
+function validateConfigShape(input) {
+  const invalid = message => { const error = new Error(message); error.status = 400; throw error; };
+  if (!input || typeof input !== 'object' || Array.isArray(input)) invalid('Configuration must be an object');
+  if (!input.general || typeof input.general !== 'object' || Array.isArray(input.general)) invalid('Missing general configuration');
+  for (const name of ['domains', 'subdomains', 'handlers', 'accessLists', 'basicAuths', 'headers', 'layer4']) {
+    if (!Array.isArray(input[name])) invalid(`${name} must be an array`);
+    const ids = new Set();
+    for (const row of input[name]) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(row.id)) invalid(`Invalid ${name} entry ID`);
+      if (ids.has(row.id)) invalid(`Duplicate ${name} entry ID`);
+      ids.add(row.id);
+      if (name === 'handlers') {
+        if (row.waf_profile && !['generic', 'exchange'].includes(row.waf_profile)) invalid('Invalid WAF profile');
+        if (row.waf_body_limit_mb !== undefined && row.waf_body_limit_mb !== null && row.waf_body_limit_mb !== '' && row.waf_body_limit_mb !== 0) {
+          const limit = Number(row.waf_body_limit_mb);
+          if (!Number.isInteger(limit) || limit < 1 || limit > 1024) invalid('WAF body limit must be an integer between 1 and 1024 MiB');
+        }
+      }
+    }
+  }
+  const domains = new Set(input.domains.map(row => row.id));
+  const subdomains = new Map(input.subdomains.map(row => [row.id, row]));
+  const targets = { accesslist: new Map(input.accessLists.map(row => [row.id, row])),
+    basicauth: new Map(input.basicAuths.map(row => [row.id, row])),
+    header: new Map(input.headers.map(row => [row.id, row])) };
+  for (const row of [...input.domains, ...input.subdomains, ...input.handlers]) {
+    for (const field of ['accesslist', 'basicauth', 'header', 'health_headers']) {
+      if (row[field] === undefined) continue;
+      if (!Array.isArray(row[field])) invalid(`${field} must be an array`);
+      const target = targets[field === 'health_headers' ? 'header' : field];
+      for (const id of row[field]) {
+        if (!target.has(id)) invalid(`Unknown ${field} reference: ${id}`);
+        if (field === 'accesslist' && (!Array.isArray(target.get(id).clientIps) || !target.get(id).clientIps.length)) invalid('A referenced access list must contain client IPs');
+      }
+    }
+  }
+  for (const row of [...input.subdomains, ...input.handlers]) {
+    if (!domains.has(row.reverse)) invalid(`Unknown parent domain: ${row.reverse}`);
+  }
+  for (const row of input.handlers) {
+    if (row.subdomain && (!subdomains.has(row.subdomain) || subdomains.get(row.subdomain).reverse !== row.reverse)) invalid('Handler subdomain must belong to its parent domain');
+  }
+}
 
 function toStringArray(value) {
   if (Array.isArray(value)) return value;
@@ -124,17 +209,17 @@ router.get('/config', async (req, res) => {
   }
 });
 
-router.post('/config', express.json(), async (req, res) => {
+router.post('/config', express.json(), (req, res, next) => serializeConfigWrite(async () => {
   try {
     const { content } = req.body;
     if (typeof content !== 'string') return res.status(400).send('Invalid request body');
     const caddyfilePath = appPaths.caddyfile;
-    await fs.promises.writeFile(caddyfilePath, content, 'utf-8');
+    await persistCaddyfile(content);
     res.sendStatus(200);
   } catch (err) {
-    res.status(500).send('Failed to write Caddyfile');
+    res.status(err.status || 500).send(err.stderr || 'Failed to write Caddyfile');
   }
-});
+}).catch(next));
 
 // ⚡ Bolt: Cache prepared SQL statements at module level to eliminate parsing overhead on every request
 const getGeneralStmt = db.prepare('SELECT * FROM general_config WHERE id = 1');
@@ -222,7 +307,9 @@ function structuredConfigFromDb() {
       basicauth: parseJSON(h.basicauth),
       header: parseJSON(h.header),
       toDomain: parseJSON(h.toDomain),
-      waf_enabled: Boolean(h.waf_enabled)
+      waf_enabled: Boolean(h.waf_enabled),
+      waf_profile: h.waf_profile || 'generic',
+      waf_body_limit_mb: h.waf_body_limit_mb || ''
     })),
     accessLists: accessListsRows.map(a => ({
       ...a,
@@ -303,7 +390,7 @@ const insertHandlerStmt = db.prepare(`
     lb_policy, lb_retries, lb_try_duration, lb_try_interval,
     health_fails, health_passes, health_timeout, health_interval, health_uri, health_port, health_status, health_body, health_follow_redirects, health_headers,
     to_path, http_version, http_keepalive, http_tls_insecure_skip_verify, http_tls_trusted_ca_certs, http_tls_server_name,
-    passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status, waf_enabled
+    passive_health_fail_duration, passive_health_max_fails, passive_health_unhealthy_status, passive_health_unhealthy_latency, passive_health_unhealthy_request_count, redir_status, waf_enabled, waf_profile, waf_body_limit_mb
   )
   SELECT
     json_extract(value, '$.id'),
@@ -347,7 +434,9 @@ const insertHandlerStmt = db.prepare(`
     json_extract(value, '$.passive_health_unhealthy_latency'),
     json_extract(value, '$.passive_health_unhealthy_request_count'),
     json_extract(value, '$.redir_status'),
-    json_extract(value, '$.waf_enabled')
+    json_extract(value, '$.waf_enabled'),
+    json_extract(value, '$.waf_profile'),
+    json_extract(value, '$.waf_body_limit_mb')
   FROM json_each(?)
 `);
 
@@ -429,7 +518,7 @@ const clearLayer4CustomCertStmt = db.prepare("UPDATE layer4 SET customCert='' WH
 const setGeneralTlsKeyTypeStmt = db.prepare('UPDATE general_config SET tls_key_type=? WHERE id=1');
 
 function keyNameForCustomCertificate(filename) {
-  return String(filename || '').replace(/\.pem$/i, '') + '.key';
+  return String(filename || '').replace(/\.(pem|crt|cer)$/i, '') + '.key';
 }
 
 function certificateReferenceRows() {
@@ -484,28 +573,39 @@ function clearCertificateReference(clearKey) {
   return true;
 }
 
-function clearCertificateReferencesForFiles(filenames) {
+async function clearCertificateReferencesForFiles(filenames) {
   const files = new Set(filenames.filter(Boolean));
   const cleared = [];
   const seen = new Set();
-  const tx = db.transaction(() => {
-    for (const reference of certificateReferenceRows()) {
-      if (!files.has(reference.file)) continue;
-      if (seen.has(reference.clearKey)) continue;
-      if (clearCertificateReference(reference.clearKey)) {
-        seen.add(reference.clearKey);
-        cleared.push(reference);
-      }
-    }
-  });
-
-  tx();
+  const config = structuredConfigFromDb();
+  const sections = { domain: 'domains', subdomain: 'subdomains', handler: 'handlers', layer4: 'layer4' };
+  for (const reference of certificateReferenceRows()) {
+    if (!files.has(reference.file) || seen.has(reference.clearKey)) continue;
+    const [type, field, id] = reference.clearKey.split(':');
+    const row = config[sections[type]].find(row => row.id === id);
+    if (!row) continue;
+    row[field] = '';
+    seen.add(reference.clearKey);
+    cleared.push(reference);
+  }
+  if (cleared.length) {
+    const tx = db.transaction(install => {
+      for (const reference of cleared) clearCertificateReference(reference.clearKey);
+      install();
+    });
+    await persistCaddyfile(generateCaddyfile(config, certDir, appPaths.logsDir), tx);
+  }
   return cleared;
 }
 
-async function writeStructuredCaddyfileFromDb() {
-  const caddyfileContent = generateCaddyfile(structuredConfigFromDb(), certDir);
-  await fs.promises.writeFile(appPaths.caddyfile, caddyfileContent, 'utf-8');
+async function setTlsKeyType(keyType) {
+  const config = structuredConfigFromDb();
+  config.general.tls_key_type = keyType;
+  const tx = db.transaction(install => {
+    setGeneralTlsKeyTypeStmt.run(keyType);
+    install();
+  });
+  await persistCaddyfile(generateCaddyfile(config, certDir, appPaths.logsDir), tx);
 }
 
 async function existingCustomCertFileSet() {
@@ -518,8 +618,9 @@ async function missingCertificateReferences() {
   return certificateReferenceRows().filter(reference => !existingFiles.has(reference.file));
 }
 
-router.post('/config/structured', express.json(), async (req, res) => {
+router.post('/config/structured', express.json(), (req, res, next) => serializeConfigWrite(async () => {
   try {
+    validateConfigShape(req.body);
     const config = normalizeAcmeConfig(req.body || {});
 
     // ⚡ Bolt: Pre-process data outside transaction to minimize write-lock duration.
@@ -545,6 +646,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
 
     const processedHandlers = (config.handlers || []).map(h => ({
       ...h,
+      lb_policy: h.ntlm && Array.isArray(h.toDomain) && h.toDomain.length > 1 ? 'ip_hash' : h.lb_policy,
       enabled: h.enabled ? 1 : 0,
       accesslist: JSON.stringify(h.accesslist || []),
       basicauth: JSON.stringify(h.basicauth || []),
@@ -556,7 +658,9 @@ router.post('/config/structured', express.json(), async (req, res) => {
       health_headers: JSON.stringify(h.health_headers || []),
       http_tls_insecure_skip_verify: h.http_tls_insecure_skip_verify ? 1 : 0,
       redir_status: h.redir_status || '301',
-      waf_enabled: h.waf_enabled ? 1 : 0
+      waf_enabled: h.waf_enabled ? 1 : 0,
+      waf_profile: h.waf_profile || 'generic',
+      waf_body_limit_mb: h.waf_body_limit_mb ? Number(h.waf_body_limit_mb) : null
     }));
 
     const processedAccessLists = (config.accessLists || []).map(a => ({
@@ -579,7 +683,7 @@ router.post('/config/structured', express.json(), async (req, res) => {
     }));
 
     // ⚡ Bolt: Perform all database operations within a single transaction for atomicity and I/O efficiency.
-    const saveTransaction = db.transaction(() => {
+    const saveTransaction = db.transaction(install => {
       // General
       if (config.general) {
         const http_versions = Array.isArray(config.general.http_versions) ? config.general.http_versions.join(' ') : (config.general.http_versions || '');
@@ -606,22 +710,21 @@ router.post('/config/structured', express.json(), async (req, res) => {
 
       deleteLayer4Stmt.run();
       if (processedLayer4.length > 0) insertLayer4Stmt.run(JSON.stringify(processedLayer4));
+      install();
     });
 
-    saveTransaction();
-
-    const caddyfileContent = generateCaddyfile(config, certDir);
-    await fs.promises.writeFile(appPaths.caddyfile, caddyfileContent, 'utf-8');
+    const caddyfileContent = generateCaddyfile(config, certDir, appPaths.logsDir);
+    await persistCaddyfile(caddyfileContent, saveTransaction);
 
     res.sendStatus(200);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Failed to save config');
+    res.status(err.status || 500).send(err.stderr || err.message || 'Failed to save config');
   }
-});
+}).catch(next));
 
 // Logs
-const logsDir = path.join(__dirname, '..', 'data', 'logs');
+const logsDir = appPaths.logsDir || path.join(__dirname, '..', 'data', 'logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
@@ -663,6 +766,9 @@ router.get('/logs/stream', async (req, res) => {
   // Use child_process tail to read the file
   // 🛡️ Sentinel: Use '--' to ensure filePath is not treated as an option if it starts with a hyphen.
   const tail = spawn('tail', ['-f', '-n', '100', '--', filePath]);
+  tail.on('error', () => {
+    res.end(`data: ${JSON.stringify({ error: 'Failed to start log reader' })}\n\n`);
+  });
 
   let buffer = '';
 
@@ -682,7 +788,7 @@ router.get('/logs/stream', async (req, res) => {
     console.error(`Tail error: ${data.toString()}`);
   });
 
-  req.on('close', () => {
+  res.on('close', () => {
     tail.kill();
   });
 });
@@ -700,7 +806,7 @@ function execCaddy(cmdArgs, res) {
 
 function execCaddyPromise(cmdArgs) {
   return new Promise((resolve, reject) => {
-    execFile(resolveCaddyBinary(), cmdArgs, (error, stdout, stderr) => {
+    execFile(resolveCaddyBinary(), cmdArgs, { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         error.stdout = stdout;
         error.stderr = stderr;
@@ -737,7 +843,8 @@ async function loadCaddyfileThroughAdmin() {
       'Cache-Control': 'no-cache',
       'Origin': 'http://localhost:2019'
     },
-    body: caddyfileContent
+    body: caddyfileContent,
+    signal: AbortSignal.timeout(10000)
   });
   if (!apiRes.ok) {
     const errText = await apiRes.text();
@@ -774,47 +881,17 @@ function startCaddyDetached() {
 
 router.post('/validate', (req, res) => execCaddy(['validate', '--config', appPaths.caddyfile], res));
 
-router.post('/start', async (req, res) => {
+router.post('/start', configHandler(async (req, res) => {
   try {
-    // Check if it is already running
-    const checkRes = await fetch('http://localhost:2019/config/', { headers: { 'Origin': 'http://localhost:2019' } }).catch(() => null);
-    if (checkRes && checkRes.ok) {
-      return res.json({ output: 'Caddy is already running.', stderr: '', error: undefined });
-    }
-  } catch (e) {
-    console.error('Failed to check if Caddy is running:', e.message || e);
+    if (await isCaddyAdminReady()) return res.json({ output: 'Caddy is already running.', stderr: '' });
+    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
+    await startCaddyDetached();
+    await waitForCaddyAdminState(true, 15000);
+    res.json({ output: 'Caddy started and its admin API is ready.', stderr: '' });
+  } catch (err) {
+    res.status(503).json({ output: err.stdout || '', stderr: err.stderr || '', error: err.message });
   }
-
-  const cp = spawn(resolveCaddyBinary(), ['run', '--config', appPaths.caddyfile], {
-    detached: true,
-    stdio: 'ignore'
-  });
-
-  cp.unref();
-
-  cp.on('error', (err) => {
-    if (!res.headersSent) {
-      res.json({ output: '', stderr: '', error: err.message });
-    }
-  });
-
-  cp.on('exit', (code) => {
-    if (!res.headersSent) {
-      if (code === 0 || code === null) {
-        res.json({ output: 'Caddy started successfully.', stderr: '', error: undefined });
-      } else {
-        res.json({ output: '', stderr: '', error: `Caddy exited with code ${code}` });
-      }
-    }
-  });
-
-  // Fallback timeout in case Caddy successfully detaches but takes a while to exit the parent process
-  setTimeout(() => {
-    if (!res.headersSent) {
-      res.json({ output: 'Caddy start command executed.', stderr: '', error: undefined });
-    }
-  }, 100);
-});
+}));
 
 router.post('/stop', async (req, res) => {
   try {
@@ -853,6 +930,7 @@ router.post('/reload', async (req, res) => {
 // Stats
 router.get('/stats', (req, res) => {
   fetch('http://localhost:2019/metrics', {
+    signal: AbortSignal.timeout(2000),
     headers: {
       'Origin': 'http://localhost:2019'
     }
@@ -1022,6 +1100,7 @@ async function findManagedCertificateHosts(certificateHosts) {
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
       return;
     }
 
@@ -1128,6 +1207,7 @@ async function listCertificatePairs(rootDir, options = {}) {
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
       return;
     }
 
@@ -1245,23 +1325,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function stopCaddyThroughAdmin() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-  try {
-    const apiRes = await fetch('http://localhost:2019/stop', {
-      method: 'POST',
-      headers: { 'Origin': 'http://localhost:2019' },
-      signal: controller.signal
-    });
-    if (!apiRes.ok) {
-      throw new Error(`Failed to stop Caddy: ${apiRes.statusText}`);
-    }
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 async function waitForCaddyAdminState(expectedReady, timeoutMs = 10000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -1271,96 +1334,15 @@ async function waitForCaddyAdminState(expectedReady, timeoutMs = 10000) {
   throw new Error(expectedReady ? 'Caddy admin API did not become reachable' : 'Caddy admin API did not stop');
 }
 
-async function restartOrStartCaddy() {
-  const wasRunning = await isCaddyAdminReady();
-  if (wasRunning) {
-    await stopCaddyThroughAdmin();
-    await waitForCaddyAdminState(false, 8000);
+async function reloadOrStartCaddy() {
+  await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
+  if (await isCaddyAdminReady()) {
+    await loadCaddyfileThroughAdmin();
+    return 'Caddy configuration reloaded; established connections and stored certificates were preserved.';
   }
-
   await startCaddyDetached();
   await waitForCaddyAdminState(true, 15000);
-  return wasRunning ? 'Caddy restarted successfully.' : 'Caddy started successfully.';
-}
-
-function renewalBackupRoot() {
-  return path.join(path.dirname(certDir), 'renewal-backups', new Date().toISOString().replace(/[:.]/g, '-'));
-}
-
-function renewalAssetPaths(certificate) {
-  const dir = path.dirname(certificate.certPath);
-  const certBase = path.basename(certificate.certPath).replace(/\.(crt|pem|cer)$/i, '');
-  const keyBase = path.basename(certificate.keyPath).replace(/\.key$/i, '');
-  const names = new Set([
-    path.basename(certificate.certPath),
-    path.basename(certificate.keyPath),
-    `${certBase}.json`,
-    `${keyBase}.json`
-  ]);
-  return [...names].map(name => path.join(dir, name));
-}
-
-async function moveFileToBackup(from, to) {
-  await fs.promises.mkdir(path.dirname(to), { recursive: true });
-  try {
-    await fs.promises.rename(from, to);
-  } catch (err) {
-    if (err.code !== 'EXDEV') throw err;
-    await fs.promises.copyFile(from, to);
-    await fs.promises.unlink(from);
-  }
-}
-
-async function moveRenewalAssetsToBackup(certificate) {
-  const backupDir = renewalBackupRoot();
-  const moved = [];
-
-  for (const filePath of renewalAssetPaths(certificate)) {
-    const backupPath = path.join(backupDir, path.basename(filePath));
-    try {
-      await moveFileToBackup(filePath, backupPath);
-      moved.push({ from: filePath, to: backupPath });
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
-  }
-
-  if (moved.length === 0) {
-    throw new Error('No stored certificate assets were found for renewal');
-  }
-
-  return { backupDir, moved };
-}
-
-async function restoreRenewalAssets(moved) {
-  for (const item of [...moved].reverse()) {
-    try {
-      await moveFileToBackup(item.to, item.from);
-    } catch (err) {
-      console.error(`Failed to restore certificate asset ${item.from}: ${err.message}`);
-    }
-  }
-}
-
-async function moveCertificatesForRenewal(certificates) {
-  const movedGroups = [];
-  try {
-    for (const certificate of certificates) {
-      movedGroups.push(await moveRenewalAssetsToBackup(certificate));
-    }
-    return movedGroups;
-  } catch (err) {
-    for (const group of [...movedGroups].reverse()) {
-      await restoreRenewalAssets(group.moved);
-    }
-    throw err;
-  }
-}
-
-async function restoreRenewalGroups(groups) {
-  for (const group of [...groups].reverse()) {
-    await restoreRenewalAssets(group.moved);
-  }
+  return 'Caddy started with the existing certificate storage.';
 }
 
 router.post('/certs/letsencrypt/request', async (req, res) => {
@@ -1428,84 +1410,33 @@ router.get('/certs/letsencrypt/status', async (req, res) => {
   }
 });
 
-router.post('/certs/letsencrypt/renew', express.json(), async (req, res) => {
+router.post('/certs/letsencrypt/renew', express.json(), configHandler(async (req, res) => {
   const { id } = req.body || {};
-  if (typeof id !== 'string' || !id) {
-    return res.status(400).json({ error: 'Missing certificate selection' });
-  }
-
-  let movedAssets = null;
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing certificate selection' });
   try {
     const certificate = (await listPfxCertificates()).find(pair => pair.id === id);
-    if (!certificate) {
-      return res.status(404).json({ error: 'Certificate/key pair not found' });
-    }
-    if (!certificate.renewable) {
-      return res.status(400).json({ error: 'Only Caddy-managed ACME certificates can be renewed here' });
-    }
-
-    setGeneralTlsKeyTypeStmt.run('rsa2048');
-    await writeStructuredCaddyfileFromDb();
-    await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
-    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
-
-    movedAssets = await moveRenewalAssetsToBackup(certificate);
-    const restartMessage = await restartOrStartCaddy();
-
-    res.json({
-      output: `Manual renewal requested for ${certificate.name}. ${restartMessage}`,
-      stderr: '',
-      error: undefined,
-      certificate: publicPfxCertificate(certificate),
-      movedAssets: movedAssets.moved.map(item => path.basename(item.from)),
-      backupDir: movedAssets.backupDir
-    });
+    if (!certificate) return res.status(404).json({ error: 'Certificate/key pair not found' });
+    if (!certificate.renewable) return res.status(400).json({ error: 'Only Caddy-managed ACME certificates renew automatically' });
+    const output = await reloadOrStartCaddy();
+    res.json({ output: `${output} Caddy renews certificates automatically when due; no forced replacement was performed.`,
+      stderr: '', certificate: publicPfxCertificate(certificate) });
   } catch (err) {
-    if (movedAssets) {
-      await restoreRenewalAssets(movedAssets.moved);
-    }
-    res.status(500).json({
-      output: err.stdout || '',
-      stderr: err.stderr || '',
-      error: err.message
-    });
+    res.status(500).json({ output: err.stdout || '', stderr: err.stderr || '', error: err.message });
   }
-});
+}));
 
-router.post('/certs/letsencrypt/renew-all-rsa', express.json(), async (req, res) => {
-  let movedGroups = [];
+router.post('/certs/letsencrypt/renew-all-rsa', express.json(), configHandler(async (req, res) => {
   try {
-    setGeneralTlsKeyTypeStmt.run('rsa2048');
-    await writeStructuredCaddyfileFromDb();
-    await fs.promises.access(appPaths.caddyfile, fs.constants.F_OK);
-    await execCaddyPromise(['validate', '--config', appPaths.caddyfile]);
-
     const certificates = (await listPfxCertificates()).filter(pair => pair.renewable);
-    if (certificates.length === 0) {
-      return res.status(404).json({ error: 'No Caddy-managed ACME certificates found' });
-    }
-
-    movedGroups = await moveCertificatesForRenewal(certificates);
-    const restartMessage = await restartOrStartCaddy();
-
-    res.json({
-      output: `RSA renewal requested for ${certificates.length} Caddy-managed ACME certificate(s). ${restartMessage}`,
-      stderr: '',
-      error: undefined,
-      certificates: certificates.map(publicPfxCertificate),
-      backupDirs: movedGroups.map(group => group.backupDir)
-    });
+    if (certificates.length === 0) return res.status(404).json({ error: 'No Caddy-managed ACME certificates found' });
+    await setTlsKeyType('rsa2048');
+    const output = await reloadOrStartCaddy();
+    res.json({ output: `RSA 2048 configured for future issuances and automatic renewals. Existing certificates were preserved. ${output}`,
+      stderr: '', certificates: certificates.map(publicPfxCertificate) });
   } catch (err) {
-    if (movedGroups.length > 0) {
-      await restoreRenewalGroups(movedGroups);
-    }
-    res.status(500).json({
-      output: err.stdout || '',
-      stderr: err.stderr || '',
-      error: err.message
-    });
+    res.status(500).json({ output: err.stdout || '', stderr: err.stderr || '', error: err.message });
   }
-});
+}));
 
 router.get('/certs/pfx/list', async (req, res) => {
   try {
@@ -1516,7 +1447,7 @@ router.get('/certs/pfx/list', async (req, res) => {
   }
 });
 
-router.post('/certs/pfx/download', express.json(), async (req, res) => {
+router.post('/certs/pfx/download', express.json(), asyncHandler(async (req, res) => {
   const { id, password } = req.body || {};
   if (typeof id !== 'string' || !id) {
     return res.status(400).send('Missing certificate selection');
@@ -1556,7 +1487,7 @@ router.post('/certs/pfx/download', express.json(), async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.send(stdout);
   });
-});
+}));
 
 router.get('/certs/references/missing', async (req, res) => {
   try {
@@ -1566,16 +1497,15 @@ router.get('/certs/references/missing', async (req, res) => {
   }
 });
 
-router.post('/certs/references/cleanup', express.json(), async (req, res) => {
+router.post('/certs/references/cleanup', express.json(), configHandler(async (req, res) => {
   try {
     const missing = await missingCertificateReferences();
-    const cleared = clearCertificateReferencesForFiles(missing.map(reference => reference.file));
-    await writeStructuredCaddyfileFromDb();
+    const cleared = await clearCertificateReferencesForFiles(missing.map(reference => reference.file));
     res.json({ missing, cleared });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 router.get('/certs/acme/download', async (req, res) => {
   try {
@@ -1598,6 +1528,11 @@ async function serveCertificates(certificatesDir, res) {
   res.setHeader('Content-Disposition', 'attachment; filename="caddy-acme-certificates.tar.gz"');
 
   const tarProcess = spawn('tar', ['-czf', '-', '-C', certificatesDir, '.']);
+    tarProcess.on('error', error => {
+      if (!res.headersSent) res.status(500).end('Failed to start certificate archive');
+      else res.destroy(error);
+    });
+    res.on('close', () => tarProcess.kill());
 
   tarProcess.stdout.pipe(res);
 
@@ -1625,20 +1560,32 @@ router.get('/certs', async (req, res) => {
   }
 });
 
-router.post('/certs', upload.single('file'), async (req, res) => {
+router.post('/certs', upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).send('Failed to get file');
-  const safeName = path.basename(req.file.originalname);
-  const dstPath = path.join(certDir, safeName);
   try {
-    // ⚡ Bolt: Use asynchronous rename to prevent event loop blocking.
-    await fs.promises.rename(req.file.path, dstPath);
+    const filename = req.file.originalname;
+    if (!isSafeFilename(filename) || !/\.(pem|crt|cer|key)$/i.test(filename)) {
+      return res.status(400).send('Use a certificate (.pem, .crt, .cer) or private key (.key) filename');
+    }
+    const content = await fs.promises.readFile(req.file.path);
+    try {
+      if (/\.key$/i.test(filename)) crypto.createPrivateKey(content);
+      else new crypto.X509Certificate(content);
+    } catch {
+      return res.status(400).send('Invalid certificate or unencrypted private key');
+    }
+    await fs.promises.chmod(req.file.path, 0o600);
+    // Hard-linking publishes the complete upload and refuses to replace an existing certificate.
+    await fs.promises.link(req.file.path, path.join(certDir, filename));
     res.sendStatus(200);
   } catch (err) {
-    res.status(500).send('Failed to write file');
+    res.status(err.code === 'EEXIST' ? 409 : 500).send(err.code === 'EEXIST' ? 'A file with this name already exists; upload with a new name' : 'Failed to write file');
+  } finally {
+    await fs.promises.rm(req.file.path, { force: true });
   }
-});
+}));
 
-router.delete('/certs', async (req, res) => {
+router.delete('/certs', configHandler(async (req, res) => {
   const filename = req.query.file;
   if (!isSafeFilename(filename)) {
     return res.status(400).send('Invalid filename');
@@ -1656,8 +1603,7 @@ router.delete('/certs', async (req, res) => {
   try {
     let clearedReferences = [];
     if (removeReferences) {
-      clearedReferences = clearCertificateReferencesForFiles([filename]);
-      await writeStructuredCaddyfileFromDb();
+      clearedReferences = await clearCertificateReferencesForFiles([filename]);
     }
 
     // ⚡ Bolt: Use asynchronous unlink to prevent event loop blocking,
@@ -1671,6 +1617,11 @@ router.delete('/certs', async (req, res) => {
       res.status(500).send('Failed to delete file');
     }
   }
+}));
+
+router.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).send('Certificate upload exceeds 10 MiB');
+  next(err);
 });
 
 module.exports = router;

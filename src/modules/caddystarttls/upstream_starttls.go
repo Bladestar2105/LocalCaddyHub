@@ -2,11 +2,12 @@ package caddystarttls
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,20 +50,39 @@ func (*UpstreamSTARTTLS) CaddyModule() caddy.ModuleInfo {
 
 func (u *UpstreamSTARTTLS) Provision(ctx caddy.Context) error {
 	u.logger = ctx.Logger()
+	if len(u.Upstreams) == 0 {
+		return fmt.Errorf("at least one upstream address is required")
+	}
+	for _, upstream := range u.Upstreams {
+		network, address := parseNetworkAddress(upstream)
+		if network != "tcp" && network != "tcp4" && network != "tcp6" {
+			return fmt.Errorf("SMTP upstream requires TCP: %s", upstream)
+		}
+		host, port, err := net.SplitHostPort(address)
+		number, portErr := strconv.Atoi(port)
+		if err != nil || host == "" || portErr != nil || number < 1 || number > 65535 {
+			return fmt.Errorf("invalid SMTP upstream address: %s", upstream)
+		}
+	}
 	return nil
 }
 
 func (u *UpstreamSTARTTLS) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	for d.Next() {
+		if len(d.RemainingArgs()) > 0 {
+			return d.ArgErr()
+		}
 		for d.NextBlock(0) {
 			switch d.Val() {
 			case "insecure_skip_verify":
-				u.InsecureSkipVerify = true
-			case "server_name":
-				if !d.NextArg() {
+				if len(d.RemainingArgs()) > 0 {
 					return d.ArgErr()
 				}
-				u.ServerName = d.Val()
+				u.InsecureSkipVerify = true
+			case "server_name":
+				if !d.AllArgs(&u.ServerName) {
+					return d.ArgErr()
+				}
 			case "upstream":
 				args := d.RemainingArgs()
 				if len(args) == 0 {
@@ -98,6 +118,9 @@ func (u *UpstreamSTARTTLS) Handle(cx *layer4.Connection, nextHandler layer4.Hand
 	var lastErr error
 
 	for i := 0; i < len(u.Upstreams); i++ {
+		if err := cx.Context.Err(); err != nil {
+			return err
+		}
 		idx := (startIdx + uint32(i)) % uint32(len(u.Upstreams))
 		upstreamAddr := u.Upstreams[idx]
 
@@ -119,11 +142,18 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 
 	// 1. Connect to the upstream
 	u.logger.Debug("dialing upstream", zap.String("network", network), zap.String("address", address))
-	conn, err := net.DialTimeout(network, address, 10*time.Second)
+	conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(cx.Context, network, address)
 	if err != nil {
 		return fmt.Errorf("dialing upstream %s: %w", upstreamAddr, err)
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(cx.Context, func() { _ = conn.Close(); _ = cx.Close() })
+	defer stop()
+	finish, err := negotiationDeadline(conn, cx.Context)
+	if err != nil {
+		return err
+	}
+	defer finish()
 
 	reader := bufio.NewReader(conn)
 
@@ -132,7 +162,7 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 	if err != nil {
 		return fmt.Errorf("reading initial greeting: %w", err)
 	}
-	if !strings.HasPrefix(greeting, "220 ") && !strings.HasPrefix(greeting, "220-") {
+	if !strings.HasPrefix(greeting, "220") {
 		return fmt.Errorf("expected 220 greeting, got: %s", greeting)
 	}
 	u.logger.Debug("received greeting", zap.String("greeting", greeting))
@@ -148,7 +178,7 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 	if err != nil {
 		return fmt.Errorf("reading EHLO response: %w", err)
 	}
-	if !strings.HasPrefix(ehloResp, "250 ") && !strings.HasPrefix(ehloResp, "250-") {
+	if !strings.HasPrefix(ehloResp, "250") {
 		return fmt.Errorf("expected 250 response to EHLO, got: %s", ehloResp)
 	}
 	u.logger.Debug("received EHLO response", zap.String("response", ehloResp))
@@ -164,7 +194,7 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 	if err != nil {
 		return fmt.Errorf("reading STARTTLS response: %w", err)
 	}
-	if !strings.HasPrefix(starttlsResp, "220 ") && !strings.HasPrefix(starttlsResp, "220-") {
+	if !strings.HasPrefix(starttlsResp, "220") {
 		return fmt.Errorf("expected 220 response to STARTTLS, got: %s", starttlsResp)
 	}
 	u.logger.Debug("received STARTTLS response", zap.String("response", starttlsResp))
@@ -181,58 +211,103 @@ func (u *UpstreamSTARTTLS) tryConnectAndProxy(cx *layer4.Connection, upstreamAdd
 	}
 
 	// 7. Perform a TLS client handshake with the upstream
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: u.InsecureSkipVerify,
-		ServerName:         serverName,
-	}
+	tlsConfig := modernTLSConfig()
+	tlsConfig.InsecureSkipVerify = u.InsecureSkipVerify
+	tlsConfig.ServerName = serverName
 
 	// Any leftover bytes in the bufio.Reader need to be prepended to the TLS connection.
-	buffered := reader.Buffered()
-	var rawConn net.Conn = conn
-	if buffered > 0 {
-		buf, _ := reader.Peek(buffered)
-		rawConn = &bufferedConn{
-			Conn: conn,
-			r:    io.MultiReader(bytes.NewReader(buf), conn),
-		}
-	}
+	rawConn := &bufferedConn{Conn: conn, r: reader}
 
 	u.logger.Debug("starting TLS handshake with upstream", zap.String("server_name", serverName))
 	tlsConn := tls.Client(rawConn, tlsConfig)
-	err = tlsConn.Handshake()
+	err = tlsConn.HandshakeContext(cx.Context)
 	if err != nil {
 		return fmt.Errorf("upstream TLS handshake failed: %w", err)
 	}
 
 	u.logger.Debug("upstream TLS handshake successful")
+	finish()
+	if cx.GetVar(smtpGreetedVar) != true {
+		finishGreeting, err := negotiationDeadline(cx, cx.Context)
+		if err != nil {
+			return err
+		}
+		n, err := io.WriteString(cx, greeting)
+		finishGreeting()
+		if err == nil && n != len(greeting) {
+			err = io.ErrShortWrite
+		}
+		if err != nil {
+			// Greeting bytes commit the session, so a failed write must never trigger failover.
+			u.logger.Error("writing downstream SMTP greeting failed", zap.Error(err))
+			_ = cx.Close()
+			return nil
+		}
+		cx.SetVar(smtpGreetedVar, true)
+	}
 
 	// 8. The upstream connection is now secured. We need to proxy the data.
-	errc := make(chan error, 2)
+	type copyResult struct {
+		client bool
+		err    error
+	}
+	errc := make(chan copyResult, 2)
 	go func() {
 		_, err := io.Copy(tlsConn, cx)
-		errc <- err
+		if err == nil {
+			_ = conn.SetDeadline(time.Now().Add(negotiationTimeout))
+			_ = cx.SetDeadline(time.Now().Add(negotiationTimeout))
+			err = tlsConn.CloseWrite()
+		}
+		errc <- copyResult{client: true, err: err}
 	}()
 	go func() {
 		_, err := io.Copy(cx, tlsConn)
-		errc <- err
+		errc <- copyResult{err: err}
 	}()
 
-	<-errc
-	tlsConn.Close()
+	result := <-errc
+	if result.client && result.err == nil {
+		// Preserve the server's final reply after a client half-close, with a bounded drain.
+		<-errc
+	} else {
+		_ = conn.Close()
+		_ = cx.Close()
+		<-errc
+	}
+	_ = cx.Close()
 	return nil
 }
 
 // readSMTPResponse reads a multi-line SMTP response from a bufio.Reader.
 func readSMTPResponse(reader *bufio.Reader) (string, error) {
 	var response strings.Builder
+	var code string
 	for {
-		line, err := reader.ReadString('\n')
+		line, err := readSMTPLine(reader)
 		if err != nil {
 			return "", err
 		}
+		if len(line) < 5 {
+			return "", fmt.Errorf("invalid SMTP reply")
+		}
+		status, parseErr := strconv.Atoi(line[:3])
+		validSeparator := line[3] == ' ' || line[3] == '-' || len(line) == 5
+		if parseErr != nil || status < 200 || status > 599 || !validSeparator {
+			return "", fmt.Errorf("invalid SMTP reply")
+		}
+		if code == "" {
+			code = line[:3]
+		}
+		if line[:3] != code {
+			return "", fmt.Errorf("inconsistent SMTP reply codes")
+		}
+		if response.Len()+len(line) > maxSMTPResponse {
+			return "", fmt.Errorf("SMTP response too large")
+		}
 		response.WriteString(line)
 		// Multi-line responses end with a space after the 3-digit code (e.g., "250 ")
-		if len(line) >= 4 && line[3] == ' ' {
+		if line[3] != '-' {
 			break
 		}
 	}
@@ -241,9 +316,7 @@ func readSMTPResponse(reader *bufio.Reader) (string, error) {
 
 // Interface guards
 var (
-	_ caddy.Module             = (*UpstreamSTARTTLS)(nil)
-	_ caddy.Provisioner        = (*UpstreamSTARTTLS)(nil)
-	_ caddyfile.Unmarshaler    = (*UpstreamSTARTTLS)(nil)
+	_ caddy.Module          = (*UpstreamSTARTTLS)(nil)
+	_ caddy.Provisioner     = (*UpstreamSTARTTLS)(nil)
+	_ caddyfile.Unmarshaler = (*UpstreamSTARTTLS)(nil)
 )
-
-

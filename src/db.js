@@ -102,7 +102,9 @@ const SCHEMA_SQL = `
       passive_health_unhealthy_latency TEXT,
       passive_health_unhealthy_request_count TEXT,
       redir_status TEXT DEFAULT '301',
-      waf_enabled INTEGER DEFAULT 0
+      waf_enabled INTEGER DEFAULT 0,
+      waf_profile TEXT DEFAULT 'generic',
+      waf_body_limit_mb INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS access_lists (
@@ -214,6 +216,8 @@ function runMigrations() {
     { table: 'subdomains', column: 'acme', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'to_path', def: 'TEXT' },
     { table: 'handlers', column: 'http_version', def: 'TEXT' },
+    { table: 'handlers', column: 'waf_profile', def: "TEXT DEFAULT 'generic'" },
+    { table: 'handlers', column: 'waf_body_limit_mb', def: 'INTEGER' },
     { table: 'handlers', column: 'http_keepalive', def: 'TEXT' },
     { table: 'handlers', column: 'http_tls_insecure_skip_verify', def: 'INTEGER DEFAULT 0' },
     { table: 'handlers', column: 'http_tls_trusted_ca_certs', def: 'TEXT' },
