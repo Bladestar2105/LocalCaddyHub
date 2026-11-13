@@ -36,7 +36,7 @@ if [ ! -x "$GO_ROOT/go/bin/go" ]; then
 fi
 export PATH="$GO_ROOT/go/bin:$PATH"
 if [ ! -d "$INSTALL_DIR" ]; then
-  git clone https://github.com/ssakalis/localcaddyhub.git "$INSTALL_DIR"
+  git clone https://github.com/Ssakalis/LocalCaddyHub.git "$INSTALL_DIR"
 fi
 cd "$INSTALL_DIR"
 npm ci

@@ -1,6 +1,7 @@
 services:
   localcaddyhub:
     image: ghcr.io/ssakalis/localcaddyhub:latest
+    build: .
     restart: unless-stopped
     environment:
       ADMIN_USER: ${ADMIN_USER:?Set the initial administrator username}

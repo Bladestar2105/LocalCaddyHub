@@ -7,6 +7,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     && ./scripts/build-caddy.sh /caddy
 
 FROM node:24.22.3-bookworm-slim
+LABEL org.opencontainers.image.source="https://github.com/Ssakalis/LocalCaddyHub"
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
