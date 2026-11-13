@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 const { once } = require('node:events');
 const Database = require('better-sqlite3');
 
@@ -84,4 +84,46 @@ test('fresh database has no implicit admin/admin login', { timeout: 15000 }, asy
   const app = await launch(dataDir);
   t.after(() => app.stop());
   assert.equal((await post(app.base, '/login', { username: 'admin', password: 'admin' })).status, 401);
+});
+
+
+test('deployment defaults retain legacy SQLite, configuration and certificates while explicit data overrides win', t => {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lch-deployment-')));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const appRoot = path.join(directory, 'app');
+  fs.mkdirSync(path.join(appRoot, 'src'), { recursive: true });
+  fs.copyFileSync(path.join(root, 'src/paths.js'), path.join(appRoot, 'src/paths.js'));
+  const defaultEnv = { ...process.env };
+  // Relocate the image's default into the sandbox without hiding its presence.
+  if (process.env.LCH_APP_ROOT && defaultEnv.LCH_DATA_DIR) defaultEnv.LCH_DATA_DIR = path.join(appRoot, 'data');
+  else delete defaultEnv.LCH_DATA_DIR;
+  const resolve = env => JSON.parse(execFileSync(process.execPath,
+    ['-e', 'console.log(JSON.stringify(require(process.argv[1])))', path.join(appRoot, 'src/paths.js')], { env, encoding: 'utf8' }));
+  const legacyDb = new Database(path.join(appRoot, 'caddyhub.db'));
+  legacyDb.exec("CREATE TABLE users (username TEXT); INSERT INTO users VALUES ('saved-administrator')");
+  legacyDb.close();
+  fs.writeFileSync(path.join(appRoot, 'Caddyfile'), '# saved legacy configuration\n');
+  fs.writeFileSync(path.join(appRoot, 'config.json'), '{"saved":true}');
+  fs.mkdirSync(path.join(appRoot, 'certs'));
+  fs.writeFileSync(path.join(appRoot, 'certs', 'saved.pem'), 'saved certificate');
+  const legacy = resolve(defaultEnv);
+  assert.equal(legacy.isLegacy, true, 'Image defaults must not silently force an existing legacy deployment into a new empty database');
+  assert.equal(legacy.db, path.join(appRoot, 'caddyhub.db'));
+  const saved = new Database(legacy.db, { readonly: true });
+  assert.equal(saved.prepare('SELECT username FROM users').get().username, 'saved-administrator'); saved.close();
+  assert.equal(fs.readFileSync(legacy.caddyfile, 'utf8'), '# saved legacy configuration\n');
+  assert.deepEqual(JSON.parse(fs.readFileSync(legacy.config, 'utf8')), { saved: true });
+  assert.equal(fs.readFileSync(path.join(legacy.certsDir, 'saved.pem'), 'utf8'), 'saved certificate');
+  const override = path.join(directory, 'explicit data');
+  const explicit = resolve({ ...defaultEnv, LCH_DATA_DIR: override });
+  assert.equal(explicit.isLegacy, false);
+  assert.equal(explicit.db, path.join(override, 'caddyhub.db'));
+  assert.equal(explicit.caddyfile, path.join(override, 'Caddyfile'));
+  assert.equal(explicit.certsDir, path.join(override, 'certs'));
+  fs.unlinkSync(path.join(appRoot, 'caddyhub.db'));
+  const fresh = resolve(defaultEnv);
+  assert.equal(fresh.isLegacy, false);
+  assert.equal(fresh.db, path.join(appRoot, 'data', 'caddyhub.db'));
+  assert.equal(fresh.caddyfile, path.join(appRoot, 'data', 'Caddyfile'));
+  assert.equal(fresh.certsDir, path.join(appRoot, 'data', 'certs'));
 });

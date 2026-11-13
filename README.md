@@ -59,6 +59,15 @@ docker run -d --name localcaddyhub \
   localcaddyhub:local
 ```
 
+Existing deployments mounting `/app/caddyhub.db` retain their legacy database/account, `/app/Caddyfile`, `/app/config.json` and `/app/certs` paths at startup. An explicitly set `LCH_DATA_DIR` overrides that detection. Fresh installations use `/app/data`.
+
+Atomic configuration replacement cannot replace an individually bind-mounted `/app/Caddyfile` (`EBUSY`). Migrate legacy file mounts before editing configuration:
+
+1. Record the old mounts and Caddy storage locations, then stop the old container so SQLite and Caddy have no active writers.
+2. Keep an offline backup of `caddyhub.db` **and any `-wal`/`-shm` sidecars**, `config.json`, `Caddyfile`, the complete `certs` directory/private keys, and Caddy's ACME data/configuration. Copy state stored only in the container layer out before removing that container.
+3. Copy the complete app state into a host directory mounted at `/app/data`, and remove the old individual `/app` file/certificate mounts. Retain existing Caddy `/data` and `/config` volumes. If an older image kept Caddy state under `/root/.local/share/caddy` or `/root/.config/caddy`, migrate those Caddy-directory contents to `/data/caddy` and `/config/caddy` in the new volumes. Use the old deployment's actual storage paths if customized. Mount the state directory rather than the whole `/app`, which would hide the new application and dependencies. Before starting Caddy, update absolute certificate/TLS, import and log paths in the copied Caddyfile (and applicable configuration references) to the new mount locations. Alternatively, run the management app with `CADDY_AUTOSTART=0` and regenerate/validate from the saved structured configuration. Raw Caddyfile users must adjust those paths explicitly.
+4. Start the new image and verify the saved login, intended raw or structured configuration and certificate selection, including a successful configuration save, before traffic cutover. Retain the offline backup and old stopped container until recovery has been verified.
+
 Persist **all three** locations:
 
 | Location | Contents |

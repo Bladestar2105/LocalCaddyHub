@@ -18,7 +18,7 @@ COPY static ./static
 COPY Caddyfile ./Caddyfile
 COPY examples ./examples
 # Match the official Caddy storage layout; all three volumes must persist.
-ENV NODE_ENV=production LCH_DATA_DIR=/app/data XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config
+ENV NODE_ENV=production XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config
 VOLUME ["/app/data", "/data", "/config"]
 EXPOSE 8090 80 443 443/udp
 CMD ["node", "src/index.js"]
